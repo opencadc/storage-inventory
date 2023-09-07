@@ -72,8 +72,6 @@ import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.util.StringUtil;
 import java.io.IOException;
 import java.net.URI;
-import java.net.URISyntaxException;
-import java.sql.Array;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -83,16 +81,15 @@ import java.sql.Types;
 import java.util.Calendar;
 import java.util.Comparator;
 import java.util.Date;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.StringTokenizer;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
+import org.opencadc.gms.GroupURI;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
@@ -109,7 +106,6 @@ import org.opencadc.vospace.DeletedNodeEvent;
 import org.opencadc.vospace.LinkNode;
 import org.opencadc.vospace.Node;
 import org.opencadc.vospace.NodeProperty;
-import org.opencadc.vospace.VOS;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.ResultSetExtractor;
@@ -979,14 +975,14 @@ public class SQLGenerator {
         }
     }
     
-    private void safeSetArray(PreparedStatement prep, int col, Set<URI> values) throws SQLException {
+    private void safeSetArray(PreparedStatement prep, int col, Set<GroupURI> values) throws SQLException {
         
         if (values != null && !values.isEmpty()) {
             log.debug("safeSetArray: " + col + " " + values.size());
             String[] array1d = new String[values.size()];
             int i = 0;
-            for (URI u : values) {
-                array1d[i] = u.toASCIIString();
+            for (GroupURI u : values) {
+                array1d[i] = u.getURI().toASCIIString();
                 i++;
             }
             java.sql.Array arr = prep.getConnection().createArrayOf("text", array1d);
@@ -1754,10 +1750,10 @@ public class SQLGenerator {
         ret.isLocked = isLocked;
 
         if (rawROG != null) {
-            Util.parseArrayURI(rawROG, ret.getReadOnlyGroup());
+            Util.parseArrayGroupURI(rawROG, ret.getReadOnlyGroup());
         }
         if (rawRWG != null) {
-            Util.parseArrayURI(rawRWG, ret.getReadWriteGroup());
+            Util.parseArrayGroupURI(rawRWG, ret.getReadWriteGroup());
         }
         if (rawProps != null) {
             Util.parseArrayProps(rawProps, ret.getProperties());

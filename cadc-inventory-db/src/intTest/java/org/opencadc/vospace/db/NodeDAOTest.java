@@ -86,6 +86,7 @@ import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.opencadc.gms.GroupURI;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.TestUtil;
 import org.opencadc.vospace.ContainerNode;
@@ -224,8 +225,8 @@ public class NodeDAOTest {
         
         // update
         Thread.sleep(10L);
-        orig.getReadOnlyGroup().add(URI.create("ivo://opencadc.org/gms?g1"));
-        orig.getReadWriteGroup().add(URI.create("ivo://opencadc.org/gms?g3"));
+        orig.getReadOnlyGroup().add(new GroupURI(URI.create("ivo://opencadc.org/gms?g1")));
+        orig.getReadWriteGroup().add(new GroupURI(URI.create("ivo://opencadc.org/gms?g3")));
         orig.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "123"));
         orig.isPublic = true;
         orig.inheritPermissions = true;
@@ -270,14 +271,13 @@ public class NodeDAOTest {
         orig.isPublic = true;
         orig.isLocked = false;
         orig.inheritPermissions = false;
-        orig.getReadOnlyGroup().add(URI.create("ivo://opencadc.org/gms?g1"));
-        orig.getReadOnlyGroup().add(URI.create("ivo://opencadc.org/gms?g2"));
-        orig.getReadWriteGroup().add(URI.create("ivo://opencadc.org/gms?g3"));
-        orig.getReadWriteGroup().add(URI.create("ivo://opencadc.org/gms?g4,g5"));
-        orig.getReadWriteGroup().add(URI.create("ivo://opencadc.org/gms?g6-g7"));
-        orig.getReadWriteGroup().add(URI.create("ivo://opencadc.org/gms?g6.g7"));
-        orig.getReadWriteGroup().add(URI.create("ivo://opencadc.org/gms?g6_g7"));
-        orig.getReadWriteGroup().add(URI.create("ivo://opencadc.org/gms?g6~g7"));
+        orig.getReadOnlyGroup().add(new GroupURI(URI.create("ivo://opencadc.org/gms?g1")));
+        orig.getReadOnlyGroup().add(new GroupURI(URI.create("ivo://opencadc.org/gms?g2")));
+        orig.getReadWriteGroup().add(new GroupURI(URI.create("ivo://opencadc.org/gms?g3")));
+        orig.getReadWriteGroup().add(new GroupURI(URI.create("ivo://opencadc.org/gms?g6-g7")));
+        orig.getReadWriteGroup().add(new GroupURI(URI.create("ivo://opencadc.org/gms?g6.g7")));
+        orig.getReadWriteGroup().add(new GroupURI(URI.create("ivo://opencadc.org/gms?g6_g7")));
+        orig.getReadWriteGroup().add(new GroupURI(URI.create("ivo://opencadc.org/gms?g6~g7")));
         
         orig.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "123"));
         orig.getProperties().add(new NodeProperty(URI.create("custom:prop"), "spaces in value"));
@@ -328,9 +328,9 @@ public class NodeDAOTest {
         orig.isPublic = false;
         orig.isLocked = true;
         orig.getReadOnlyGroup().clear();
-        orig.getReadOnlyGroup().add(URI.create("ivo://opencadc.org/gms?g1"));
+        orig.getReadOnlyGroup().add(new GroupURI(URI.create("ivo://opencadc.org/gms?g1")));
         orig.getReadWriteGroup().clear();
-        orig.getReadWriteGroup().add(URI.create("ivo://opencadc.org/gms?g3"));
+        orig.getReadWriteGroup().add(new GroupURI(URI.create("ivo://opencadc.org/gms?g3")));
         orig.getProperties().clear();
         orig.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "123"));
         orig.inheritPermissions = true;
@@ -418,9 +418,9 @@ public class NodeDAOTest {
         orig.isPublic = false;
         orig.isLocked = true;
         orig.getReadOnlyGroup().clear();
-        orig.getReadOnlyGroup().add(URI.create("ivo://opencadc.org/gms?g1"));
+        orig.getReadOnlyGroup().add(new GroupURI(URI.create("ivo://opencadc.org/gms?g1")));
         orig.getReadWriteGroup().clear();
-        orig.getReadWriteGroup().add(URI.create("ivo://opencadc.org/gms?g3"));
+        orig.getReadWriteGroup().add(new GroupURI(URI.create("ivo://opencadc.org/gms?g3")));
         orig.getProperties().clear();
         orig.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "123"));
         // don't change storageID
@@ -509,9 +509,9 @@ public class NodeDAOTest {
         orig.isPublic = false;
         orig.isLocked = true;
         orig.getReadOnlyGroup().clear();
-        orig.getReadOnlyGroup().add(URI.create("ivo://opencadc.org/gms?g1"));
+        orig.getReadOnlyGroup().add(new GroupURI(URI.create("ivo://opencadc.org/gms?g1")));
         orig.getReadWriteGroup().clear();
-        orig.getReadWriteGroup().add(URI.create("ivo://opencadc.org/gms?g3"));
+        orig.getReadWriteGroup().add(new GroupURI(URI.create("ivo://opencadc.org/gms?g3")));
         orig.getProperties().clear();
         orig.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "123"));
         // don't change target
