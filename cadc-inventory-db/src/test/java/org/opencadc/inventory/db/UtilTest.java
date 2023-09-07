@@ -68,12 +68,12 @@
 package org.opencadc.inventory.db;
 
 import ca.nrc.cadc.util.Log4jInit;
-import java.net.URI;
 import java.util.Set;
 import java.util.TreeSet;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Test;
+import org.opencadc.gms.GroupURI;
 import org.opencadc.vospace.NodeProperty;
 
 /**
@@ -91,19 +91,18 @@ public class UtilTest {
     }
     
     @Test
-    public void testParseArrayURI() throws Exception {
+    public void testParseArrayGroupURI() throws Exception {
         
         String str = "{ivo://opencadc.org/gms?g3,"
-                + "\"ivo://opencadc.org/gms?g4,g5\","
                 + "ivo://opencadc.org/gms?g6-g7,"
                 + "ivo://opencadc.org/gms?g6.g7,"
                 + "ivo://opencadc.org/gms?g6_g7,"
                 + "ivo://opencadc.org/gms?g6~g7}";
         
-        Set<URI> dest = new TreeSet<>();
-        Util.parseArrayURI(str, dest);
-        for (URI u : dest) {
-            log.info("uri: " + u);
+        Set<GroupURI> dest = new TreeSet<>();
+        Util.parseArrayGroupURI(str, dest);
+        for (GroupURI u : dest) {
+            log.info("uri: " + u.getURI());
         }
     }
     
