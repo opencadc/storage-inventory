@@ -98,6 +98,15 @@ public class NodeDAO extends AbstractDAO<Node> {
         super.put(val);
     }
     
+    @Override
+    public Node lock(Node n) {
+        if (n == null) {
+            throw new IllegalArgumentException("entity cannot be null");
+        }
+        // override because Node has subclasses: force base class here
+        return super.lock(Node.class, n.getID());
+    }
+    
     public Node get(UUID id) {
         return super.get(Node.class, id);
     }
@@ -117,6 +126,26 @@ public class NodeDAO extends AbstractDAO<Node> {
         } finally {
             long dt = System.currentTimeMillis() - t;
             log.debug("GET: " + parent.getID() + " + " + name + " " + dt + "ms");
+        }
+        throw new RuntimeException("BUG: handleInternalFail did not throw");
+    }
+    
+    public boolean isEmpty(ContainerNode parent) {
+        checkInit();
+        log.debug("isEmpty: " + parent.getID());
+        long t = System.currentTimeMillis();
+
+        try {
+            JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+            SQLGenerator.NodeCount count = (SQLGenerator.NodeCount) gen.getNodeCount();
+            count.setID(parent.getID());
+            int num = count.execute(jdbc);
+            return (num == 0);
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
+        } finally {
+            long dt = System.currentTimeMillis() - t;
+            log.debug("isEmpty: " + parent.getID() + " " + dt + "ms");
         }
         throw new RuntimeException("BUG: handleInternalFail did not throw");
     }
