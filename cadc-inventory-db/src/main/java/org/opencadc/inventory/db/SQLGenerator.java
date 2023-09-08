@@ -108,6 +108,7 @@ import org.opencadc.vospace.Node;
 import org.opencadc.vospace.NodeProperty;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.PreparedStatementCreator;
 import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.jdbc.core.RowMapper;
 
@@ -304,17 +305,15 @@ public class SQLGenerator {
             return new StorageSiteGet(forUpdate);
         }
         
-        if (Node.class.equals(c) || Node.class.isInstance(c)) {
+        if (Node.class.equals(c)) {
             return new NodeGet(forUpdate);
-        }
-        if (DeletedNodeEvent.class.equals(c)) {
-            //return new DeletedNodeGet();
         }
         
         if (forUpdate) {
             throw new UnsupportedOperationException("entity-get + forUpdate: " + c.getSimpleName());
         }
         
+        // raw events are never locked for update
         if (DeletedArtifactEvent.class.equals(c)) {
             return new DeletedArtifactEventGet();
         }
@@ -327,11 +326,38 @@ public class SQLGenerator {
         if (ObsoleteStorageLocation.class.equals(c)) {
             return new ObsoleteStorageLocationGet();
         }
+        
+        if (DeletedNodeEvent.class.equals(c)) {
+            //return new DeletedNodeGet();
+        }
+        
         if (HarvestState.class.equals(c)) {
             return new HarvestStateGet();
         }
         
         throw new UnsupportedOperationException("entity-get: " + c.getName());
+    }
+    
+    public NodeCount getNodeCount() {
+        return new NodeCount();
+    }
+    
+    public class NodeCount {
+        private UUID id;
+        
+        public void setID(UUID id) {
+            this.id = id;
+        }
+        
+        public int execute(JdbcTemplate jdbc) {
+            StringBuilder sb = new StringBuilder();
+            sb.append("SELECT count(*) FROM ").append(getTable(Node.class));
+            sb.append(" WHERE parentID = '").append(id.toString()).append("'");
+            String sql = sb.toString();
+            log.debug("NodeCount: " + sql);
+            int ret = jdbc.queryForObject(sql, Integer.class);
+            return ret;
+        }
     }
     
     public EntityIteratorQuery getEntityIteratorQuery(Class c) {

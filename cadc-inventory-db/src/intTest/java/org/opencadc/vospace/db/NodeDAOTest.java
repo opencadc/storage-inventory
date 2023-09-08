@@ -542,6 +542,35 @@ public class NodeDAOTest {
     }
     
     @Test
+    public void testGetWithLock() {
+        UUID rootID = new UUID(0L, 0L);
+        ContainerNode root = new ContainerNode(rootID, "root");
+        
+        // put
+        ContainerNode orig = new ContainerNode("container-test");
+        orig.parent = root;
+        orig.ownerID = "the-owner";
+        nodeDAO.put(orig);
+        
+        // get-by-id
+        Node a = nodeDAO.get(orig.getID());
+        Assert.assertNotNull(a);
+        log.info("found by id: "  + a.getID() + " aka " + a);
+        Assert.assertEquals(orig.getID(), a.getID());
+        Assert.assertEquals(orig.getName(), a.getName());
+        Assert.assertEquals(root.getID(), a.parentID);
+        
+        // get with lock
+        Node locked = nodeDAO.lock(a);
+        Assert.assertNotNull(locked);
+        log.info("locked: "  + a.getID() + " aka " + a);
+        
+        nodeDAO.delete(orig.getID());
+        Node gone = nodeDAO.get(orig.getID());
+        Assert.assertNull(gone);
+    }
+    
+    @Test
     public void testContainerNodeIterator() throws IOException {
         UUID rootID = new UUID(0L, 0L);
         ContainerNode root = new ContainerNode(rootID, "root");
@@ -558,6 +587,8 @@ public class NodeDAOTest {
         Assert.assertEquals(orig.getName(), a.getName());
         
         Assert.assertTrue(a instanceof ContainerNode);
+        ContainerNode cn = (ContainerNode) a;
+        Assert.assertTrue(nodeDAO.isEmpty(cn));
         
         // these are set in put
         Assert.assertEquals(orig.getMetaChecksum(), a.getMetaChecksum());
@@ -588,10 +619,13 @@ public class NodeDAOTest {
         link.ownerID = orig.ownerID;
         log.info("put child: " + cont + " of " + cont.parent);
         nodeDAO.put(cont);
+        Assert.assertFalse(nodeDAO.isEmpty(cn));
         log.info("put child: " + data + " of " + data.parent);
         nodeDAO.put(data);
+        Assert.assertFalse(nodeDAO.isEmpty(cn));
         log.info("put child: " + link + " of " + link.parent);
         nodeDAO.put(link);
+        Assert.assertFalse(nodeDAO.isEmpty(cn));
         
         Node c1;
         Node c2;

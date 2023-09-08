@@ -72,6 +72,7 @@ import ca.nrc.cadc.auth.IdentityManager;
 import ca.nrc.cadc.auth.PrincipalExtractor;
 import ca.nrc.cadc.auth.X509CertificateChain;
 import ca.nrc.cadc.date.DateUtil;
+import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.InvalidConfigException;
@@ -91,8 +92,10 @@ import javax.security.auth.Subject;
 import javax.security.auth.x500.X500Principal;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.vospace.ContainerNode;
 import org.opencadc.vospace.DataNode;
@@ -118,8 +121,6 @@ public class NodePersistenceImpl implements NodePersistence {
     private final Set<URI> immutableProps = new TreeSet<>();
     private final Set<URI> artifactProps = new TreeSet<>();
     private URI resourceID;
-    
-    private IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
     
     public NodePersistenceImpl(URI resourceID) {
         if (resourceID == null) {
@@ -152,6 +153,7 @@ public class NodePersistenceImpl implements NodePersistence {
                 return null;
             }
         });
+        IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
         
         // root node
         UUID rootID = new UUID(0L, 0L);
@@ -262,9 +264,12 @@ public class NodePersistenceImpl implements NodePersistence {
             return null;
         }
         ret.parent = parent;
+        IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
         ret.owner = identityManager.toSubject(ret.ownerID);
         ret.ownerDisplay = identityManager.toDisplayString(ret.owner);
         
+        // in principle we could have queried vospace.Node join inventory.Artifact above
+        // and avoid this query.... simplicity for now
         if (ret instanceof DataNode) {
             DataNode dn = (DataNode) ret;
             ArtifactDAO artifactDAO = getArtifactDAO();
@@ -312,9 +317,22 @@ public class NodePersistenceImpl implements NodePersistence {
         private final ContainerNode parent;
         private final ResourceIterator<Node> childIter;
         
+        private IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
+        private Map<Object, Subject> identCache = new TreeMap<>();
+        
         IdentWrapper(ContainerNode parent, ResourceIterator<Node> childIter) {
             this.parent = parent;
             this.childIter = childIter;
+            // prime cache with caller
+            Subject caller = AuthenticationUtil.getCurrentSubject();
+            if (caller != null) {
+                Object ownerID = identityManager.toOwner(caller);
+                if (ownerID != null) {
+                    // HACK: NodeDAO returns ownerID as String and relies on the IM
+                    // to convert to a number (eg)
+                    identCache.put(ownerID.toString(), caller);
+                }
+            }
         }
         
         @Override
@@ -326,7 +344,12 @@ public class NodePersistenceImpl implements NodePersistence {
         public Node next() {
             Node ret = childIter.next();
             ret.parent = parent;
-            ret.owner = identityManager.toSubject(ret.ownerID);
+            Subject s = identCache.get(ret.ownerID);
+            if (s == null) {
+                s = identityManager.toSubject(ret.ownerID);
+                identCache.put(ret.ownerID, s);
+            }
+            ret.owner = s;
             ret.ownerDisplay = identityManager.toDisplayString(ret.owner);
             return ret;
         }
@@ -334,6 +357,7 @@ public class NodePersistenceImpl implements NodePersistence {
         @Override
         public void close() throws IOException {
             childIter.close();
+            identCache.clear();
         }
         
     }
@@ -376,6 +400,7 @@ public class NodePersistenceImpl implements NodePersistence {
             if (node.owner == null) {
                 throw new RuntimeException("BUG: cannot persist node without owner: " + node);
             }
+            IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
             node.ownerID = identityManager.toOwner(node.owner);
         }
 
@@ -454,48 +479,68 @@ public class NodePersistenceImpl implements NodePersistence {
             throw new IllegalArgumentException("arg cannot be null: node");
         }
         
-        NodeDAO dao = getDAO();
+        final NodeDAO dao = getDAO();
+        final ArtifactDAO artifactDAO = getArtifactDAO();
+        TransactionManager txn = dao.getTransactionManager();
         
-        // TODO: do the following in a transaction, acquire lock on target node
-        
-        boolean moveToTrash = true; // default
-        URI storageID = null;
-        if (node instanceof ContainerNode) {
-            ContainerNode cn = (ContainerNode) node;
-            try (ResourceIterator<Node> iter = dao.iterator(cn, 1, null)) {
-                moveToTrash = iter.hasNext(); // empty
-            } catch (IOException ex) {
-                throw new TransientException("database IO failure", ex);
-            }
-        } else if (node instanceof LinkNode) {
-            moveToTrash = false;
-        } else if (node instanceof DataNode) {
-            DataNode dn = (DataNode) node;
-            NodeProperty len = dn.getProperty(VOS.PROPERTY_URI_CONTENTLENGTH);
-            if (len == null) {
-                // artifact does not exist
-                moveToTrash = false;
-            } else {
-                storageID = dn.storageID;
-            }
-        }
-        
-        // TODO: create DeletedNodeEvent?
-        // need DeletedNodeDAO
-        // what about DNE for all child nodes, which also got deleted? or would sync of a
-        // DNE involve calling NodePersistence.delete(DeletedNodeEvent) to replay this same
-        // deletion logic in a mirror?? TBD
-        // persisting the DNE means that recovery from trash has to re-assign IDs
+        try {
+            log.debug("starting transaction");
+            txn.startTransaction();
+            log.debug("start txn: OK");
+            
+            Node locked = dao.lock(node);
+            if (locked != null) {      
+                node = locked; // safer than having two vars and accidentally using the wrong one
+                URI storageID = null;
+                if (node instanceof ContainerNode) {
+                    ContainerNode cn = (ContainerNode) node;
+                    boolean empty = dao.isEmpty(cn);
+                    if (!empty) {
+                        log.debug("commit txn...");
+                        txn.commitTransaction();
+                        log.debug("commit txn: OK");
+                        throw new IllegalArgumentException("container node '" + node.getName() + "' is not empty");
+                    }
+                } else if (node instanceof DataNode) {
+                    DataNode dn = (DataNode) node;
+                    NodeProperty len = dn.getProperty(VOS.PROPERTY_URI_CONTENTLENGTH);
+                    if (len != null) {
+                        // artifact exists
+                        storageID = dn.storageID;
+                    }
+                } // else: LinkNode can always be deleted
 
-        // TODO: if DataNode (storageID != null): delete artifact and create DeletedArtifactEvent?
-        
-        if (moveToTrash) {
-            node.parentID = trash.getID();
-            node.setName(node.getName() + "-" + UUID.randomUUID().toString());
-            dao.put(node);
-        } else {
-            dao.delete(node.getID());
+                if (storageID != null) {
+                    Artifact a = artifactDAO.get(storageID);
+                    if (a != null) {
+                        DeletedArtifactEventDAO daeDAO = new DeletedArtifactEventDAO(artifactDAO);
+                        DeletedArtifactEvent dae = new DeletedArtifactEvent(a.getID());
+                        daeDAO.put(dae);
+                        artifactDAO.delete(a.getID());
+                    }
+                }
+                // TODO: need DeletedNodeDAO to create DeletedNodeEvent
+                dao.delete(node.getID());
+            } else {
+                log.debug("failed to lock node " + node.getID() + " - assume deleted by another process");
+            }
+            
+            log.debug("commit txn...");
+            txn.commitTransaction();
+            log.debug("commit txn: OK");
+        } catch (Exception ex) {
+            if (txn.isOpen()) {
+                log.error("failed to delete " + node.getID() + " aka " + node.getName(), ex);
+                txn.rollbackTransaction();
+                log.debug("rollback txn: OK");
+            }
+            throw ex;
+        } finally {
+            if (txn.isOpen()) {
+                log.error("BUG - open transaction in finally");
+                txn.rollbackTransaction();
+                log.error("rollback txn: OK");
+            }
         }
-        
     }
 }
