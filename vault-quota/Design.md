@@ -15,7 +15,7 @@ algorithm that can detect and fix discrepancies in a live `vault`.
 
 ## Event watcher algorithm:
 ```
-track progress using HarvestState (name: `Artifact`, source: `db:{bucket range}`)
+track progress using HarvestState (source: `db:{bucket range}`, name: TBD)
 incremental query for new artifacts in lastModified order
 for each new Artifact:
   query for DataNode (storageID = artifact.uri)
