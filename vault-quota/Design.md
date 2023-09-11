@@ -1,6 +1,6 @@
 # vault quota design/algorithms
 
-The definitive source of content-length (file size) of a DataNode coems from the
+The definitive source of content-length (file size) of a DataNode comes from the
 `inventory.Artifact` table and it not known until a PUT to storage is completed.
 In the case of a `vault` service co-located with a single storage site (`minoc`),
 the new Artifact is visible in the database as soon as the PUT to `minoc` is
@@ -63,4 +63,5 @@ note: all field and column names TBD
 * add `delta` to the `vospace.Node` table
 * incremental sync query/iterator (ArtifactDAO?)
 * lookup DataNode by storageID (ArtifactDAO?)
+* indices to support new queries
 
