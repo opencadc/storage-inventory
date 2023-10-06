@@ -71,6 +71,7 @@ import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.opencadc.gms.GroupURI;
 
 /**
  * Test the nodes endpoint.
@@ -86,6 +87,7 @@ public class NodesTest extends org.opencadc.conformance.vos.NodesTest {
     }
     
     public NodesTest() {
+        //super(URI.create("ivo://opencadc.org/vault"), "vault-test.pem", new GroupURI(URI.create("ivo://cadc.nrc.ca/gms?CADC_TEST_GROUP2")), "vault-test-auth.pem");
         super(URI.create("ivo://opencadc.org/vault"), "vault-test.pem");
     }
 }
