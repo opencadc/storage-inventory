@@ -325,6 +325,13 @@ public class ProtocolsGenerator {
             if (filesCap != null) {
                 for (Protocol proto : transfer.getProtocols()) {
                     if (storageSite.getAllowRead()) {
+                        // less generic request for service that implements an API
+                        // HACK: this is filesCap specific in here
+                        if (proto.getUri().equals(filesCap.getStandardID().toASCIIString())) {
+                            Protocol p = new Protocol(proto.getUri());
+                            p.setEndpoint(storageSite.getResourceID().toASCIIString());
+                            protos.add(p);
+                        }
                         URI sec = proto.getSecurityMethod();
                         if (sec == null) {
                             sec = Standards.SECURITY_METHOD_ANON;
@@ -444,6 +451,13 @@ public class ProtocolsGenerator {
                 for (Protocol proto : transfer.getProtocols()) {
                     //log.warn("PUT: " + storageSite + " proto: " + proto);
                     if (storageSite.getAllowWrite()) {
+                        // less generic request for service that implements
+                        // HACK: this is filesCap specific in here
+                        if (proto.getUri().equals(filesCap.getStandardID().toASCIIString())) {
+                            Protocol p = new Protocol(proto.getUri());
+                            p.setEndpoint(storageSite.getResourceID().toASCIIString());
+                            protos.add(p);
+                        }
                         URI sec = proto.getSecurityMethod();
                         if (sec == null) {
                             sec = Standards.SECURITY_METHOD_ANON;
