@@ -78,16 +78,14 @@ import org.apache.log4j.Logger;
  *
  * @author pdowler, majorb, yeunga, adriand
  */
-public class RecursiveDeleteNodeJobManager extends JobManager
-{
+public class RecursiveDeleteNodeJobManager extends JobManager {
     private static final Logger log = Logger.getLogger(RecursiveDeleteNodeJobManager.class);
 
-    private static final Long MAX_EXEC_DURATION = Long.valueOf(12*7200L); // 24 hours?
-    private static final Long MAX_DESTRUCTION = Long.valueOf(7*24*3600L); // 1 week
-    private static final Long MAX_QUOTE = Long.valueOf(12*7200L); // same as exec
+    private static final Long MAX_EXEC_DURATION = Long.valueOf(12 * 7200L); // 24 hours?
+    private static final Long MAX_DESTRUCTION = Long.valueOf(7 * 24 * 3600L); // 1 week
+    private static final Long MAX_QUOTE = Long.valueOf(12 * 7200L); // same as exec
 
-    public RecursiveDeleteNodeJobManager()
-    {
+    public RecursiveDeleteNodeJobManager() {
         super();
         // jp is instantiated in parent org.opencadc.cavern.JobManager
         JobUpdater ju = jp;

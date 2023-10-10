@@ -142,8 +142,8 @@ public class RecursiveDeleteNodeRunner implements JobRunner {
 
             if (ep == null) {
                 throw new IllegalStateException(
-                        "Could not change the job phase from " + ExecutionPhase.QUEUED +
-                        " to " + ExecutionPhase.EXECUTING);
+                        "Could not change the job phase from " + ExecutionPhase.QUEUED
+                                + " to " + ExecutionPhase.EXECUTING);
             }
 
             VOSURI nodeURI = null;
@@ -212,8 +212,7 @@ public class RecursiveDeleteNodeRunner implements JobRunner {
                 }
             }
             if (!endPhase.equals(ep)) {
-                log.warn("Could not change the job phase from " + ExecutionPhase.EXECUTING +
-                        " to " + endPhase);
+                log.warn("Could not change the job phase from " + ExecutionPhase.EXECUTING + " to " + endPhase);
             }
         } catch (FileNotFoundException e) {
             sendError("NotFound");
@@ -317,8 +316,8 @@ public class RecursiveDeleteNodeRunner implements JobRunner {
             }
 
             if (!ExecutionPhase.EXECUTING.equals(ep)) {
-                throw new IllegalStateException("Job should be in phase " +
-                    ExecutionPhase.EXECUTING + " but is in phase " + ep);
+                throw new IllegalStateException("Job should be in phase "
+                        + ExecutionPhase.EXECUTING + " but is in phase " + ep);
             }
         }
     }
@@ -339,12 +338,12 @@ public class RecursiveDeleteNodeRunner implements JobRunner {
                     ExecutionPhase.ERROR, error, new Date());
 
             if (!ExecutionPhase.ERROR.equals(ep)) {
-                log.warn("Could not change the job phase from " + ExecutionPhase.EXECUTING +
-                        " to " + ExecutionPhase.ERROR + " because it is " + jobUpdater.getPhase(job.getID()));
+                log.warn("Could not change the job phase from " + ExecutionPhase.EXECUTING
+                        + " to " + ExecutionPhase.ERROR + " because it is " + jobUpdater.getPhase(job.getID()));
             }
         } catch (Throwable t) {
-            log.error("Failed to change the job phase from " + ExecutionPhase.EXECUTING +
-                    " to " + ExecutionPhase.ERROR, t);
+            log.error("Failed to change the job phase from " + ExecutionPhase.EXECUTING
+                    + " to " + ExecutionPhase.ERROR, t);
         }
     }
 }
