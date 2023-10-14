@@ -67,10 +67,12 @@
 
 package org.opencadc.vault;
 
+import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.opencadc.conformance.vos.VOSTest;
 import org.opencadc.gms.GroupURI;
 
 /**
@@ -89,5 +91,8 @@ public class NodesTest extends org.opencadc.conformance.vos.NodesTest {
     public NodesTest() {
         //super(URI.create("ivo://opencadc.org/vault"), "vault-test.pem", new GroupURI(URI.create("ivo://cadc.nrc.ca/gms?CADC_TEST_GROUP2")), "vault-test-auth.pem");
         super(URI.create("ivo://opencadc.org/vault"), "vault-test.pem");
+        enablePermissionTests(new GroupURI(URI.create("ivo://cadc.nrc.ca/gms?CADC_TEST_GROUP2")),
+                FileUtil.getFileFromResource("vault-test-auth.pem", VOSTest.class));
+        enablePermissionPropsTest(new GroupURI(URI.create("ivo://myauth/gms?gr1")), new GroupURI(URI.create("ivo://myauth/gms?gr2")));
     }
 }

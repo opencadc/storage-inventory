@@ -233,7 +233,7 @@ public class VaultInitAction extends InitAction {
     }
 
     protected void initNodePersistence() {
-        jndiNodePersistence = componentID + ".nodePersistence";
+        jndiNodePersistence = appName + "-" + NodePersistence.class.getName();
         try {
             Context ctx = new InitialContext();
             try {
