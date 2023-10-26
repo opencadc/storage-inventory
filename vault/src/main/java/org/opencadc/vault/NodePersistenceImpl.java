@@ -131,7 +131,9 @@ public class NodePersistenceImpl implements NodePersistence {
             VOS.PROPERTY_URI_CONTENTLENGTH,
             VOS.PROPERTY_URI_CONTENTMD5,
             VOS.PROPERTY_URI_CREATION_DATE,
-            VOS.PROPERTY_URI_DATE 
+            VOS.PROPERTY_URI_DATE,
+            VOS.PROPERTY_URI_CREATOR,
+            VOS.PROPERTY_URI_QUOTA
         )
     );
     
