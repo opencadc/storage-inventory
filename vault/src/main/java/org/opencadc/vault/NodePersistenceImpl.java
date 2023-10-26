@@ -68,6 +68,7 @@
 package org.opencadc.vault;
 
 import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.HttpPrincipal;
 import ca.nrc.cadc.auth.IdentityManager;
 import ca.nrc.cadc.auth.PrincipalExtractor;
 import ca.nrc.cadc.auth.X509CertificateChain;
@@ -167,32 +168,14 @@ public class NodePersistenceImpl implements NodePersistence {
         nodeDaoConfig.put("schema", inventorySchema);
         nodeDaoConfig.put("vosSchema", vospaceSchema);
         
-        final String owner = config.getFirstPropertyValue(VaultInitAction.ROOT_OWNER);
-        if (owner == null) {
-            throw new InvalidConfigException(VaultInitAction.ROOT_OWNER + " cannot be null");
-        }
-        Subject rawOwnerSubject = AuthenticationUtil.getSubject(new PrincipalExtractor() {
-            @Override
-            public Set<Principal> getPrincipals() {
-                Set<Principal> ret = new HashSet<>();
-                ret.add(new X500Principal(owner));
-                return ret;
-            }
-
-            @Override
-            public X509CertificateChain getCertificateChain() {
-                return null;
-            }
-        });
-        IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
-        
         // root node
+        IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
         UUID rootID = new UUID(0L, 0L);
         this.root = new ContainerNode(rootID, "");
-        root.owner = identityManager.augment(rawOwnerSubject);
+        root.owner = getRootOwner(config, identityManager);
         root.ownerDisplay = identityManager.toDisplayString(root.owner);
         log.warn("ROOT owner: " + root.owner);
-        root.ownerID = identityManager.toOwner(rawOwnerSubject);
+        root.ownerID = identityManager.toOwner(root.owner);
         root.isPublic = true;
         root.inheritPermissions = false;
 
@@ -214,6 +197,16 @@ public class NodePersistenceImpl implements NodePersistence {
         
         String ns = config.getFirstPropertyValue(VaultInitAction.STORAGE_NAMESPACE_KEY);
         this.storageNamespace = new Namespace(ns);
+    }
+    
+    private Subject getRootOwner(MultiValuedProperties mvp, IdentityManager im) {
+        final String owner = mvp.getFirstPropertyValue(VaultInitAction.ROOT_OWNER);
+        if (owner == null) {
+            throw new InvalidConfigException(VaultInitAction.ROOT_OWNER + " cannot be null");
+        }
+        Subject ret = new Subject();
+        ret.getPrincipals().add(new HttpPrincipal(owner));
+        return im.augment(ret);
     }
 
     @Override
