@@ -62,36 +62,52 @@
 *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
 *                                       <http://www.gnu.org/licenses/>.
 *
+*  $Revision: 4 $
+*
 ************************************************************************
 */
 
 package org.opencadc.vault;
 
-import ca.nrc.cadc.util.FileUtil;
-import ca.nrc.cadc.util.Log4jInit;
-import java.net.URI;
-import org.apache.log4j.Level;
+import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.uws.server.JobExecutor;
+import ca.nrc.cadc.uws.server.JobPersistence;
+import ca.nrc.cadc.uws.server.JobUpdater;
+import ca.nrc.cadc.uws.server.SimpleJobManager;
+import ca.nrc.cadc.uws.server.ThreadPoolExecutor;
+import ca.nrc.cadc.uws.server.impl.PostgresJobPersistence;
 import org.apache.log4j.Logger;
-import org.opencadc.gms.GroupURI;
+import org.opencadc.vospace.server.async.RecursiveDeleteNodeRunner;
 
 /**
- * Test the nodes endpoint.
- * 
- * @author pdowler
+ *
+ * @author pdowler, majorb, yeunga, adriand
  */
-public class NodesTest extends org.opencadc.conformance.vos.NodesTest {
-    private static final Logger log = Logger.getLogger(NodesTest.class);
+public class RecursiveDeleteNodeJobManager extends SimpleJobManager {
+    private static final Logger log = Logger.getLogger(RecursiveDeleteNodeJobManager.class);
+
+    private static final Long MAX_EXEC_DURATION = Long.valueOf(12 * 7200L); // 24 hours?
+    private static final Long MAX_DESTRUCTION = Long.valueOf(7 * 24 * 3600L); // 1 week
+    private static final Long MAX_QUOTE = Long.valueOf(12 * 7200L); // same as exec
+
+    protected static JobPersistence jp;
 
     static {
-        Log4jInit.setLevel("org.opencadc.conformance.vos", Level.DEBUG);
-        Log4jInit.setLevel("org.opencadc.vospace", Level.DEBUG);
+        log.info("Creating shared (postgres) job manager");
+        jp = new PostgresJobPersistence(AuthenticationUtil.getIdentityManager());
     }
-    
-    public NodesTest() {
-        super(URI.create("ivo://opencadc.org/vault"), "vault-test.pem");
-        enablePermissionTests(new GroupURI(URI.create("ivo://cadc.nrc.ca/gms?opencadc-vospace-test")),
-                FileUtil.getFileFromResource("vault-auth-test.pem", NodesTest.class));
-        // vault does not check the actual groups in the permission props tests, hence they can be made up.
-        enablePermissionPropsTest(new GroupURI(URI.create("ivo://myauth/gms?gr1")), new GroupURI(URI.create("ivo://myauth/gms?gr2")));
+
+    public RecursiveDeleteNodeJobManager() {
+        super();
+        // jp is instantiated in parent org.opencadc.cavern.JobManager
+        JobUpdater ju = jp;
+        super.setJobPersistence(jp);
+
+        JobExecutor jobExec = new ThreadPoolExecutor(ju, RecursiveDeleteNodeRunner.class, 3);
+        super.setJobExecutor(jobExec);
+        
+        super.setMaxExecDuration(MAX_EXEC_DURATION);
+        super.setMaxDestruction(MAX_DESTRUCTION);
+        super.setMaxQuote(MAX_QUOTE);
     }
 }

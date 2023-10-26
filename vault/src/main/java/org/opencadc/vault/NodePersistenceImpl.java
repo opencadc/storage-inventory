@@ -99,13 +99,14 @@ import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.vospace.ContainerNode;
 import org.opencadc.vospace.DataNode;
-import org.opencadc.vospace.LinkNode;
 import org.opencadc.vospace.Node;
 import org.opencadc.vospace.NodeNotSupportedException;
 import org.opencadc.vospace.NodeProperty;
 import org.opencadc.vospace.VOS;
 import org.opencadc.vospace.db.NodeDAO;
 import org.opencadc.vospace.server.NodePersistence;
+import org.opencadc.vospace.server.Views;
+import org.opencadc.vospace.server.transfers.TransferGenerator;
 
 /**
  *
@@ -241,6 +242,16 @@ public class NodePersistenceImpl implements NodePersistence {
     @Override
     public Set<URI> getImmutableProps() {
         return immutableProps;
+    }
+
+    @Override
+    public Views getViews() {
+        throw new UnsupportedOperationException("TODO");
+    }
+
+    @Override
+    public TransferGenerator getTransferGenerator() {
+        throw new UnsupportedOperationException("TODO");
     }
 
     /**

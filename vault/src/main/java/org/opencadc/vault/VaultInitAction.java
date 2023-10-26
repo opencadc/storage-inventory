@@ -71,6 +71,7 @@ import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.rest.InitAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
+import ca.nrc.cadc.uws.server.impl.InitDatabaseUWS;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Map;
@@ -93,6 +94,7 @@ public class VaultInitAction extends InitAction {
     private static final Logger log = Logger.getLogger(VaultInitAction.class);
 
     static final String JNDI_DATASOURCE = "jdbc/nodes"; // context.xml
+    static final String JNDI_UWS_DATASOURCE = "jdbc/uws"; // context.xml
 
     // config keys
     private static final String VAULT_KEY = "org.opencadc.vault";
@@ -119,6 +121,7 @@ public class VaultInitAction extends InitAction {
     public void doInit() {
         initConfig();
         initDatabase();
+        initUWSDatabase();
         initNodePersistence();
     }
 
@@ -215,8 +218,22 @@ public class VaultInitAction extends InitAction {
         }
     }
 
+    private void initUWSDatabase() {
+        log.info("initUWSDatabase: START");
+        try {
+            // Init UWS database
+            DataSource uws = DBUtil.findJNDIDataSource(JNDI_UWS_DATASOURCE);
+            InitDatabaseUWS uwsi = new InitDatabaseUWS(uws, null, "uws");
+            uwsi.doInit();
+            log.info("initDatabase: " + JNDI_UWS_DATASOURCE + " uws OK");
+
+        } catch (Exception ex) {
+            throw new RuntimeException("check/init uws database failed", ex);
+        }
+    }
+
     protected void initNodePersistence() {
-        jndiNodePersistence = componentID + ".nodePersistence";
+        jndiNodePersistence = appName + "-" + NodePersistence.class.getName();
         try {
             Context ctx = new InitialContext();
             try {
