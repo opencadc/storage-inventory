@@ -81,6 +81,8 @@ import java.io.IOException;
 import java.net.URI;
 import java.security.Principal;
 import java.text.DateFormat;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
@@ -115,12 +117,40 @@ import org.opencadc.vospace.server.transfers.TransferGenerator;
 public class NodePersistenceImpl implements NodePersistence {
     private static final Logger log = Logger.getLogger(NodePersistenceImpl.class);
 
+    static final Set<URI> ADMIN_PROPS = new TreeSet<>(
+        Arrays.asList(
+            VOS.PROPERTY_URI_CREATOR,
+            VOS.PROPERTY_URI_QUOTA
+        )
+    );
+    
+    static final Set<URI> IMMUTABLE_PROPS = new TreeSet<>(
+        Arrays.asList(
+            VOS.PROPERTY_URI_AVAILABLESPACE,
+            VOS.PROPERTY_URI_CONTENTLENGTH,
+            VOS.PROPERTY_URI_CONTENTMD5,
+            VOS.PROPERTY_URI_CREATION_DATE,
+            VOS.PROPERTY_URI_DATE 
+        )
+    );
+    
+    private static final Set<URI> ARTIFACT_PROPS = new TreeSet<>(
+        Arrays.asList(
+            VOS.PROPERTY_URI_CONTENTLENGTH,
+            VOS.PROPERTY_URI_CONTENTMD5,
+            VOS.PROPERTY_URI_CREATION_DATE,
+            VOS.PROPERTY_URI_DATE,
+            // mutable
+            VOS.PROPERTY_URI_CONTENTENCODING,
+            VOS.PROPERTY_URI_TYPE
+        )
+    );
+    
     private final Map<String,Object> nodeDaoConfig = new TreeMap<>();
     private final ContainerNode root;
     private final ContainerNode trash;
     private final Namespace storageNamespace;
-    private final Set<URI> immutableProps = new TreeSet<>();
-    private final Set<URI> artifactProps = new TreeSet<>();
+    
     private URI resourceID;
     
     public NodePersistenceImpl(URI resourceID) {
@@ -184,24 +214,16 @@ public class NodePersistenceImpl implements NodePersistence {
         
         String ns = config.getFirstPropertyValue(VaultInitAction.STORAGE_NAMESPACE_KEY);
         this.storageNamespace = new Namespace(ns);
+    }
 
-        // computed properties
-        // VOS.PROPERTY_URI_AVAILABLESPACE // container nodes
-        // VOS.PROPERTY_URI_WRITABLE       // prediction for current caller 
-        
-        // props only the admin (root owner) can modify?
-        // VOS.PROPERTY_URI_CREATOR // owner
-        // VOS.PROPERTY_URI_CONTENTLENGTH // container nodes
-        // VOS.PROPERTY_URI_QUOTA // container nodes
-        
-        // node properties that match immutable Artifact fields
-        immutableProps.add(VOS.PROPERTY_URI_CONTENTLENGTH);   // immutable
-        immutableProps.add(VOS.PROPERTY_URI_CONTENTMD5);      // immutable
-        immutableProps.add(VOS.PROPERTY_URI_CREATION_DATE);   // immutable
-        
-        artifactProps.addAll(immutableProps);
-        artifactProps.add(VOS.PROPERTY_URI_CONTENTENCODING); // mutable
-        artifactProps.add(VOS.PROPERTY_URI_TYPE);            // mutable
+    @Override
+    public Views getViews() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public TransferGenerator getTransferGenerator() {
+        throw new UnsupportedOperationException();
     }
     
     private NodeDAO getDAO() {
@@ -240,18 +262,13 @@ public class NodePersistenceImpl implements NodePersistence {
     }
 
     @Override
+    public Set<URI> getAdminProps() {
+        return Collections.unmodifiableSet(ADMIN_PROPS);
+    }
+    
+    @Override
     public Set<URI> getImmutableProps() {
-        return immutableProps;
-    }
-
-    @Override
-    public Views getViews() {
-        throw new UnsupportedOperationException("TODO");
-    }
-
-    @Override
-    public TransferGenerator getTransferGenerator() {
-        throw new UnsupportedOperationException("TODO");
+        return Collections.unmodifiableSet(IMMUTABLE_PROPS);
     }
 
     /**
@@ -445,7 +462,7 @@ public class NodePersistenceImpl implements NodePersistence {
                         contentEncoding = np;
                     }
                     
-                    if (artifactProps.contains(np.getKey())) {
+                    if (ARTIFACT_PROPS.contains(np.getKey())) {
                         i.remove();
                     }
                 }
@@ -478,6 +495,12 @@ public class NodePersistenceImpl implements NodePersistence {
         return node;
     }
 
+    @Override
+    public void move(Node node, ContainerNode dest, String newName) {
+        throw new UnsupportedOperationException();
+    }
+
+    
     /**
      * Delete the specified node.
      * 
