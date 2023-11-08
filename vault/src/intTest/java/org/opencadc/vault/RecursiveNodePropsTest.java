@@ -62,42 +62,43 @@
 *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
 *                                       <http://www.gnu.org/licenses/>.
 *
-*  $Revision: 5 $
-*
 ************************************************************************
- */
+*/
 
 package org.opencadc.vault;
 
-import ca.nrc.cadc.reg.Capabilities;
+import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
-import ca.nrc.cadc.vosi.CapabilitiesTest;
+import java.io.File;
 import java.net.URI;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.opencadc.gms.GroupURI;
 
 /**
- *
+ * Test the async endpoint.
+ * 
  * @author pdowler
  */
-public class VosiCapabilitiesTest extends CapabilitiesTest {
-
-    private static final Logger log = Logger.getLogger(VosiCapabilitiesTest.class);
+public class RecursiveNodePropsTest extends org.opencadc.conformance.vos.RecursiveNodePropsTest {
+    private static final Logger log = Logger.getLogger(RecursiveNodePropsTest.class);
 
     static {
-        Log4jInit.setLevel("ca.nrc.cadc.vosi", Level.DEBUG);
-        Log4jInit.setLevel("org.opencadc.vault", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.conformance.vos", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.vospace", Level.INFO);
+        //Log4jInit.setLevel("ca.nrc.cadc.auth", Level.DEBUG);
     }
 
-    public static final URI VAULT_SERVICE_ID = URI.create("ivo://opencadc.org/vault");
-    
-    public VosiCapabilitiesTest() {
-        super(VAULT_SERVICE_ID);
-    }
+    private static File ADMIN_CERT = FileUtil.getFileFromResource("vault-test.pem", RecursiveNodePropsTest.class);
 
-    @Override
-    protected void validateContent(Capabilities caps) throws Exception {
-        super.validateContent(caps);
+    public RecursiveNodePropsTest() {
+        super(URI.create("ivo://opencadc.org/vault"), ADMIN_CERT);
+        
+        File altCert = FileUtil.getFileFromResource("vault-auth-test.pem", RecursiveNodePropsTest.class);
+        enablePermissionTests(new GroupURI(URI.create("ivo://cadc.nrc.ca/gms?opencadc-vospace-test")), altCert);
+        
+        // vault does not check the actual groups in the permission props tests, hence they can be made up.
+        enablePermissionPropsTest(new GroupURI(URI.create("ivo://myauth/gms?gr1")), new GroupURI(URI.create("ivo://myauth/gms?gr2")));
     }
 
 }

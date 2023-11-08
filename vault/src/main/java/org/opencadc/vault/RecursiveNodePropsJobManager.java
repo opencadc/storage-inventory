@@ -62,42 +62,52 @@
 *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
 *                                       <http://www.gnu.org/licenses/>.
 *
-*  $Revision: 5 $
+*  $Revision: 4 $
 *
 ************************************************************************
- */
+*/
 
 package org.opencadc.vault;
 
-import ca.nrc.cadc.reg.Capabilities;
-import ca.nrc.cadc.util.Log4jInit;
-import ca.nrc.cadc.vosi.CapabilitiesTest;
-import java.net.URI;
-import org.apache.log4j.Level;
+import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.uws.server.JobExecutor;
+import ca.nrc.cadc.uws.server.JobPersistence;
+import ca.nrc.cadc.uws.server.JobUpdater;
+import ca.nrc.cadc.uws.server.SimpleJobManager;
+import ca.nrc.cadc.uws.server.ThreadPoolExecutor;
+import ca.nrc.cadc.uws.server.impl.PostgresJobPersistence;
 import org.apache.log4j.Logger;
+import org.opencadc.vospace.server.async.RecursiveNodePropsRunner;
 
 /**
  *
- * @author pdowler
+ * @author pdowler, majorb, yeunga, adriand
  */
-public class VosiCapabilitiesTest extends CapabilitiesTest {
+public class RecursiveNodePropsJobManager extends SimpleJobManager {
+    private static final Logger log = Logger.getLogger(RecursiveNodePropsJobManager.class);
 
-    private static final Logger log = Logger.getLogger(VosiCapabilitiesTest.class);
+    private static final Long MAX_EXEC_DURATION = Long.valueOf(12 * 7200L); // 24 hours?
+    private static final Long MAX_DESTRUCTION = Long.valueOf(7 * 24 * 3600L); // 1 week
+    private static final Long MAX_QUOTE = Long.valueOf(12 * 7200L); // same as exec
+
+    protected static JobPersistence jp;
 
     static {
-        Log4jInit.setLevel("ca.nrc.cadc.vosi", Level.DEBUG);
-        Log4jInit.setLevel("org.opencadc.vault", Level.DEBUG);
+        log.info("Creating shared (postgres) job manager");
+        jp = new PostgresJobPersistence(AuthenticationUtil.getIdentityManager());
     }
 
-    public static final URI VAULT_SERVICE_ID = URI.create("ivo://opencadc.org/vault");
-    
-    public VosiCapabilitiesTest() {
-        super(VAULT_SERVICE_ID);
-    }
+    public RecursiveNodePropsJobManager() {
+        super();
+        // jp is instantiated in parent org.opencadc.cavern.JobManager
+        JobUpdater ju = jp;
+        super.setJobPersistence(jp);
 
-    @Override
-    protected void validateContent(Capabilities caps) throws Exception {
-        super.validateContent(caps);
+        JobExecutor jobExec = new ThreadPoolExecutor(ju, RecursiveNodePropsRunner.class, 3);
+        super.setJobExecutor(jobExec);
+        
+        super.setMaxExecDuration(MAX_EXEC_DURATION);
+        super.setMaxDestruction(MAX_DESTRUCTION);
+        super.setMaxQuote(MAX_QUOTE);
     }
-
 }
