@@ -76,6 +76,8 @@ import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.reg.Standards;
+import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import java.io.IOException;
@@ -87,6 +89,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -94,6 +97,7 @@ import java.util.UUID;
 import javax.security.auth.Subject;
 import javax.security.auth.x500.X500Principal;
 import org.apache.log4j.Logger;
+import org.opencadc.gms.GroupURI;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.Namespace;
@@ -154,6 +158,7 @@ public class NodePersistenceImpl implements NodePersistence {
     private final ContainerNode trash;
     private final Namespace storageNamespace;
     
+    private final boolean localGroupsOnly;
     private URI resourceID;
     
     public NodePersistenceImpl(URI resourceID) {
@@ -199,6 +204,8 @@ public class NodePersistenceImpl implements NodePersistence {
         
         String ns = config.getFirstPropertyValue(VaultInitAction.STORAGE_NAMESPACE_KEY);
         this.storageNamespace = new Namespace(ns);
+        
+        this.localGroupsOnly = false;
     }
     
     private Subject getRootOwner(MultiValuedProperties mvp, IdentityManager im) {
@@ -427,6 +434,33 @@ public class NodePersistenceImpl implements NodePersistence {
             node.ownerID = identityManager.toOwner(node.owner);
         }
 
+        if (localGroupsOnly) {
+            if (!node.getReadOnlyGroup().isEmpty() || !node.getReadWriteGroup().isEmpty()) {
+                LocalAuthority loc = new LocalAuthority();
+                try {
+                    URI localGMS = loc.getServiceURI(Standards.GMS_SEARCH_10.toASCIIString());
+                    StringBuilder serr = new StringBuilder("non-local groups:");
+                    int len = serr.length();
+                    for (GroupURI g : node.getReadOnlyGroup()) {
+                        if (!localGMS.equals(g.getServiceID())) {
+                            serr.append(" ").append(g.getURI().toASCIIString());
+                        }
+                    }
+                    for (GroupURI g : node.getReadWriteGroup()) {
+                        if (!localGMS.equals(g.getServiceID())) {
+                            serr.append(" ").append(g.getURI().toASCIIString());
+                        }
+                    }
+                    String err = serr.toString();
+                    if (err.length() > len) {
+                        throw new IllegalArgumentException(err);
+                    }
+                } catch (NoSuchElementException ex) {
+                    throw new RuntimeException("CONFIG: localGroupOnly policy && local GMS service not configured");
+                }
+            }
+        }
+        
         if (node instanceof DataNode) {
             DataNode dn = (DataNode) node;
             if (dn.storageID == null) {
