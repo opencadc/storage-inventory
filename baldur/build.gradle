@@ -24,7 +24,7 @@ war {
 }
 
 dependencies {
-    compile 'org.opencadc:cadc-util:[1.9,2.0)'
+    compile 'org.opencadc:cadc-util:[1.10.2,2.0)'
     compile 'org.opencadc:cadc-gms:[1.0,2.0)'
     compile 'org.opencadc:cadc-permissions:[0.2,)'
     // there is no cadc-permisssions-server lib because it's too simple 
