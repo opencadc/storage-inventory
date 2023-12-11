@@ -69,35 +69,29 @@
 
 package org.opencadc.vault;
 
-import ca.nrc.cadc.uws.server.JobExecutor;
+import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.uws.server.JobPersistence;
-import ca.nrc.cadc.uws.server.JobUpdater;
-import ca.nrc.cadc.uws.server.ThreadPoolExecutor;
+import ca.nrc.cadc.uws.server.SimpleJobManager;
+import ca.nrc.cadc.uws.server.impl.PostgresJobPersistence;
 import org.apache.log4j.Logger;
-import org.opencadc.vospace.server.async.RecursiveNodePropsRunner;
 
 /**
  *
- * @author pdowler, majorb, yeunga, adriand
+ * @author adriand
  */
-public class RecursiveNodePropsJobManager extends VaultJobManager {
-    private static final Logger log = Logger.getLogger(RecursiveNodePropsJobManager.class);
+public class VaultJobManager extends SimpleJobManager {
+    private static final Logger log = Logger.getLogger(VaultJobManager.class);
 
-    private static final Long MAX_EXEC_DURATION = Long.valueOf(12 * 7200L); // 24 hours?
-    private static final Long MAX_DESTRUCTION = Long.valueOf(7 * 24 * 3600L); // 1 week
-    private static final Long MAX_QUOTE = Long.valueOf(12 * 7200L); // same as exec
-
-    public RecursiveNodePropsJobManager() {
+    protected VaultJobManager() {
         super();
-        JobPersistence jp = createJobPersistence();
-        JobUpdater ju = (JobUpdater) jp;
-        super.setJobPersistence(jp);
+    }
 
-        JobExecutor jobExec = new ThreadPoolExecutor(ju, RecursiveNodePropsRunner.class, 3);
-        super.setJobExecutor(jobExec);
-        
-        super.setMaxExecDuration(MAX_EXEC_DURATION);
-        super.setMaxDestruction(MAX_DESTRUCTION);
-        super.setMaxQuote(MAX_QUOTE);
+    protected final JobPersistence createJobPersistence() {
+        return new PostgresJobPersistence(AuthenticationUtil.getIdentityManager());
+    }
+
+    @Override
+    public void terminate() throws InterruptedException {
+        super.terminate();
     }
 }

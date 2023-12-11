@@ -69,13 +69,10 @@
 
 package org.opencadc.vault;
 
-import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.uws.server.JobExecutor;
 import ca.nrc.cadc.uws.server.JobPersistence;
 import ca.nrc.cadc.uws.server.JobUpdater;
-import ca.nrc.cadc.uws.server.SimpleJobManager;
 import ca.nrc.cadc.uws.server.ThreadPoolExecutor;
-import ca.nrc.cadc.uws.server.impl.PostgresJobPersistence;
 import org.apache.log4j.Logger;
 import org.opencadc.vospace.server.async.RecursiveDeleteNodeRunner;
 
@@ -83,24 +80,17 @@ import org.opencadc.vospace.server.async.RecursiveDeleteNodeRunner;
  *
  * @author pdowler, majorb, yeunga, adriand
  */
-public class RecursiveDeleteNodeJobManager extends SimpleJobManager {
+public class RecursiveDeleteNodeJobManager extends VaultJobManager {
     private static final Logger log = Logger.getLogger(RecursiveDeleteNodeJobManager.class);
 
     private static final Long MAX_EXEC_DURATION = Long.valueOf(12 * 7200L); // 24 hours?
     private static final Long MAX_DESTRUCTION = Long.valueOf(7 * 24 * 3600L); // 1 week
     private static final Long MAX_QUOTE = Long.valueOf(12 * 7200L); // same as exec
 
-    protected static JobPersistence jp;
-
-    static {
-        log.info("Creating shared (postgres) job manager");
-        jp = new PostgresJobPersistence(AuthenticationUtil.getIdentityManager());
-    }
-
     public RecursiveDeleteNodeJobManager() {
         super();
-        // jp is instantiated in parent org.opencadc.cavern.JobManager
-        JobUpdater ju = jp;
+        JobPersistence jp = createJobPersistence();
+        JobUpdater ju = (JobUpdater) jp;
         super.setJobPersistence(jp);
 
         JobExecutor jobExec = new ThreadPoolExecutor(ju, RecursiveDeleteNodeRunner.class, 3);
