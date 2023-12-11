@@ -63,7 +63,7 @@
     <load-on-startup>2</load-on-startup>
   </servlet>
 
-  <!-- async recursive node property setting servlet-->
+  <!-- async recursive node delete servlet-->
   <servlet>
     <servlet-name>RecursiveDeleteNodeServlet</servlet-name>
     <servlet-class>ca.nrc.cadc.uws.server.JobServlet</servlet-class>
@@ -82,6 +82,33 @@
     <init-param>
       <param-name>ca.nrc.cadc.uws.server.JobManager</param-name>
       <param-value>org.opencadc.vault.RecursiveDeleteNodeJobManager</param-value>
+    </init-param>
+    <load-on-startup>3</load-on-startup>
+  </servlet>
+
+  <!-- async recursive node property setting servlet-->
+  <servlet>
+      <servlet-name>RecursiveNodePropsServlet</servlet-name>
+    <servlet-class>ca.nrc.cadc.uws.server.JobServlet</servlet-class>
+    <init-param>
+      <param-name>get</param-name>
+      <param-value>ca.nrc.cadc.uws.web.GetAction</param-value>
+    </init-param>
+    <init-param>
+      <param-name>post</param-name>
+      <param-value>ca.nrc.cadc.uws.web.PostAction</param-value>
+    </init-param>
+    <init-param>
+      <param-name>delete</param-name>
+      <param-value>ca.nrc.cadc.uws.web.DeleteAction</param-value>
+    </init-param>
+    <init-param>
+      <param-name>ca.nrc.cadc.uws.server.JobManager</param-name>
+      <param-value>org.opencadc.vault.RecursiveNodePropsJobManager</param-value>
+    </init-param>
+    <init-param>
+      <param-name>ca.nrc.cadc.rest.InlineContentHandler</param-name>
+      <param-value>org.opencadc.vospace.server.async.InlineNodeJobHandler</param-value>
     </init-param>
     <load-on-startup>3</load-on-startup>
   </servlet>
@@ -134,7 +161,12 @@
 
   <servlet-mapping>
     <servlet-name>RecursiveDeleteNodeServlet</servlet-name>
-    <url-pattern>/recursiveDelete/*</url-pattern>
+    <url-pattern>/async-delete/*</url-pattern>
+  </servlet-mapping>
+
+  <servlet-mapping>
+    <servlet-name>RecursiveNodePropsServlet</servlet-name>
+    <url-pattern>/async-setprops/*</url-pattern>
   </servlet-mapping>
 
   <!-- Availability servlet endpoint -->

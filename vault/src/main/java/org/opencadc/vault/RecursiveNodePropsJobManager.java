@@ -74,26 +74,26 @@ import ca.nrc.cadc.uws.server.JobPersistence;
 import ca.nrc.cadc.uws.server.JobUpdater;
 import ca.nrc.cadc.uws.server.ThreadPoolExecutor;
 import org.apache.log4j.Logger;
-import org.opencadc.vospace.server.async.RecursiveDeleteNodeRunner;
+import org.opencadc.vospace.server.async.RecursiveNodePropsRunner;
 
 /**
  *
  * @author pdowler, majorb, yeunga, adriand
  */
-public class RecursiveDeleteNodeJobManager extends VaultJobManager {
-    private static final Logger log = Logger.getLogger(RecursiveDeleteNodeJobManager.class);
+public class RecursiveNodePropsJobManager extends VaultJobManager {
+    private static final Logger log = Logger.getLogger(RecursiveNodePropsJobManager.class);
 
     private static final Long MAX_EXEC_DURATION = Long.valueOf(12 * 7200L); // 24 hours?
     private static final Long MAX_DESTRUCTION = Long.valueOf(7 * 24 * 3600L); // 1 week
     private static final Long MAX_QUOTE = Long.valueOf(12 * 7200L); // same as exec
 
-    public RecursiveDeleteNodeJobManager() {
+    public RecursiveNodePropsJobManager() {
         super();
         JobPersistence jp = createJobPersistence();
         JobUpdater ju = (JobUpdater) jp;
         super.setJobPersistence(jp);
 
-        JobExecutor jobExec = new ThreadPoolExecutor(ju, RecursiveDeleteNodeRunner.class, 3);
+        JobExecutor jobExec = new ThreadPoolExecutor(ju, RecursiveNodePropsRunner.class, 3);
         super.setJobExecutor(jobExec);
         
         super.setMaxExecDuration(MAX_EXEC_DURATION);
