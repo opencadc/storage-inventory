@@ -94,6 +94,7 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.KeyPair;
 import org.opencadc.inventory.ObsoleteStorageLocation;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
@@ -108,7 +109,6 @@ import org.opencadc.vospace.Node;
 import org.opencadc.vospace.NodeProperty;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.PreparedStatementCreator;
 import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.jdbc.core.RowMapper;
 
@@ -162,6 +162,7 @@ public class SQLGenerator {
         // internal
         this.tableMap.put(ObsoleteStorageLocation.class, pref + ObsoleteStorageLocation.class.getSimpleName());
         this.tableMap.put(HarvestState.class, pref + HarvestState.class.getSimpleName());
+        this.tableMap.put(KeyPair.class, pref + KeyPair.class.getSimpleName());
         
         String[] cols = new String[] {
             "uri", // first column is logical key
@@ -217,6 +218,16 @@ public class SQLGenerator {
             "id" // last column is always PK
         };
         this.columnMap.put(HarvestState.class, cols);
+        
+        cols = new String[] {
+            "name",
+            "publicKey",
+            "privateKey",
+            "lastModified",
+            "metaChecksum",
+            "id" // last column is always PK
+        };
+        this.columnMap.put(KeyPair.class, cols);
         
         // optional vospace
         log.debug("vosSchema: " + vosSchema);
@@ -304,7 +315,9 @@ public class SQLGenerator {
         if (StorageSite.class.equals(c)) {
             return new StorageSiteGet(forUpdate);
         }
-        
+        if (KeyPair.class.equals(c)) {
+            return new KeyPairGet(forUpdate);
+        }
         if (Node.class.equals(c)) {
             return new NodeGet(forUpdate);
         }
@@ -334,6 +347,8 @@ public class SQLGenerator {
         if (HarvestState.class.equals(c)) {
             return new HarvestStateGet();
         }
+        
+        
         
         throw new UnsupportedOperationException("entity-get: " + c.getName());
     }
@@ -374,6 +389,9 @@ public class SQLGenerator {
         if (StorageSite.class.equals(c)) {
             return new StorageSiteList();
         }
+        if (KeyPair.class.equals(c)) {
+            return new KeyPairList();
+        }
         throw new UnsupportedOperationException("entity-list: " + c.getName());
     }
     
@@ -403,6 +421,9 @@ public class SQLGenerator {
         }
         if (HarvestState.class.equals(c)) {
             return new HarvestStatePut(update);
+        }
+        if (KeyPair.class.equals(c)) {
+            return new KeyPairPut(update);
         }
         if (Node.class.isAssignableFrom(c)) {
             return new NodePut(update);
@@ -831,6 +852,76 @@ public class SQLGenerator {
         }
     }
     
+    class KeyPairGet implements EntityGet<KeyPair> {
+        private UUID id;
+        private String name;
+        private final boolean forUpdate;
+
+        public KeyPairGet(boolean forUpdate) {
+            this.forUpdate = forUpdate;
+        }
+        
+        @Override
+        public void setID(UUID id) {
+            this.id = id;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        @Override
+        public KeyPair execute(JdbcTemplate jdbc) {
+            return (KeyPair) jdbc.query(this, new KeyPairExtractor());
+        }
+
+        @Override
+        public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
+            StringBuilder sb = getSelectFromSQL(KeyPair.class, false);
+            sb.append(" WHERE ");
+            if (id != null) {
+                String col = getKeyColumn(KeyPair.class, true);
+                sb.append(col).append(" = ?");
+            } else if (name != null) {
+                sb.append("name = ?");
+            } else {
+                throw new IllegalStateException("primary key and name are both null");
+            }
+            if (forUpdate) {
+                sb.append(" FOR UPDATE");
+            }
+            String sql = sb.toString();
+            log.debug("KeyPairGet: " + sql);
+            PreparedStatement prep = conn.prepareStatement(sql);
+            if (id != null) {
+                prep.setObject(1, id);
+            } else {
+                prep.setString(1, name);
+            }
+            return prep;
+        }
+    }
+
+    private class KeyPairList implements EntityList<KeyPair> {
+
+        @Override
+        public Set<KeyPair> query(JdbcTemplate jdbc) {
+            List<KeyPair> keys = (List<KeyPair>) jdbc.query(this, new KeyPairRowMapper());
+            Set<KeyPair> ret = new TreeSet<>();
+            ret.addAll(keys);
+            return ret;
+        }
+
+        @Override
+        public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
+            StringBuilder sb = getSelectFromSQL(KeyPair.class, false);
+            String sql = sb.toString();
+            log.debug("KeyPairList: " + sql);
+            PreparedStatement prep = conn.prepareStatement(sql);
+            return prep;
+        }
+    }
+
     public class NodeGet implements EntityGet<Node> {
         private UUID id;
         private ContainerNode parent;
@@ -1264,6 +1355,50 @@ public class SQLGenerator {
             return prep;
         }
         
+    }
+    
+    private class KeyPairPut implements EntityPut<KeyPair> {
+        private final Calendar utc = Calendar.getInstance(DateUtil.UTC);
+        private final boolean update;
+        private KeyPair value;
+        
+        KeyPairPut(boolean update) {
+            this.update = update;
+        }
+
+        @Override
+        public void setValue(KeyPair value) {
+            this.value = value;
+        }
+        
+        @Override
+        public void execute(JdbcTemplate jdbc) {
+            jdbc.update(this);
+        }
+        
+        @Override
+        public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
+            String sql = null;
+            if (update) {
+                sql = getUpdateSQL(KeyPair.class);
+                       
+            } else {
+                sql = getInsertSQL(KeyPair.class);
+            }
+            log.debug("KeyPairPut: " + sql);
+            PreparedStatement prep = conn.prepareStatement(sql);
+            int col = 1;
+            
+            prep.setString(col++, value.getName());
+            prep.setBytes(col++, value.getPublicKey());
+            prep.setBytes(col++, value.getPrivateKey());
+
+            prep.setTimestamp(col++, new Timestamp(value.getLastModified().getTime()), utc);
+            prep.setString(col++, value.getMetaChecksum().toASCIIString());
+            prep.setObject(col++, value.getID());
+            
+            return prep;
+        }
     }
     
     private class NodePut implements EntityPut<Node> {
@@ -1874,6 +2009,40 @@ public class SQLGenerator {
                 return null;
             }
             StorageSiteRowMapper m = new StorageSiteRowMapper();
+            return m.mapRow(rs, 1);
+        }
+    }
+    
+    private class KeyPairRowMapper implements RowMapper<KeyPair> {
+        Calendar utc = Calendar.getInstance(DateUtil.UTC);
+
+        @Override
+        public KeyPair mapRow(ResultSet rs, int i) throws SQLException {
+            int col = 1;
+            final String name = rs.getString(col++);
+            final byte[] pub = rs.getBytes(col++);
+            final byte[] priv = rs.getBytes(col++);
+
+            final Date lastModified = Util.getDate(rs, col++, utc);
+            final URI metaChecksum = Util.getURI(rs, col++);
+            final UUID id = Util.getUUID(rs, col++);
+            
+            KeyPair s = new KeyPair(id, name, pub, priv);
+            InventoryUtil.assignLastModified(s, lastModified);
+            InventoryUtil.assignMetaChecksum(s, metaChecksum);
+            return s;
+        }
+    }
+    
+    private class KeyPairExtractor implements ResultSetExtractor<KeyPair> {
+        final Calendar utc = Calendar.getInstance(DateUtil.UTC);
+        
+        @Override
+        public KeyPair extractData(ResultSet rs) throws SQLException, DataAccessException {
+            if (!rs.next()) {
+                return null;
+            }
+            KeyPairRowMapper m = new KeyPairRowMapper();
             return m.mapRow(rs, 1);
         }
     }

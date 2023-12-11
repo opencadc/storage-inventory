@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2022.                            (c) 2022.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,55 +65,80 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.db.version;
+package org.opencadc.inventory.db;
 
-import java.net.URL;
-import javax.sql.DataSource;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.KeyPair;
+import org.springframework.jdbc.BadSqlGrammarException;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- *
+ * Simple DAO class to store and retrieve public-private key pairs.
+ * 
  * @author pdowler
  */
-public class InitDatabase extends ca.nrc.cadc.db.version.InitDatabase {
-    private static final Logger log = Logger.getLogger(InitDatabase.class);
-    
-    public static final String MODEL_NAME = "storage-inventory";
-    public static final String MODEL_VERSION = "0.15";
-    public static final String PREV_MODEL_VERSION = "0.14";
-    //public static final String PREV_MODEL_VERSION = "DO-NOT_UPGRADE-BY-ACCIDENT";
+public class KeyPairDAO extends AbstractDAO<KeyPair> {
+    private static final Logger log = Logger.getLogger(KeyPairDAO.class);
 
-    static String[] CREATE_SQL = new String[] {
-        "inventory.ModelVersion.sql",
-        "inventory.Artifact.sql",
-        "inventory.StorageSite.sql",
-        "inventory.ObsoleteStorageLocation.sql",
-        "inventory.DeletedArtifactEvent.sql",
-        "inventory.DeletedStorageLocationEvent.sql",
-        "inventory.StorageLocationEvent.sql",
-        "inventory.HarvestState.sql",
-        "inventory.KeyPair.sql",
-        "inventory.permissions.sql"
-    };
+    public KeyPairDAO() {
+        super(true);
+    }
     
-    static String[] UPGRADE_SQL = new String[] {
-        "inventory.KeyPair.sql",
-        "inventory.permissions.sql"
-    };
+    public KeyPairDAO(AbstractDAO src) {
+        super(src);
+    }
     
-    public InitDatabase(DataSource ds, String database, String schema) { 
-        super(ds, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
-        for (String s : CREATE_SQL) {
-            createSQL.add(s);
+    public KeyPair get(UUID id) {
+        return super.get(KeyPair.class, id);
+    }
+    
+    public KeyPair get(String name) {
+        if (name == null) {
+            throw new IllegalArgumentException("name cannot be null");
         }
-        for (String s : UPGRADE_SQL) {
-            upgradeSQL.add(s);
+        checkInit();
+        log.debug("GET: " + name);
+        long t = System.currentTimeMillis();
+
+        try {
+            JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+            
+            SQLGenerator.KeyPairGet get = ( SQLGenerator.KeyPairGet) gen.getEntityGet(KeyPair.class);
+            get.setName(name);
+            KeyPair ret = get.execute(jdbc);
+            return ret;
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
+        } finally {
+            long dt = System.currentTimeMillis() - t;
+            log.debug("GET: " + name + " " + dt + "ms");
         }
+        throw new RuntimeException("BUG: should be unreachable");
     }
 
-    @Override
-    protected URL findSQL(String fname) {
-        // SQL files are stored inside the jar file
-        return InitDatabase.class.getClassLoader().getResource(fname);
+    public void delete(UUID id) {
+        super.delete(KeyPair.class, id);
+    }
+    
+    public Set<KeyPair> list() {
+        checkInit();
+        log.debug("LIST");
+        long t = System.currentTimeMillis();
+
+        try {
+            JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+            EntityList get = gen.getEntityList(KeyPair.class);
+            Set<KeyPair> result = get.query(jdbc);
+            return result;
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
+        } finally {
+            long dt = System.currentTimeMillis() - t;
+            log.debug("LIST: " + dt + "ms");
+        }
+        throw new RuntimeException("BUG: should be unreachable");
     }
 }

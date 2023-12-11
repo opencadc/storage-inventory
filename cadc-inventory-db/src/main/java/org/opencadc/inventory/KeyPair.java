@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2023.                            (c) 2023.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,55 +65,75 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.db.version;
+package org.opencadc.inventory;
 
-import java.net.URL;
-import javax.sql.DataSource;
+import java.util.Objects;
+import java.util.UUID;
 import org.apache.log4j.Logger;
 
 /**
- *
+ * Entity class to support storing a key pair in the database.
+ * 
  * @author pdowler
  */
-public class InitDatabase extends ca.nrc.cadc.db.version.InitDatabase {
-    private static final Logger log = Logger.getLogger(InitDatabase.class);
-    
-    public static final String MODEL_NAME = "storage-inventory";
-    public static final String MODEL_VERSION = "0.15";
-    public static final String PREV_MODEL_VERSION = "0.14";
-    //public static final String PREV_MODEL_VERSION = "DO-NOT_UPGRADE-BY-ACCIDENT";
+public class KeyPair extends Entity implements Comparable<KeyPair> {
+    private static final Logger log = Logger.getLogger(KeyPair.class);
 
-    static String[] CREATE_SQL = new String[] {
-        "inventory.ModelVersion.sql",
-        "inventory.Artifact.sql",
-        "inventory.StorageSite.sql",
-        "inventory.ObsoleteStorageLocation.sql",
-        "inventory.DeletedArtifactEvent.sql",
-        "inventory.DeletedStorageLocationEvent.sql",
-        "inventory.StorageLocationEvent.sql",
-        "inventory.HarvestState.sql",
-        "inventory.KeyPair.sql",
-        "inventory.permissions.sql"
-    };
+    private final String name;
+    private final byte[] publicKey;
+    private final byte[] privateKey;
     
-    static String[] UPGRADE_SQL = new String[] {
-        "inventory.KeyPair.sql",
-        "inventory.permissions.sql"
-    };
+    public KeyPair(String name, byte[] publicKey, byte[] privateKey) {
+        super();
+        InventoryUtil.assertNotNull(KeyPair.class, "name", name);
+        InventoryUtil.assertNotNull(KeyPair.class, "publicKey", publicKey);
+        InventoryUtil.assertNotNull(KeyPair.class, "privateKey", privateKey);
+        this.name = name;
+        this.publicKey = publicKey;
+        this.privateKey = privateKey;
+    }
     
-    public InitDatabase(DataSource ds, String database, String schema) { 
-        super(ds, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
-        for (String s : CREATE_SQL) {
-            createSQL.add(s);
-        }
-        for (String s : UPGRADE_SQL) {
-            upgradeSQL.add(s);
-        }
+    // ctor for DAO class
+    public KeyPair(UUID id, String name, byte[] publicKey, byte[] privateKey) {
+        super(id);
+        InventoryUtil.assertNotNull(KeyPair.class, "name", name);
+        InventoryUtil.assertNotNull(KeyPair.class, "publicKey", publicKey);
+        InventoryUtil.assertNotNull(KeyPair.class, "privateKey", privateKey);
+        this.name = name;
+        this.publicKey = publicKey;
+        this.privateKey = privateKey;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public byte[] getPublicKey() {
+        return publicKey;
+    }
+
+    public byte[] getPrivateKey() {
+        return privateKey;
     }
 
     @Override
-    protected URL findSQL(String fname) {
-        // SQL files are stored inside the jar file
-        return InitDatabase.class.getClassLoader().getResource(fname);
+    public int hashCode() {
+        int hash = 7;
+        hash = 43 * hash + Objects.hashCode(this.name);
+        return hash;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null) {
+            return false;
+        }
+        KeyPair f = (KeyPair) o;
+        return this.compareTo(f) == 0;
+    }
+    
+    @Override
+    public int compareTo(KeyPair t) {
+        return name.compareTo(t.name);
     }
 }

@@ -80,18 +80,20 @@ public class InitDatabaseVOS extends ca.nrc.cadc.db.version.InitDatabase {
     private static final Logger log = Logger.getLogger(InitDatabaseVOS.class);
 
     public static final String MODEL_NAME = "vospace-inventory";
-    public static final String MODEL_VERSION = "0.1";
-    public static final String PREV_MODEL_VERSION = "n/a";
+    public static final String MODEL_VERSION = "0.2";
+    public static final String PREV_MODEL_VERSION = "0.1";
     //public static final String PREV_MODEL_VERSION = "DO-NOT_UPGRADE-BY-ACCIDENT";
     
     static String[] CREATE_SQL = new String[] {
         "vos.ModelVersion.sql",
         "vos.Node.sql",
         "vos.DeletedNodeEvent.sql",
+        "inventory.KeyPair.sql",
         "inventory.permissions.sql"
     };
     
     static String[] UPGRADE_SQL = new String[] {
+        "inventory.KeyPair.sql",
         "inventory.permissions.sql"
     };
     
