@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2022.                            (c) 2022.
+*  (c) 2023.                            (c) 2023.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -73,8 +73,6 @@ import ca.nrc.cadc.net.StorageResolver;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.rest.Version;
 import ca.nrc.cadc.util.MultiValuedProperties;
-import ca.nrc.cadc.vos.Direction;
-import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vosi.Availability;
 import java.io.File;
 import java.net.URI;
@@ -88,9 +86,12 @@ import javax.naming.InitialContext;
 import javax.naming.NamingException;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.transfer.StorageSiteRule;
 import org.opencadc.permissions.ReadGrant;
 import org.opencadc.permissions.WriteGrant;
 import org.opencadc.permissions.client.PermissionsCheck;
+import org.opencadc.vospace.transfer.Direction;
+import org.opencadc.vospace.transfer.Transfer;
 
 /**
  * Abstract class for all that raven action classes have in common,

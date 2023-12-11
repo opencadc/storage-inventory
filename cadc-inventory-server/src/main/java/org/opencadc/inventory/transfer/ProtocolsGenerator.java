@@ -65,7 +65,7 @@
 ************************************************************************
 */
 
-package org.opencadc.raven;
+package org.opencadc.inventory.transfer;
 
 import ca.nrc.cadc.cred.client.CredUtil;
 import ca.nrc.cadc.net.HttpGet;
@@ -76,10 +76,6 @@ import ca.nrc.cadc.reg.Capability;
 import ca.nrc.cadc.reg.Interface;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
-import ca.nrc.cadc.vos.Direction;
-import ca.nrc.cadc.vos.Protocol;
-import ca.nrc.cadc.vos.Transfer;
-import ca.nrc.cadc.vos.VOS;
 import ca.nrc.cadc.vosi.Availability;
 import java.io.File;
 import java.io.IOException;
@@ -109,6 +105,10 @@ import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.permissions.ReadGrant;
 import org.opencadc.permissions.TokenTool;
 import org.opencadc.permissions.WriteGrant;
+import org.opencadc.vospace.VOS;
+import org.opencadc.vospace.transfer.Direction;
+import org.opencadc.vospace.transfer.Protocol;
+import org.opencadc.vospace.transfer.Transfer;
 
 /**
  * Class for generating protocol lists corresponding to transfer requests.
@@ -149,7 +149,11 @@ public class ProtocolsGenerator {
         this.storageResolver = storageResolver;
     }
 
-    List<Protocol> getProtocols(Transfer transfer) throws ResourceNotFoundException, IOException {
+    public boolean getStorageResolverAdded() {
+        return storageResolverAdded;
+    }
+
+    public List<Protocol> getProtocols(Transfer transfer) throws ResourceNotFoundException, IOException {
         String authToken = null;
         URI artifactURI = transfer.getTargets().get(0); // see PostAction line ~127
         if (publicKeyFile != null && privateKeyFile != null) {
@@ -171,60 +175,7 @@ public class ProtocolsGenerator {
         return protos;
     }
 
-    static void prioritizePullFromSites(List<StorageSite> storageSites) {
-        // contains the algorithm for prioritizing storage sites to pull from.
-        
-        // was: prefer read/write sites to put less load on a read-only "seeder" site during migration
-        //storageSites.sort((site1, site2) -> Boolean.compare(!site1.getAllowWrite(), !site2.getAllowWrite()));
-        
-        // random
-        Collections.shuffle(storageSites);
-    }
-
-    Artifact getRemoteArtifact(URL location, URI artifactURI) {
-        try {
-            HttpGet head = new HttpGet(location, true);
-            head.setHeadOnly(true);
-            head.setReadTimeout(10000);
-            head.run();
-            if (head.getResponseCode() != 200) {
-                // caught at the end of the method
-                throw new RuntimeException("Unsuccessful HEAD request: " + head.getResponseCode());
-            }
-            UUID id = UUID.fromString(head.getResponseHeader(ARTIFACT_ID_HDR));
-            Artifact result = new
-                    Artifact(id, artifactURI, head.getDigest(), head.getLastModified(), head.getContentLength());
-            result.contentType = head.getContentType();
-            result.contentEncoding = head.getContentEncoding();
-            return result;
-        } catch (Throwable t) {
-            log.debug("Could not retrieve artifact " + artifactURI.toASCIIString() + " from " + location, t);
-            return null;
-        }
-    }
-
-    private Capability getFilesCapability(StorageSite storageSite) {
-        if (!isAvailable(storageSite.getResourceID())) {
-            log.warn("storage site is offline: " + storageSite.getResourceID());
-            return null;
-        }
-        Capability filesCap = null;
-        try {
-            RegistryClient regClient = new RegistryClient();
-            Capabilities caps = regClient.getCapabilities(storageSite.getResourceID());
-            filesCap = caps.findCapability(Standards.SI_FILES);
-            if (filesCap == null) {
-                log.warn("service: " + storageSite.getResourceID() + " does not provide " + Standards.SI_FILES);
-            }
-        } catch (ResourceNotFoundException ex) {
-            log.warn("storage site not found: " + storageSite.getResourceID());
-        } catch (Exception ex) {
-            log.warn("storage site not responding (capabilities): " + storageSite.getResourceID(), ex);
-        }
-        return filesCap;
-    }
-
-    Artifact getUnsyncedArtifact(URI artifactURI, Transfer transfer, Set<StorageSite> storageSites, String authToken) {
+    public Artifact getUnsyncedArtifact(URI artifactURI, Transfer transfer, Set<StorageSite> storageSites, String authToken) {
         Artifact result = null;
         for (StorageSite storageSite : storageSites) {
             // check if site is currently offline
@@ -296,6 +247,61 @@ public class ProtocolsGenerator {
         }
         return result;
     }
+    
+    static void prioritizePullFromSites(List<StorageSite> storageSites) {
+        // contains the algorithm for prioritizing storage sites to pull from.
+        
+        // was: prefer read/write sites to put less load on a read-only "seeder" site during migration
+        //storageSites.sort((site1, site2) -> Boolean.compare(!site1.getAllowWrite(), !site2.getAllowWrite()));
+        
+        // random
+        Collections.shuffle(storageSites);
+    }
+
+    Artifact getRemoteArtifact(URL location, URI artifactURI) {
+        try {
+            HttpGet head = new HttpGet(location, true);
+            head.setHeadOnly(true);
+            head.setReadTimeout(10000);
+            head.run();
+            if (head.getResponseCode() != 200) {
+                // caught at the end of the method
+                throw new RuntimeException("Unsuccessful HEAD request: " + head.getResponseCode());
+            }
+            UUID id = UUID.fromString(head.getResponseHeader(ARTIFACT_ID_HDR));
+            Artifact result = new
+                    Artifact(id, artifactURI, head.getDigest(), head.getLastModified(), head.getContentLength());
+            result.contentType = head.getContentType();
+            result.contentEncoding = head.getContentEncoding();
+            return result;
+        } catch (Throwable t) {
+            log.debug("Could not retrieve artifact " + artifactURI.toASCIIString() + " from " + location, t);
+            return null;
+        }
+    }
+
+    private Capability getFilesCapability(StorageSite storageSite) {
+        if (!isAvailable(storageSite.getResourceID())) {
+            log.warn("storage site is offline: " + storageSite.getResourceID());
+            return null;
+        }
+        Capability filesCap = null;
+        try {
+            RegistryClient regClient = new RegistryClient();
+            Capabilities caps = regClient.getCapabilities(storageSite.getResourceID());
+            filesCap = caps.findCapability(Standards.SI_FILES);
+            if (filesCap == null) {
+                log.warn("service: " + storageSite.getResourceID() + " does not provide " + Standards.SI_FILES);
+            }
+        } catch (ResourceNotFoundException ex) {
+            log.warn("storage site not found: " + storageSite.getResourceID());
+        } catch (Exception ex) {
+            log.warn("storage site not responding (capabilities): " + storageSite.getResourceID(), ex);
+        }
+        return filesCap;
+    }
+
+    
 
     List<Protocol> doPullFrom(URI artifactURI, Transfer transfer, String authToken) throws ResourceNotFoundException, IOException {
         StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
@@ -327,7 +333,7 @@ public class ProtocolsGenerator {
                     if (storageSite.getAllowRead()) {
                         // less generic request for service that implements an API
                         // HACK: this is filesCap specific in here
-                        if (proto.getUri().equals(filesCap.getStandardID().toASCIIString())) {
+                        if (proto.getUri().equals(filesCap.getStandardID())) {
                             Protocol p = new Protocol(proto.getUri());
                             p.setEndpoint(storageSite.getResourceID().toASCIIString());
                             protos.add(p);
