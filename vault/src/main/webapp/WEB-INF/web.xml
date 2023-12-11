@@ -18,12 +18,12 @@
       <param-name>logLevelPackages</param-name>
       <param-value>
           org.opencadc.vault
-          <!-- ca.nrc.cadc.db -->
+          ca.nrc.cadc.db
           org.opencadc.vospace
-          <!--ca.nrc.cadc.rest
+          ca.nrc.cadc.rest
           ca.nrc.cadc.util
           ca.nrc.cadc.vosi
-          ca.nrc.cadc.uws -->
+          ca.nrc.cadc.uws
       </param-value>
     </init-param>
     <init-param>

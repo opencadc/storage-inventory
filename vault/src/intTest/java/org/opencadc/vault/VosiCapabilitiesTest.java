@@ -85,8 +85,8 @@ public class VosiCapabilitiesTest extends CapabilitiesTest {
     private static final Logger log = Logger.getLogger(VosiCapabilitiesTest.class);
 
     static {
-        Log4jInit.setLevel("ca.nrc.cadc.vosi", Level.DEBUG);
-        Log4jInit.setLevel("org.opencadc.vault", Level.DEBUG);
+        Log4jInit.setLevel("ca.nrc.cadc.vosi", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.vault", Level.INFO);
     }
 
     public static final URI VAULT_SERVICE_ID = URI.create("ivo://opencadc.org/vault");
