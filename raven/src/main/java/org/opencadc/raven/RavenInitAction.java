@@ -71,8 +71,6 @@ import ca.nrc.cadc.rest.InitAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.util.StringUtil;
-import ca.nrc.cadc.vosi.Availability;
-import ca.nrc.cadc.vosi.AvailabilityClient;
 import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -80,17 +78,15 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
-import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Namespace;
-import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
+import org.opencadc.inventory.transfer.StorageSiteAvailabilityCheck;
 import org.opencadc.inventory.transfer.StorageSiteRule;
 
 /**
@@ -118,9 +114,6 @@ public class RavenInitAction extends InitAction {
     static final String PREVENT_NOT_FOUND_KEY = RAVEN_CONSIST_KEY + ".preventNotFound";
 
     static final String DEV_AUTH_ONLY_KEY = RAVEN_KEY + ".authenticateOnly";
-
-    static final int AVAILABILITY_CHECK_TIMEOUT = 30; //secs
-    static final int AVAILABILITY_FULL_CHECK_TIMEOUT = 300; //secs
 
     // set init initConfig, used by subsequent init methods
     MultiValuedProperties props;
@@ -216,7 +209,7 @@ public class RavenInitAction extends InitAction {
 
         this.siteAvailabilitiesKey = this.appName + RavenInitAction.JNDI_AVAILABILITY_NAME;
         terminate();
-        this.availabilityCheck = new Thread(new AvailabilityCheck(storageSiteDAO, this.siteAvailabilitiesKey));
+        this.availabilityCheck = new Thread(new StorageSiteAvailabilityCheck(storageSiteDAO, this.siteAvailabilitiesKey));
         this.availabilityCheck.setDaemon(true);
         this.availabilityCheck.start();
     }
@@ -370,111 +363,4 @@ public class RavenInitAction extends InitAction {
         }
         return prefs;
     }
-
-    private static class AvailabilityCheck implements Runnable {
-        private final StorageSiteDAO storageSiteDAO;
-        private final Map<URI, SiteState> siteStates;
-        private final Map<URI, Availability> siteAvailabilities;
-
-        public AvailabilityCheck(StorageSiteDAO storageSiteDAO, String siteAvailabilitiesKey) {
-            this.storageSiteDAO = storageSiteDAO;
-            this.siteStates = new HashMap<URI, SiteState>();
-            this.siteAvailabilities = new HashMap<URI, Availability>();
-
-            try {
-                Context initialContext = new InitialContext();
-                // check if key already bound, if so unbind
-                try {
-                    initialContext.unbind(siteAvailabilitiesKey);
-                } catch (NamingException ignore) {
-                    // ignore
-                }
-                initialContext.bind(siteAvailabilitiesKey, this.siteAvailabilities);
-            } catch (NamingException e) {
-                throw new IllegalStateException(String.format("unable to bind %s to initial context: %s",
-                                                              siteAvailabilitiesKey, e.getMessage()), e);
-            }
-        }
-
-        @Override
-        public void run() {
-            int lastSiteQuerySecs = 0;
-            while (true) {
-                Set<StorageSite> sites = storageSiteDAO.list();
-                if (lastSiteQuerySecs >= AVAILABILITY_FULL_CHECK_TIMEOUT) {
-                    sites = storageSiteDAO.list();
-                    lastSiteQuerySecs = 0;
-                } else {
-                    lastSiteQuerySecs += AVAILABILITY_CHECK_TIMEOUT;
-                }
-
-                for (StorageSite site: sites) {
-                    URI resourceID = site.getResourceID();
-                    log.debug("checking site: " + resourceID);
-                    SiteState siteState = this.siteStates.get(resourceID);
-                    if (siteState == null) {
-                        siteState = new SiteState(false, 0);
-                    }
-                    boolean minDetail = siteState.isMinDetail();
-                    Availability availability;
-                    try {
-                        availability = getAvailability(resourceID, minDetail);
-                    } catch (Exception e) {
-                        availability = new Availability(false, e.getMessage());
-                        log.debug(String.format("availability check failed %s - %s", resourceID, e.getMessage()));
-                    }
-                    final boolean prev = siteState.available;
-                    siteState.available = availability.isAvailable();
-                    this.siteStates.put(resourceID, siteState);
-                    this.siteAvailabilities.put(resourceID, availability);
-                    String message = String.format("availability check %s %s - %s", minDetail ? "MIN" : "FULL",
-                                                   resourceID, siteState.available ? "UP" : "DOWN");
-                    if (!siteState.available) {
-                        log.warn(message);
-                    } else if (prev != siteState.available) {
-                        log.info(message);
-                    } else {
-                        log.debug(message);
-                    }
-                }
-
-                try {
-                    log.debug(String.format("sleep availability checks for %d secs", AVAILABILITY_CHECK_TIMEOUT));
-                    Thread.sleep(AVAILABILITY_CHECK_TIMEOUT * 1000);
-                } catch (InterruptedException e) {
-                    throw new IllegalStateException("AvailabilityCheck thread interrupted during sleep");
-                }
-            }
-        }
-
-        private Availability getAvailability(URI resourceID, boolean minDetail) {
-            AvailabilityClient client = new AvailabilityClient(resourceID, minDetail);
-            return client.getAvailability();
-        }
-
-        private class SiteState {
-
-            public boolean available;
-            public int lastFullCheckSecs;
-
-            public SiteState(boolean available, int lastFullCheckSecs) {
-                this.available = available;
-                this.lastFullCheckSecs = lastFullCheckSecs;
-            }
-
-            public boolean isMinDetail() {
-                log.debug(String.format("isMinDetail() available=%b, lastFullCheckSecs=%d",
-                                        available, lastFullCheckSecs));
-                if (this.available && this.lastFullCheckSecs < AVAILABILITY_FULL_CHECK_TIMEOUT) {
-                    this.lastFullCheckSecs += AVAILABILITY_CHECK_TIMEOUT;
-                    return true;
-                }
-                this.lastFullCheckSecs = 0;
-                return false;
-            }
-
-        }
-
-    }
-
 }
