@@ -140,7 +140,7 @@ public class GetFilesAction extends FilesAction {
         proto.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
         transfer.getProtocols().add(proto);
 
-        ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.publicKeyFile, this.privateKeyFile,
+        ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.tokenGen,
                                                        this.user, this.siteAvailabilities, this.siteRules,
                                                        this.preventNotFound, this.storageResolver);
         List<Protocol> protos = pg.getProtocols(transfer);

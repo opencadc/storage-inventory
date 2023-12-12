@@ -160,7 +160,7 @@ public class PostAction extends ArtifactAction {
     public void doAction() throws Exception {
         initAndAuthorize();
 
-        ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.publicKeyFile, this.privateKeyFile,
+        ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.tokenGen,
                                                        this.user, this.siteAvailabilities, this.siteRules,
                                                        this.preventNotFound, this.storageResolver);
         Transfer ret = new Transfer(artifactURI, transfer.getDirection());

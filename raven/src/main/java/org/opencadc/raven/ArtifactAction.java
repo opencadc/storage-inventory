@@ -88,6 +88,7 @@ import org.apache.log4j.Logger;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.transfer.StorageSiteRule;
 import org.opencadc.permissions.ReadGrant;
+import org.opencadc.permissions.TokenTool;
 import org.opencadc.permissions.WriteGrant;
 import org.opencadc.permissions.client.PermissionsCheck;
 import org.opencadc.vospace.transfer.Direction;
@@ -110,8 +111,7 @@ public abstract class ArtifactAction extends RestAction {
 
     // immutable state set in constructor
     protected final ArtifactDAO artifactDAO;
-    protected final File publicKeyFile;
-    protected final File privateKeyFile;
+    protected final TokenTool tokenGen;
     protected final List<URI> readGrantServices = new ArrayList<>();
     protected final List<URI> writeGrantServices = new ArrayList<>();
     protected StorageResolver storageResolver;
@@ -126,8 +126,7 @@ public abstract class ArtifactAction extends RestAction {
     ArtifactAction(boolean init) {
         super();
         this.authenticateOnly = false;
-        this.publicKeyFile = null;
-        this.privateKeyFile = null;
+        this.tokenGen = null;
         this.artifactDAO = null;
         this.preventNotFound = false;
         this.storageResolver = null;
@@ -184,14 +183,14 @@ public abstract class ArtifactAction extends RestAction {
         String privkeyFileName = props.getFirstPropertyValue(RavenInitAction.PRIVKEYFILE_KEY);
         if (pubkeyFileName == null && privkeyFileName == null) {
             log.debug("public/private key preauth not enabled by config");
-            this.publicKeyFile = null;
-            this.privateKeyFile = null;
+            this.tokenGen = null;
         } else {
-            this.publicKeyFile = new File(System.getProperty("user.home") + "/config/" + pubkeyFileName);
-            this.privateKeyFile = new File(System.getProperty("user.home") + "/config/" + privkeyFileName);
+            File publicKeyFile = new File(System.getProperty("user.home") + "/config/" + pubkeyFileName);
+            File privateKeyFile = new File(System.getProperty("user.home") + "/config/" + privkeyFileName);
             if (!publicKeyFile.exists() || !privateKeyFile.exists()) {
                 throw new IllegalStateException("invalid config: missing public/private key pair files -- " + publicKeyFile + " | " + privateKeyFile);
             }
+            this.tokenGen = new TokenTool(publicKeyFile, privateKeyFile);
         }
 
         Map<String, Object> config = RavenInitAction.getDaoConfig(props);

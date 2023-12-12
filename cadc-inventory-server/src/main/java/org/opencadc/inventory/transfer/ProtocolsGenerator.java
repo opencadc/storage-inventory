@@ -124,8 +124,7 @@ public class ProtocolsGenerator {
     private final ArtifactDAO artifactDAO;
     private final DeletedArtifactEventDAO deletedArtifactEventDAO;
     private final String user;
-    private final File publicKeyFile;
-    private final File privateKeyFile;
+    private final TokenTool tokenGen;
     private final Map<URI, Availability> siteAvailabilities;
     private final Map<URI, StorageSiteRule> siteRules;
     private final StorageResolver storageResolver;
@@ -135,14 +134,13 @@ public class ProtocolsGenerator {
     boolean storageResolverAdded = false;
 
 
-    public ProtocolsGenerator(ArtifactDAO artifactDAO, File publicKeyFile, File privateKeyFile, String user,
+    public ProtocolsGenerator(ArtifactDAO artifactDAO, TokenTool tokenGen, String user,
                               Map<URI, Availability> siteAvailabilities, Map<URI, StorageSiteRule> siteRules,
                               boolean preventNotFound, StorageResolver storageResolver) {
         this.artifactDAO = artifactDAO;
         this.deletedArtifactEventDAO = new DeletedArtifactEventDAO(this.artifactDAO);
         this.user = user;
-        this.publicKeyFile = publicKeyFile;
-        this.privateKeyFile = privateKeyFile;
+        this.tokenGen = tokenGen;
         this.siteAvailabilities = siteAvailabilities;
         this.siteRules = siteRules;
         this.preventNotFound = preventNotFound;
@@ -156,13 +154,12 @@ public class ProtocolsGenerator {
     public List<Protocol> getProtocols(Transfer transfer) throws ResourceNotFoundException, IOException {
         String authToken = null;
         URI artifactURI = transfer.getTargets().get(0); // see PostAction line ~127
-        if (publicKeyFile != null && privateKeyFile != null) {
+        if (tokenGen != null) {
             // create an auth token
-            TokenTool tk = new TokenTool(publicKeyFile, privateKeyFile);
             if (transfer.getDirection().equals(Direction.pullFromVoSpace)) {
-                authToken = tk.generateToken(artifactURI, ReadGrant.class, user);
+                authToken = tokenGen.generateToken(artifactURI, ReadGrant.class, user);
             } else {
-                authToken = tk.generateToken(artifactURI, WriteGrant.class, user);
+                authToken = tokenGen.generateToken(artifactURI, WriteGrant.class, user);
             }
         }
 

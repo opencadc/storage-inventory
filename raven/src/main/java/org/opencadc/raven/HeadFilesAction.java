@@ -112,15 +112,15 @@ public class HeadFilesAction extends FilesAction {
         if (artifact == null) {
             if (this.preventNotFound) {
                 // check known storage sites
-                ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.publicKeyFile, this.privateKeyFile,
+                ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.tokenGen,
                         this.user, this.siteAvailabilities, this.siteRules, this.preventNotFound, this.storageResolver);
                 StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
                 Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace);
                 Protocol proto = new Protocol(VOS.PROTOCOL_HTTPS_GET);
                 proto.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
                 transfer.getProtocols().add(proto);
-                TokenTool tk = new TokenTool(publicKeyFile, privateKeyFile);
-                String authToken = tk.generateToken(artifactURI, ReadGrant.class, user);
+                // TODO: tokenGen is optional so this can fail
+                String authToken = tokenGen.generateToken(artifactURI, ReadGrant.class, user);
                 artifact = pg.getUnsyncedArtifact(artifactURI, transfer, storageSiteDAO.list(), authToken);
             }
         }
