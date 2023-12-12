@@ -67,7 +67,7 @@
 ************************************************************************
 */
 
-package org.opencadc.vault;
+package org.opencadc.vault.uws;
 
 import ca.nrc.cadc.uws.server.JobExecutor;
 import ca.nrc.cadc.uws.server.JobPersistence;

@@ -81,7 +81,7 @@
     </init-param>
     <init-param>
       <param-name>ca.nrc.cadc.uws.server.JobManager</param-name>
-      <param-value>org.opencadc.vault.RecursiveDeleteNodeJobManager</param-value>
+      <param-value>org.opencadc.vault.uws.RecursiveDeleteNodeJobManager</param-value>
     </init-param>
     <load-on-startup>3</load-on-startup>
   </servlet>
@@ -104,7 +104,7 @@
     </init-param>
     <init-param>
       <param-name>ca.nrc.cadc.uws.server.JobManager</param-name>
-      <param-value>org.opencadc.vault.RecursiveNodePropsJobManager</param-value>
+      <param-value>org.opencadc.vault.uws.RecursiveNodePropsJobManager</param-value>
     </init-param>
     <init-param>
       <param-name>ca.nrc.cadc.rest.InlineContentHandler</param-name>
