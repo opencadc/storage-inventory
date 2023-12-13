@@ -18,8 +18,9 @@
       <param-name>logLevelPackages</param-name>
       <param-value>
           org.opencadc.vault
-          ca.nrc.cadc.db
+          org.opencadc.inventory
           org.opencadc.vospace
+          ca.nrc.cadc.db
           ca.nrc.cadc.rest
           ca.nrc.cadc.util
           ca.nrc.cadc.vosi
@@ -33,6 +34,19 @@
     <load-on-startup>1</load-on-startup>
   </servlet>
 
+    <servlet>
+    <servlet-name>PubKeyServlet</servlet-name>
+    <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
+        <init-param>
+          <param-name>augmentSubject</param-name>
+          <param-value>false</param-value>
+        </init-param>
+        <init-param>
+          <param-name>get</param-name>
+          <param-value>org.opencadc.vault.GetKeyAction</param-value>
+        </init-param>
+    </servlet>
+    
   <servlet>
     <servlet-name>NodesServlet</servlet-name>
     <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
@@ -63,6 +77,64 @@
     <load-on-startup>2</load-on-startup>
   </servlet>
 
+    <!-- sync transfer servlet-->
+    <servlet>
+        <servlet-name>SyncTransferServlet</servlet-name>
+        <servlet-class>ca.nrc.cadc.uws.server.JobServlet</servlet-class>
+        <init-param>
+            <param-name>get</param-name>
+            <param-value>ca.nrc.cadc.uws.web.SyncGetAction</param-value>
+        </init-param>
+        <init-param>
+            <param-name>post</param-name>
+            <param-value>ca.nrc.cadc.uws.web.SyncPostAction</param-value>
+        </init-param>
+        <init-param>
+            <param-name>delete</param-name>
+            <param-value>ca.nrc.cadc.uws.web.DeleteAction</param-value>
+        </init-param>
+        <init-param>
+            <param-name>ca.nrc.cadc.uws.web.SyncPostAction.execOnPOST</param-name>
+            <param-value>true</param-value>
+        </init-param>
+        <init-param>
+            <param-name>ca.nrc.cadc.uws.server.JobManager</param-name>
+            <param-value>org.opencadc.vault.uws.SyncTransferManager</param-value>
+        </init-param>
+        <init-param>
+            <param-name>ca.nrc.cadc.rest.InlineContentHandler</param-name>
+            <param-value>org.opencadc.vospace.server.transfers.InlineTransferHandler</param-value>
+        </init-param>
+        <load-on-startup>3</load-on-startup>
+    </servlet>
+    
+    <!-- async transfer servlet-->
+    <servlet>
+        <servlet-name>AsyncTransferServlet</servlet-name>
+        <servlet-class>ca.nrc.cadc.uws.server.JobServlet</servlet-class>
+        <init-param>
+            <param-name>get</param-name>
+            <param-value>ca.nrc.cadc.uws.web.GetAction</param-value>
+        </init-param>
+        <init-param>
+            <param-name>post</param-name>
+            <param-value>ca.nrc.cadc.uws.web.PostAction</param-value>
+        </init-param>
+        <init-param>
+            <param-name>delete</param-name>
+            <param-value>ca.nrc.cadc.uws.web.DeleteAction</param-value>
+        </init-param>
+        <init-param>
+            <param-name>ca.nrc.cadc.uws.server.JobManager</param-name>
+            <param-value>org.opencadc.vault.uws.AsyncTransferManager</param-value>
+        </init-param>
+        <init-param>
+            <param-name>ca.nrc.cadc.rest.InlineContentHandler</param-name>
+            <param-value>org.opencadc.vospace.server.transfers.InlineTransferHandler</param-value>
+        </init-param>
+        <load-on-startup>3</load-on-startup>
+    </servlet>
+    
   <!-- async recursive node delete servlet-->
   <servlet>
     <servlet-name>RecursiveDeleteNodeServlet</servlet-name>
@@ -149,11 +221,28 @@
       <param-name>availabilityProperties</param-name>
       <param-value>vault-availability.properties</param-value>
     </init-param>
-    <load-on-startup>4</load-on-startup>
+    <load-on-startup>3</load-on-startup>
   </servlet>
 
+    <!-- hopefully temporary -->
+    <!-- internal servlet to assist async transfer servlet -->
+    <servlet>
+        <servlet-name>TransferDetailsServlet</servlet-name>
+        <servlet-class>org.opencadc.vospace.server.transfers.TransferDetailsServlet</servlet-class>
+        <init-param>
+            <param-name>ca.nrc.cadc.uws.server.JobManager</param-name>
+            <param-value>org.opencadc.vault.uws.SyncTransferManager</param-value>
+        </init-param>
+        <load-on-startup>3</load-on-startup>
+    </servlet>
+    
   <!-- Endpoints -->
 
+  <servlet-mapping>
+    <servlet-name>PubKeyServlet</servlet-name>
+    <url-pattern>/pubkey</url-pattern>
+  </servlet-mapping>
+  
   <servlet-mapping>
     <servlet-name>NodesServlet</servlet-name>
     <url-pattern>/nodes/*</url-pattern>
@@ -168,7 +257,22 @@
     <servlet-name>RecursiveNodePropsServlet</servlet-name>
     <url-pattern>/async-setprops/*</url-pattern>
   </servlet-mapping>
-
+  
+  <servlet-mapping>
+    <servlet-name>AsyncTransferServlet</servlet-name>
+    <url-pattern>/transfers/*</url-pattern>
+  </servlet-mapping>
+  
+  <servlet-mapping>
+    <servlet-name>SyncTransferServlet</servlet-name>
+    <url-pattern>/synctrans/*</url-pattern>
+  </servlet-mapping>
+  
+  <servlet-mapping>
+    <servlet-name>TransferDetailsServlet</servlet-name>
+    <url-pattern>/xfer/*</url-pattern>
+  </servlet-mapping>
+    
   <!-- Availability servlet endpoint -->
   <servlet-mapping>
     <servlet-name>AvailabilityServlet</servlet-name>

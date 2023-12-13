@@ -70,8 +70,6 @@ package org.opencadc.vault;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.HttpPrincipal;
 import ca.nrc.cadc.auth.IdentityManager;
-import ca.nrc.cadc.auth.PrincipalExtractor;
-import ca.nrc.cadc.auth.X509CertificateChain;
 import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
@@ -82,11 +80,9 @@ import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import java.io.IOException;
 import java.net.URI;
-import java.security.Principal;
 import java.text.DateFormat;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -95,22 +91,26 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
 import javax.security.auth.Subject;
-import javax.security.auth.x500.X500Principal;
 import org.apache.log4j.Logger;
 import org.opencadc.gms.GroupURI;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.Namespace;
+import org.opencadc.inventory.PreauthKeyPair;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
+import org.opencadc.inventory.db.PreauthKeyPairDAO;
 import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.permissions.TokenTool;
 import org.opencadc.vospace.ContainerNode;
 import org.opencadc.vospace.DataNode;
 import org.opencadc.vospace.Node;
 import org.opencadc.vospace.NodeNotSupportedException;
 import org.opencadc.vospace.NodeProperty;
 import org.opencadc.vospace.VOS;
+import org.opencadc.vospace.VOSURI;
 import org.opencadc.vospace.db.NodeDAO;
+import org.opencadc.vospace.server.LocalServiceURI;
 import org.opencadc.vospace.server.NodePersistence;
 import org.opencadc.vospace.server.Views;
 import org.opencadc.vospace.server.transfers.TransferGenerator;
@@ -225,7 +225,11 @@ public class NodePersistenceImpl implements NodePersistence {
 
     @Override
     public TransferGenerator getTransferGenerator() {
-        throw new UnsupportedOperationException();
+        PreauthKeyPairDAO keyDAO = new PreauthKeyPairDAO();
+        keyDAO.setConfig(nodeDaoConfig);
+        PreauthKeyPair kp = keyDAO.get(VaultInitAction.KEY_PAIR_NAME);
+        TokenTool tt = new TokenTool(kp.getPublicKey(), kp.getPrivateKey());
+        return new VaultTransferGenerator(this, getArtifactDAO(), tt);
     }
     
     private NodeDAO getDAO() {
@@ -526,7 +530,31 @@ public class NodePersistenceImpl implements NodePersistence {
 
     @Override
     public void move(Node node, ContainerNode dest, String newName) {
-        throw new UnsupportedOperationException();
+        if (node == null || dest == null) {
+            throw new IllegalArgumentException("args cannot be null");
+        }
+        if (node.parent == null || dest.parent == null) {
+            throw new IllegalArgumentException("args must both be peristent nodes before move");
+        }
+
+        Subject caller = AuthenticationUtil.getCurrentSubject();
+        node.owner = caller;
+        node.ownerID = null;
+        node.ownerDisplay = null;
+        node.parent = dest;
+        node.parentID = null;
+        if (newName != null) {
+            node.setName(newName);
+        }
+        try {
+            Node result = put(node);
+            log.debug("moved: " + result);
+        } catch (NodeNotSupportedException ex) {
+            LocalServiceURI loc = new LocalServiceURI(getResourceID());
+            VOSURI srcURI = loc.getURI(node);
+            throw new RuntimeException("BUG: failed to move node because of detected type change: " 
+                    + srcURI.getPath() + " type=" + node.getClass().getSimpleName(), ex);
+        }
     }
 
     

@@ -86,16 +86,11 @@ import javax.naming.InitialContext;
 import javax.naming.NamingException;
 import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.KeyPair;
 import org.opencadc.inventory.db.ArtifactDAO;
-import org.opencadc.inventory.db.KeyPairDAO;
 import org.opencadc.inventory.transfer.ProtocolsGenerator;
 import org.opencadc.inventory.transfer.StorageSiteAvailabilityCheck;
 import org.opencadc.inventory.transfer.StorageSiteRule;
-import org.opencadc.permissions.Grant;
-import org.opencadc.permissions.ReadGrant;
 import org.opencadc.permissions.TokenTool;
-import org.opencadc.permissions.WriteGrant;
 import org.opencadc.vospace.ContainerNode;
 import org.opencadc.vospace.DataNode;
 import org.opencadc.vospace.LinkingException;
@@ -116,21 +111,19 @@ import org.opencadc.vospace.transfer.Transfer;
 public class VaultTransferGenerator implements TransferGenerator {
     private static final Logger log = Logger.getLogger(VaultTransferGenerator.class);
 
-    static String KEY_PAIR_NAME = "vault-preauth-keys";
-    
     private final NodePersistenceImpl nodePersistence;
     private final VOSpaceAuthorizer authorizer;
     private final ArtifactDAO artifactDAO;
-    private final KeyPairDAO keyDAO;
+    private final TokenTool tokenTool;
     
     private Map<URI, StorageSiteRule> siteRules = new HashMap<>();
     private Map<URI, Availability> siteAvailabilities;
     
-    public VaultTransferGenerator(NodePersistenceImpl nodePersistence, ArtifactDAO artifactDAO, KeyPairDAO keyDAO) {
+    public VaultTransferGenerator(NodePersistenceImpl nodePersistence, ArtifactDAO artifactDAO, TokenTool tokenTool) {
         this.nodePersistence = nodePersistence;
         this.authorizer = new VOSpaceAuthorizer(nodePersistence);
         this.artifactDAO = artifactDAO;
-        this.keyDAO = keyDAO;
+        this.tokenTool = tokenTool;
         
         // TODO: get appname from ???
         String siteAvailabilitiesKey = "vault" + "-" + StorageSiteAvailabilityCheck.class.getName();
@@ -190,29 +183,22 @@ public class VaultTransferGenerator implements TransferGenerator {
             throws IOException, ResourceNotFoundException {
         log.debug("handleDataNode: " + node);
         
-        Direction dir = trans.getDirection();
-        final Map<String,String> params = new TreeMap<>(); // empty for now
-        
-        // vault only supports preauth URLs using persistent key pair
-        //KeyPair keys = keyDAO.get(KEY_PAIR_NAME);
-        //TokenTool tokenGen = new TokenTool(keys.getPublicKey(), keys.getPrivateKey());
-        TokenTool tokenGen = null;
-        
         IdentityManager im = AuthenticationUtil.getIdentityManager();
         Subject caller = AuthenticationUtil.getCurrentSubject();
         Object userObject = im.toOwner(caller);
         String callingUser = (userObject == null ? null : userObject.toString());
         
-        ProtocolsGenerator pg = new ProtocolsGenerator(artifactDAO, tokenGen, callingUser, siteAvailabilities, siteRules);
+        ProtocolsGenerator pg = new ProtocolsGenerator(artifactDAO, siteAvailabilities, siteRules);
+        pg.tokenGen = tokenTool;
+        pg.user = callingUser;
+        pg.requirePreauthAnon = true;
         //pg.preventNotFound = true;
         
-        Transfer artifactTrans = new Transfer(node.storageID, dir);
+        Transfer artifactTrans = new Transfer(node.storageID, trans.getDirection());
         for (Protocol p : trans.getProtocols()) {
             log.debug("requested protocol: " + p);
             URI secM = p.getSecurityMethod();
-            // TODO: request preauth URL specifically, not anon
             if (secM == null || secM.equals(Standards.SECURITY_METHOD_ANON)) {
-                p.setSecurityMethod(ProtocolsGenerator.SECURITY_EMBEDDED_TOKEN);
                 artifactTrans.getProtocols().add(p);
             }
         }

@@ -71,9 +71,11 @@ import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.rest.InitAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
+import ca.nrc.cadc.util.RsaSignatureGenerator;
 import ca.nrc.cadc.uws.server.impl.InitDatabaseUWS;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.security.KeyPair;
 import java.util.Map;
 import java.util.TreeMap;
 import javax.naming.Context;
@@ -82,8 +84,14 @@ import javax.naming.NamingException;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Namespace;
+import org.opencadc.inventory.PreauthKeyPair;
+import org.opencadc.inventory.db.PreauthKeyPairDAO;
+import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.inventory.db.StorageSiteDAO;
+import org.opencadc.inventory.transfer.StorageSiteAvailabilityCheck;
 import org.opencadc.vospace.db.InitDatabaseVOS;
 import org.opencadc.vospace.server.NodePersistence;
+import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  *
@@ -93,6 +101,8 @@ public class VaultInitAction extends InitAction {
 
     private static final Logger log = Logger.getLogger(VaultInitAction.class);
 
+    static String KEY_PAIR_NAME = "vault-preauth-keys";
+    
     static final String JNDI_DATASOURCE = "jdbc/nodes"; // context.xml
     static final String JNDI_UWS_DATASOURCE = "jdbc/uws"; // context.xml
 
@@ -112,6 +122,9 @@ public class VaultInitAction extends InitAction {
     private Map<String, Object> daoConfig;
 
     private String jndiNodePersistence;
+    private String jndiPreauthKeys;
+    private String jndiSiteAvailabilities;
+    private Thread availabilityCheck;
 
     public VaultInitAction() {
         super();
@@ -123,8 +136,29 @@ public class VaultInitAction extends InitAction {
         initDatabase();
         initUWSDatabase();
         initNodePersistence();
+        initKeyPair();
+        initAvailabilityCheck();
     }
 
+    @Override
+    public void doShutdown() {
+        try {
+            Context ctx = new InitialContext();
+            ctx.unbind(jndiNodePersistence);
+        } catch (Exception oops) {
+            log.error("unbind failed during destroy", oops);
+        }
+        
+        try {
+            Context ctx = new InitialContext();
+            ctx.unbind(jndiPreauthKeys);
+        } catch (Exception oops) {
+            log.error("unbind failed during destroy", oops);
+        }
+        
+        terminateAvailabilityCheck();
+    }
+    
     /**
      * Read config file and verify that all required entries are present.
      *
@@ -183,7 +217,9 @@ public class VaultInitAction extends InitAction {
     }
 
     static Map<String, Object> getDaoConfig(MultiValuedProperties props) {
+        
         Map<String, Object> ret = new TreeMap<>();
+        ret.put(SQLGenerator.class.getName(), SQLGenerator.class); // not configurable right now
         ret.put("jndiDataSourceName", org.opencadc.vault.VaultInitAction.JNDI_DATASOURCE);
         ret.put("schema", props.getFirstPropertyValue(org.opencadc.vault.VaultInitAction.INVENTORY_SCHEMA_KEY));
         ret.put("vosSchema", props.getFirstPropertyValue(org.opencadc.vault.VaultInitAction.VOSPACE_SCHEMA_KEY));
@@ -232,7 +268,7 @@ public class VaultInitAction extends InitAction {
         }
     }
 
-    protected void initNodePersistence() {
+    private void initNodePersistence() {
         jndiNodePersistence = appName + "-" + NodePersistence.class.getName();
         try {
             Context ctx = new InitialContext();
@@ -249,15 +285,76 @@ public class VaultInitAction extends InitAction {
             log.error("Failed to create JNDI Key " + jndiNodePersistence, ex);
         }
     }
-
-    @Override
-    public void doShutdown() {
+    
+    private void initKeyPair() {
+        log.info("initKeyPair: START");
+        jndiPreauthKeys = appName + "-" + PreauthKeyPair.class.getName();
         try {
+            PreauthKeyPairDAO dao = new PreauthKeyPairDAO();
+            dao.setConfig(daoConfig);
+            PreauthKeyPair keys = dao.get(KEY_PAIR_NAME);
+            if (keys == null) {
+                KeyPair kp = RsaSignatureGenerator.getKeyPair(4096);
+                keys = new PreauthKeyPair(KEY_PAIR_NAME, kp.getPublic().getEncoded(), kp.getPrivate().getEncoded());
+                try {
+                    dao.put(keys);
+                    log.info("initKeyPair: new keys created - OK");
+                    
+                } catch (DataIntegrityViolationException oops) {
+                    log.warn("persist new " + PreauthKeyPair.class.getSimpleName() + " failed (" + oops + ") -- probably race condition");
+                    keys = dao.get(KEY_PAIR_NAME);
+                    if (keys != null) {
+                        log.info("race condition confirmed: another instance created keys - OK");
+                    } else {
+                        throw new RuntimeException("check/init " + KEY_PAIR_NAME + " failed", oops);
+                    }
+                }
+            } else {
+                log.info("initKeyPair: re-use existing keys - OK");
+            }
             Context ctx = new InitialContext();
-            ctx.unbind(jndiNodePersistence);
-        } catch (Exception oops) {
-            log.error("unbind failed during destroy", oops);
+            try {
+                ctx.unbind(jndiPreauthKeys);
+            } catch (NamingException ignore) {
+                log.debug("unbind previous JNDI key (" + jndiPreauthKeys + ") failed... ignoring");
+            }
+            ctx.bind(jndiPreauthKeys, keys);
+            log.info("initKeyPair: created JNDI key: " + jndiPreauthKeys);
+        } catch (Exception ex) {
+            throw new RuntimeException("check/init " + KEY_PAIR_NAME + " failed", ex);
         }
     }
+    
+    void initAvailabilityCheck() {
+        StorageSiteDAO storageSiteDAO = new StorageSiteDAO();
+        storageSiteDAO.setConfig(getDaoConfig(props));
 
+        this.jndiSiteAvailabilities = appName + "-" + StorageSiteAvailabilityCheck.class.getName();
+        terminateAvailabilityCheck();
+        this.availabilityCheck = new Thread(new StorageSiteAvailabilityCheck(storageSiteDAO, this.jndiSiteAvailabilities));
+        this.availabilityCheck.setDaemon(true);
+        this.availabilityCheck.start();
+    }
+
+    private final void terminateAvailabilityCheck() {
+        if (this.availabilityCheck != null) {
+            try {
+                log.info("terminating AvailabilityCheck Thread...");
+                this.availabilityCheck.interrupt();
+                this.availabilityCheck.join();
+                log.info("terminating AvailabilityCheck Thread... [OK]");
+            } catch (Throwable t) {
+                log.info("failed to terminate AvailabilityCheck thread", t);
+            } finally {
+                this.availabilityCheck = null;
+            }
+        }
+        try {
+            InitialContext initialContext = new InitialContext();
+            initialContext.unbind(this.jndiSiteAvailabilities);
+        } catch (NamingException e) {
+            log.debug(String.format("unable to unbind %s - %s", this.jndiSiteAvailabilities, e.getMessage()));
+        }
+    }
+    
 }

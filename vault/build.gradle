@@ -44,6 +44,8 @@ dependencies {
     compile 'org.opencadc:cadc-registry:[1.7.4,)'
     compile 'org.opencadc:cadc-inventory:[0.9.4,1.0)'
     compile 'org.opencadc:cadc-inventory-db:[0.15.0,1.0)'
+    compile 'org.opencadc:cadc-inventory-server:[0.3,1.0)'
+    compile 'org.opencadc:cadc-permissions:[0.3.5,1.0)'
 
     testCompile 'junit:junit:[4.0,)'
 
