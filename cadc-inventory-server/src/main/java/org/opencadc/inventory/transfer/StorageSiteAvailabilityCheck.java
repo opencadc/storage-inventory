@@ -101,7 +101,7 @@ public class StorageSiteAvailabilityCheck implements Runnable {
     public StorageSiteAvailabilityCheck(StorageSiteDAO storageSiteDAO, String siteAvailabilitiesKey) {
         this.storageSiteDAO = storageSiteDAO;
         this.siteStates = new HashMap<>();
-        this.siteAvailabilities = new HashMap<URI, Availability>();
+        this.siteAvailabilities = new HashMap<>();
 
         try {
             Context initialContext = new InitialContext();

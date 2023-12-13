@@ -119,24 +119,48 @@ public class ProtocolsGenerator {
 
     private static final Logger log = Logger.getLogger(ProtocolsGenerator.class);
 
+    public static final URI SECURITY_EMBEDDED_TOKEN = URI.create("https://www.opencadc.org/std/storage#embedded-token");
+    
     public static final String ARTIFACT_ID_HDR = "x-artifact-id";  // matches minoc.HeadAction.ARTIFACT_ID_HDR
 
     private final ArtifactDAO artifactDAO;
     private final DeletedArtifactEventDAO deletedArtifactEventDAO;
-    private final String user;
-    private final TokenTool tokenGen;
+    
     private final Map<URI, Availability> siteAvailabilities;
     private final Map<URI, StorageSiteRule> siteRules;
-    private final StorageResolver storageResolver;
-    private final boolean preventNotFound;
     
-    // for use by FilesAction subclasses
+    /**
+     * Optional StorageResolver to resolve Artifact.uri to an external data provider.
+     */
+    public StorageResolver storageResolver;
+    
+    /**
+     * Optional flag to enable prevention of 404 NotFound failure due to eventual
+     * consistency. Setting this to true will cause the code to make HTTP HEAD
+     * requests to all known storage sites looking for an artifact that is not
+     * in the local database.
+     */
+    public boolean preventNotFound = false;
+    
+    /**
+     * Optional user value to put into generated preauth token.
+     */
+    public String user;
+    
+    /**
+     * Optional TokenTool to generate and inject preauth tokens into otherwise anon URL.
+     */
+    public TokenTool tokenGen;
+    
+    /**
+     * Optional restriction so that all anon URLs must have a preauth token.
+     */
+    public boolean requirePreauthAnon = false;
+    
+    // for use by FilesAction subclasses to enhance logging
     boolean storageResolverAdded = false;
 
-
-    public ProtocolsGenerator(ArtifactDAO artifactDAO, TokenTool tokenGen, String user,
-                              Map<URI, Availability> siteAvailabilities, Map<URI, StorageSiteRule> siteRules,
-                              boolean preventNotFound, StorageResolver storageResolver) {
+    public ProtocolsGenerator(ArtifactDAO artifactDAO, Map<URI, Availability> siteAvailabilities, Map<URI, StorageSiteRule> siteRules) {
         this.artifactDAO = artifactDAO;
         this.deletedArtifactEventDAO = new DeletedArtifactEventDAO(this.artifactDAO);
         this.user = user;
@@ -146,7 +170,7 @@ public class ProtocolsGenerator {
         this.preventNotFound = preventNotFound;
         this.storageResolver = storageResolver;
     }
-
+    
     public boolean getStorageResolverAdded() {
         return storageResolverAdded;
     }
@@ -438,7 +462,7 @@ public class ProtocolsGenerator {
                 log.warn("storage site is offline: " + storageSite.getResourceID());
                 continue;
             }
-
+            
             //log.warn("PUT: " + storageSite);
             Capability filesCap = null;
             try {
@@ -456,7 +480,7 @@ public class ProtocolsGenerator {
                     if (storageSite.getAllowWrite()) {
                         // less generic request for service that implements
                         // HACK: this is filesCap specific in here
-                        if (proto.getUri().equals(filesCap.getStandardID().toASCIIString())) {
+                        if (proto.getUri().equals(filesCap.getStandardID())) {
                             Protocol p = new Protocol(proto.getUri());
                             p.setEndpoint(storageSite.getResourceID().toASCIIString());
                             protos.add(p);
@@ -465,15 +489,17 @@ public class ProtocolsGenerator {
                         if (sec == null) {
                             sec = Standards.SECURITY_METHOD_ANON;
                         }
+                        boolean incToken = Standards.SECURITY_METHOD_ANON.equals(sec);
                         Interface iface = filesCap.findInterface(sec);
                         log.debug("PUT: " + storageSite + " proto: " + proto + " iface: " + iface);
                         if (iface != null) {
                             URL baseURL = iface.getAccessURL().getURL();
                             //log.debug("base url for site " + storageSite.getResourceID() + ": " + baseURL);
                             if (protocolCompat(proto, baseURL)) {
+                                
                                 StringBuilder sb = new StringBuilder();
                                 sb.append(baseURL.toExternalForm()).append("/");
-                                if (proto.getSecurityMethod() == null || Standards.SECURITY_METHOD_ANON.equals(proto.getSecurityMethod())) {
+                                if (authToken != null && incToken) {
                                     sb.append(authToken).append("/");
                                 }
                                 sb.append(artifactURI.toASCIIString());
