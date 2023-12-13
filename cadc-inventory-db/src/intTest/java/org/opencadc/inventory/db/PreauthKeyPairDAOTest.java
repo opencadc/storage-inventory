@@ -71,11 +71,12 @@ import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.util.Log4jInit;
+import ca.nrc.cadc.util.RsaSignatureGenerator;
 import java.net.URI;
+import java.security.KeyPair;
 import java.security.MessageDigest;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
 import javax.sql.DataSource;
@@ -84,31 +85,31 @@ import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.opencadc.inventory.KeyPair;
+import org.opencadc.inventory.PreauthKeyPair;
 import org.opencadc.inventory.db.version.InitDatabase;
 
 /**
  *
  * @author pdowler
  */
-public class KeyPairDAOTest {
-    private static final Logger log = Logger.getLogger(KeyPairDAOTest.class);
+public class PreauthKeyPairDAOTest {
+    private static final Logger log = Logger.getLogger(PreauthKeyPairDAOTest.class);
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
         Log4jInit.setLevel("ca.nrc.cadc.db.version", Level.DEBUG);
     }
 
-    KeyPairDAO dao = new KeyPairDAO();
+    PreauthKeyPairDAO dao = new PreauthKeyPairDAO();
     
-    public KeyPairDAOTest()throws Exception {
+    public PreauthKeyPairDAOTest()throws Exception {
         DBConfig dbrc = new DBConfig();
         ConnectionConfig cc = dbrc.getConnectionConfig(TestUtil.SERVER, TestUtil.DATABASE);
-        DBUtil.createJNDIDataSource("jdbc/KeyPairDAOTest", cc);
+        DBUtil.createJNDIDataSource("jdbc/PreauthKeyPairDAOTest", cc);
         
         Map<String,Object> config = new TreeMap<String,Object>();
         config.put(SQLGenerator.class.getName(), SQLGenerator.class);
-        config.put("jndiDataSourceName", "jdbc/KeyPairDAOTest");
+        config.put("jndiDataSourceName", "jdbc/PreauthKeyPairDAOTest");
         config.put("database", TestUtil.DATABASE);
         config.put("schema", TestUtil.SCHEMA);
         dao.setConfig(config);
@@ -126,7 +127,7 @@ public class KeyPairDAOTest {
         log.info("clearing old content...");
         SQLGenerator gen = dao.getSQLGenerator();
         DataSource ds = dao.getDataSource();
-        String sql = "delete from " + gen.getTable(KeyPair.class);
+        String sql = "delete from " + gen.getTable(PreauthKeyPair.class);
         log.info("pre-test cleanup: " + sql);
         ds.getConnection().createStatement().execute(sql);
         log.info("clearing old content... OK");
@@ -135,17 +136,15 @@ public class KeyPairDAOTest {
     @Test
     public void testPutGetUpdateDelete() {
         String name = "testPutGetUpdateDelete";
-        Random rnd = new Random();
-        byte[] publicKey = new byte[128];
-        rnd.nextBytes(publicKey);
-        byte[] privateKey = new byte[512];
-        rnd.nextBytes(privateKey);
-        
-
+        KeyPair kp = RsaSignatureGenerator.getKeyPair(4096);
+        byte[] publicKey = kp.getPublic().getEncoded();
+        byte[] privateKey = kp.getPrivate().getEncoded();
+        log.info("generated keys (4096): " + publicKey.length + "," + privateKey.length);
         try {
-            KeyPair expected = new KeyPair(name, publicKey, privateKey);
+            
+            PreauthKeyPair expected = new PreauthKeyPair(name, publicKey, privateKey);
 
-            KeyPair notFound = dao.get(expected.getID());
+            PreauthKeyPair notFound = dao.get(expected.getID());
             Assert.assertNull(notFound);
         
             dao.put(expected);
@@ -159,7 +158,7 @@ public class KeyPairDAOTest {
             Assert.assertEquals("put metachecksum", mcs, mcs0);
             
             // get by ID
-            KeyPair fid = dao.get(expected.getID());
+            PreauthKeyPair fid = dao.get(expected.getID());
             Assert.assertNotNull(fid);
             Assert.assertEquals(expected.getName(), fid.getName());
             Assert.assertEquals(expected.getPublicKey().length, fid.getPublicKey().length);
@@ -179,12 +178,12 @@ public class KeyPairDAOTest {
             // TODO: udpate
             
             // list
-            Set<KeyPair> keys = dao.list();
+            Set<PreauthKeyPair> keys = dao.list();
             Assert.assertNotNull(keys);
             Assert.assertEquals(1, keys.size());
-            Iterator<KeyPair> iter = keys.iterator();
+            Iterator<PreauthKeyPair> iter = keys.iterator();
             Assert.assertTrue(iter.hasNext());
-            KeyPair actual = iter.next();
+            PreauthKeyPair actual = iter.next();
             Assert.assertEquals(expected.getPublicKey().length, fid.getPublicKey().length);
             Assert.assertEquals(expected.getPrivateKey().length, fid.getPrivateKey().length);
             URI mcs3 = fid.computeMetaChecksum(MessageDigest.getInstance("MD5"));
@@ -192,7 +191,7 @@ public class KeyPairDAOTest {
             
             // delete
             dao.delete(expected.getID());
-            KeyPair deleted = dao.get(expected.getID());
+            PreauthKeyPair deleted = dao.get(expected.getID());
             Assert.assertNull(deleted);
         
         } catch (Exception unexpected) {

@@ -94,7 +94,7 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.KeyPair;
+import org.opencadc.inventory.PreauthKeyPair;
 import org.opencadc.inventory.ObsoleteStorageLocation;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
@@ -162,7 +162,7 @@ public class SQLGenerator {
         // internal
         this.tableMap.put(ObsoleteStorageLocation.class, pref + ObsoleteStorageLocation.class.getSimpleName());
         this.tableMap.put(HarvestState.class, pref + HarvestState.class.getSimpleName());
-        this.tableMap.put(KeyPair.class, pref + KeyPair.class.getSimpleName());
+        this.tableMap.put(PreauthKeyPair.class, pref + PreauthKeyPair.class.getSimpleName());
         
         String[] cols = new String[] {
             "uri", // first column is logical key
@@ -227,7 +227,7 @@ public class SQLGenerator {
             "metaChecksum",
             "id" // last column is always PK
         };
-        this.columnMap.put(KeyPair.class, cols);
+        this.columnMap.put(PreauthKeyPair.class, cols);
         
         // optional vospace
         log.debug("vosSchema: " + vosSchema);
@@ -315,7 +315,7 @@ public class SQLGenerator {
         if (StorageSite.class.equals(c)) {
             return new StorageSiteGet(forUpdate);
         }
-        if (KeyPair.class.equals(c)) {
+        if (PreauthKeyPair.class.equals(c)) {
             return new KeyPairGet(forUpdate);
         }
         if (Node.class.equals(c)) {
@@ -389,7 +389,7 @@ public class SQLGenerator {
         if (StorageSite.class.equals(c)) {
             return new StorageSiteList();
         }
-        if (KeyPair.class.equals(c)) {
+        if (PreauthKeyPair.class.equals(c)) {
             return new KeyPairList();
         }
         throw new UnsupportedOperationException("entity-list: " + c.getName());
@@ -422,7 +422,7 @@ public class SQLGenerator {
         if (HarvestState.class.equals(c)) {
             return new HarvestStatePut(update);
         }
-        if (KeyPair.class.equals(c)) {
+        if (PreauthKeyPair.class.equals(c)) {
             return new KeyPairPut(update);
         }
         if (Node.class.isAssignableFrom(c)) {
@@ -852,7 +852,7 @@ public class SQLGenerator {
         }
     }
     
-    class KeyPairGet implements EntityGet<KeyPair> {
+    class KeyPairGet implements EntityGet<PreauthKeyPair> {
         private UUID id;
         private String name;
         private final boolean forUpdate;
@@ -871,16 +871,16 @@ public class SQLGenerator {
         }
 
         @Override
-        public KeyPair execute(JdbcTemplate jdbc) {
-            return (KeyPair) jdbc.query(this, new KeyPairExtractor());
+        public PreauthKeyPair execute(JdbcTemplate jdbc) {
+            return (PreauthKeyPair) jdbc.query(this, new KeyPairExtractor());
         }
 
         @Override
         public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
-            StringBuilder sb = getSelectFromSQL(KeyPair.class, false);
+            StringBuilder sb = getSelectFromSQL(PreauthKeyPair.class, false);
             sb.append(" WHERE ");
             if (id != null) {
-                String col = getKeyColumn(KeyPair.class, true);
+                String col = getKeyColumn(PreauthKeyPair.class, true);
                 sb.append(col).append(" = ?");
             } else if (name != null) {
                 sb.append("name = ?");
@@ -902,19 +902,19 @@ public class SQLGenerator {
         }
     }
 
-    private class KeyPairList implements EntityList<KeyPair> {
+    private class KeyPairList implements EntityList<PreauthKeyPair> {
 
         @Override
-        public Set<KeyPair> query(JdbcTemplate jdbc) {
-            List<KeyPair> keys = (List<KeyPair>) jdbc.query(this, new KeyPairRowMapper());
-            Set<KeyPair> ret = new TreeSet<>();
+        public Set<PreauthKeyPair> query(JdbcTemplate jdbc) {
+            List<PreauthKeyPair> keys = (List<PreauthKeyPair>) jdbc.query(this, new KeyPairRowMapper());
+            Set<PreauthKeyPair> ret = new TreeSet<>();
             ret.addAll(keys);
             return ret;
         }
 
         @Override
         public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
-            StringBuilder sb = getSelectFromSQL(KeyPair.class, false);
+            StringBuilder sb = getSelectFromSQL(PreauthKeyPair.class, false);
             String sql = sb.toString();
             log.debug("KeyPairList: " + sql);
             PreparedStatement prep = conn.prepareStatement(sql);
@@ -1357,17 +1357,17 @@ public class SQLGenerator {
         
     }
     
-    private class KeyPairPut implements EntityPut<KeyPair> {
+    private class KeyPairPut implements EntityPut<PreauthKeyPair> {
         private final Calendar utc = Calendar.getInstance(DateUtil.UTC);
         private final boolean update;
-        private KeyPair value;
+        private PreauthKeyPair value;
         
         KeyPairPut(boolean update) {
             this.update = update;
         }
 
         @Override
-        public void setValue(KeyPair value) {
+        public void setValue(PreauthKeyPair value) {
             this.value = value;
         }
         
@@ -1380,10 +1380,10 @@ public class SQLGenerator {
         public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
             String sql = null;
             if (update) {
-                sql = getUpdateSQL(KeyPair.class);
+                sql = getUpdateSQL(PreauthKeyPair.class);
                        
             } else {
-                sql = getInsertSQL(KeyPair.class);
+                sql = getInsertSQL(PreauthKeyPair.class);
             }
             log.debug("KeyPairPut: " + sql);
             PreparedStatement prep = conn.prepareStatement(sql);
@@ -2013,11 +2013,11 @@ public class SQLGenerator {
         }
     }
     
-    private class KeyPairRowMapper implements RowMapper<KeyPair> {
+    private class KeyPairRowMapper implements RowMapper<PreauthKeyPair> {
         Calendar utc = Calendar.getInstance(DateUtil.UTC);
 
         @Override
-        public KeyPair mapRow(ResultSet rs, int i) throws SQLException {
+        public PreauthKeyPair mapRow(ResultSet rs, int i) throws SQLException {
             int col = 1;
             final String name = rs.getString(col++);
             final byte[] pub = rs.getBytes(col++);
@@ -2027,18 +2027,18 @@ public class SQLGenerator {
             final URI metaChecksum = Util.getURI(rs, col++);
             final UUID id = Util.getUUID(rs, col++);
             
-            KeyPair s = new KeyPair(id, name, pub, priv);
+            PreauthKeyPair s = new PreauthKeyPair(id, name, pub, priv);
             InventoryUtil.assignLastModified(s, lastModified);
             InventoryUtil.assignMetaChecksum(s, metaChecksum);
             return s;
         }
     }
     
-    private class KeyPairExtractor implements ResultSetExtractor<KeyPair> {
+    private class KeyPairExtractor implements ResultSetExtractor<PreauthKeyPair> {
         final Calendar utc = Calendar.getInstance(DateUtil.UTC);
         
         @Override
-        public KeyPair extractData(ResultSet rs) throws SQLException, DataAccessException {
+        public PreauthKeyPair extractData(ResultSet rs) throws SQLException, DataAccessException {
             if (!rs.next()) {
                 return null;
             }

@@ -71,7 +71,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.KeyPair;
+import org.opencadc.inventory.PreauthKeyPair;
 import org.springframework.jdbc.BadSqlGrammarException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -80,22 +80,22 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * 
  * @author pdowler
  */
-public class KeyPairDAO extends AbstractDAO<KeyPair> {
-    private static final Logger log = Logger.getLogger(KeyPairDAO.class);
+public class PreauthKeyPairDAO extends AbstractDAO<PreauthKeyPair> {
+    private static final Logger log = Logger.getLogger(PreauthKeyPairDAO.class);
 
-    public KeyPairDAO() {
+    public PreauthKeyPairDAO() {
         super(true);
     }
     
-    public KeyPairDAO(AbstractDAO src) {
+    public PreauthKeyPairDAO(AbstractDAO src) {
         super(src);
     }
     
-    public KeyPair get(UUID id) {
-        return super.get(KeyPair.class, id);
+    public PreauthKeyPair get(UUID id) {
+        return super.get(PreauthKeyPair.class, id);
     }
     
-    public KeyPair get(String name) {
+    public PreauthKeyPair get(String name) {
         if (name == null) {
             throw new IllegalArgumentException("name cannot be null");
         }
@@ -106,9 +106,9 @@ public class KeyPairDAO extends AbstractDAO<KeyPair> {
         try {
             JdbcTemplate jdbc = new JdbcTemplate(dataSource);
             
-            SQLGenerator.KeyPairGet get = ( SQLGenerator.KeyPairGet) gen.getEntityGet(KeyPair.class);
+            SQLGenerator.KeyPairGet get = ( SQLGenerator.KeyPairGet) gen.getEntityGet(PreauthKeyPair.class);
             get.setName(name);
-            KeyPair ret = get.execute(jdbc);
+            PreauthKeyPair ret = get.execute(jdbc);
             return ret;
         } catch (BadSqlGrammarException ex) {
             handleInternalFail(ex);
@@ -120,18 +120,18 @@ public class KeyPairDAO extends AbstractDAO<KeyPair> {
     }
 
     public void delete(UUID id) {
-        super.delete(KeyPair.class, id);
+        super.delete(PreauthKeyPair.class, id);
     }
     
-    public Set<KeyPair> list() {
+    public Set<PreauthKeyPair> list() {
         checkInit();
         log.debug("LIST");
         long t = System.currentTimeMillis();
 
         try {
             JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-            EntityList get = gen.getEntityList(KeyPair.class);
-            Set<KeyPair> result = get.query(jdbc);
+            EntityList get = gen.getEntityList(PreauthKeyPair.class);
+            Set<PreauthKeyPair> result = get.query(jdbc);
             return result;
         } catch (BadSqlGrammarException ex) {
             handleInternalFail(ex);

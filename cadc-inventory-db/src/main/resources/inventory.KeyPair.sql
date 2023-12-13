@@ -1,5 +1,5 @@
 
-create table <schema>.KeyPair (
+create table <schema>.PreauthKeyPair (
     name varchar(32) not null,
     publicKey bytea not null,
     privateKey bytea not null,
@@ -9,4 +9,4 @@ create table <schema>.KeyPair (
     metaChecksum varchar(136) not null
 );
 
-create unique index kp_name_index on <schema>.KeyPair(name);
+create unique index kp_name_index on <schema>.PreauthKeyPair(name);

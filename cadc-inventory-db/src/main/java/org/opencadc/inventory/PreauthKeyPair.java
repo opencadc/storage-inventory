@@ -76,29 +76,29 @@ import org.apache.log4j.Logger;
  * 
  * @author pdowler
  */
-public class KeyPair extends Entity implements Comparable<KeyPair> {
-    private static final Logger log = Logger.getLogger(KeyPair.class);
+public class PreauthKeyPair extends Entity implements Comparable<PreauthKeyPair> {
+    private static final Logger log = Logger.getLogger(PreauthKeyPair.class);
 
     private final String name;
     private final byte[] publicKey;
     private final byte[] privateKey;
     
-    public KeyPair(String name, byte[] publicKey, byte[] privateKey) {
+    public PreauthKeyPair(String name, byte[] publicKey, byte[] privateKey) {
         super();
-        InventoryUtil.assertNotNull(KeyPair.class, "name", name);
-        InventoryUtil.assertNotNull(KeyPair.class, "publicKey", publicKey);
-        InventoryUtil.assertNotNull(KeyPair.class, "privateKey", privateKey);
+        InventoryUtil.assertNotNull(PreauthKeyPair.class, "name", name);
+        InventoryUtil.assertNotNull(PreauthKeyPair.class, "publicKey", publicKey);
+        InventoryUtil.assertNotNull(PreauthKeyPair.class, "privateKey", privateKey);
         this.name = name;
         this.publicKey = publicKey;
         this.privateKey = privateKey;
     }
     
     // ctor for DAO class
-    public KeyPair(UUID id, String name, byte[] publicKey, byte[] privateKey) {
+    public PreauthKeyPair(UUID id, String name, byte[] publicKey, byte[] privateKey) {
         super(id);
-        InventoryUtil.assertNotNull(KeyPair.class, "name", name);
-        InventoryUtil.assertNotNull(KeyPair.class, "publicKey", publicKey);
-        InventoryUtil.assertNotNull(KeyPair.class, "privateKey", privateKey);
+        InventoryUtil.assertNotNull(PreauthKeyPair.class, "name", name);
+        InventoryUtil.assertNotNull(PreauthKeyPair.class, "publicKey", publicKey);
+        InventoryUtil.assertNotNull(PreauthKeyPair.class, "privateKey", privateKey);
         this.name = name;
         this.publicKey = publicKey;
         this.privateKey = privateKey;
@@ -128,12 +128,12 @@ public class KeyPair extends Entity implements Comparable<KeyPair> {
         if (o == null) {
             return false;
         }
-        KeyPair f = (KeyPair) o;
+        PreauthKeyPair f = (PreauthKeyPair) o;
         return this.compareTo(f) == 0;
     }
     
     @Override
-    public int compareTo(KeyPair t) {
+    public int compareTo(PreauthKeyPair t) {
         return name.compareTo(t.name);
     }
 }
