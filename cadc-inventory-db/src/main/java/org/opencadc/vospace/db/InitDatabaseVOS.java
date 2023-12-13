@@ -88,13 +88,13 @@ public class InitDatabaseVOS extends ca.nrc.cadc.db.version.InitDatabase {
         "vos.ModelVersion.sql",
         "vos.Node.sql",
         "vos.DeletedNodeEvent.sql",
-        "inventory.KeyPair.sql",
-        "inventory.permissions.sql"
+        "generic.PreauthKeyPair.sql",
+        "generic.permissions.sql"
     };
     
     static String[] UPGRADE_SQL = new String[] {
-        "inventory.KeyPair.sql",
-        "inventory.permissions.sql"
+        "generic.PreauthKeyPair.sql",
+        "generic.permissions.sql"
     };
     
     public InitDatabaseVOS(DataSource ds, String database, String schema) { 

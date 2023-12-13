@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2023.                            (c) 2023.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -92,13 +92,13 @@ public class InitDatabase extends ca.nrc.cadc.db.version.InitDatabase {
         "inventory.DeletedStorageLocationEvent.sql",
         "inventory.StorageLocationEvent.sql",
         "inventory.HarvestState.sql",
-        "inventory.KeyPair.sql",
-        "inventory.permissions.sql"
+        "generic.PreauthKeyPair.sql",
+        "generic.permissions.sql"
     };
     
     static String[] UPGRADE_SQL = new String[] {
-        "inventory.KeyPair.sql",
-        "inventory.permissions.sql"
+        "generic.PreauthKeyPair.sql",
+        "generic.permissions.sql"
     };
     
     public InitDatabase(DataSource ds, String database, String schema) { 
