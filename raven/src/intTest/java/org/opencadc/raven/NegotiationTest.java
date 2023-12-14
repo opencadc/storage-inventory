@@ -844,8 +844,7 @@ public class NegotiationTest extends RavenTest {
 
         Protocol files = new Protocol(Standards.SI_FILES);
         requested.add(files);
-        URI resourceID = URI.create("ivo://opencadc.org/minoc");
-        StorageSite site = new StorageSite(resourceID, "site1", true, true);
+        StorageSite site = new StorageSite(CONSIST_RESOURCE_ID, "site1", true, true);
         try {
             // get raven pub key
             URL pubKeyURL = anonURL.toURI().resolve("./pubkey").toURL();
