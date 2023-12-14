@@ -83,7 +83,6 @@ import javax.naming.NamingException;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.db.ArtifactDAO;
-import org.opencadc.inventory.db.PreauthKeyPairDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.transfer.StorageSiteAvailabilityCheck;
@@ -148,8 +147,6 @@ public class RavenInitAction extends InitAction {
         Map<String,Object> dc = getDaoConfig(props);
         ArtifactDAO artifactDAO = new ArtifactDAO();
         artifactDAO.setConfig(dc); // connectivity tested
-        PreauthKeyPairDAO kpDAO = new PreauthKeyPairDAO();
-        kpDAO.setConfig(dc);
         log.info("initDAO: OK");
     }
     

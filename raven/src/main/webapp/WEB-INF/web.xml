@@ -119,7 +119,7 @@
 
   <servlet-mapping>
     <servlet-name>PubKeyServlet</servlet-name>
-    <url-pattern>/pubkey/*</url-pattern>
+    <url-pattern>/pubkey</url-pattern>
   </servlet-mapping>
   
   <!-- Availability servlet endpoint -->

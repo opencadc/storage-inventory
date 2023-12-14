@@ -840,10 +840,7 @@ public class NegotiationTest extends RavenTest {
 
     @Test
     public void testPreauthURL() throws Exception {
-        List<Protocol> requested = new ArrayList<>();
 
-        Protocol files = new Protocol(Standards.SI_FILES);
-        requested.add(files);
         StorageSite site = new StorageSite(CONSIST_RESOURCE_ID, "site1", true, true);
         try {
             // get raven pub key
@@ -872,7 +869,6 @@ public class NegotiationTest extends RavenTest {
                     p.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
                     Transfer transfer = new Transfer(artifactURI, Direction.pushToVoSpace);
                     transfer.getProtocols().add(p);
-                    transfer.getProtocols().add(files);
                     transfer.version = VOS.VOSPACE_21;
                     Transfer negotiated = negotiate(transfer);
                     List<String> endPoints = negotiated.getAllEndpoints(VOS.PROTOCOL_HTTPS_PUT.toASCIIString());
