@@ -67,19 +67,20 @@ org.opencadc.vault.storage.namespace = {a storage inventory namespace to use}
 ```
 The vault _resourceID_ is the resourceID of _this_ vault service.
 
-The _inventory.schema_ name is the name of the database schema that contains the inventory database objects. The account nominally requires read-only (select) permission on those objects. This currently must be "inventory" due to configuration
-limitations in <a href="../luskan">luskan</a>.
+The _inventory.schema_ name is the name of the database schema that contains the inventory database objects. The
+account nominally requires read-only (select) permission on those objects. This currently must be "inventory" due
+to configuration limitations in <a href="../luskan">luskan</a>.
 
-The _vospace.schema_ name is the name of the database schema used for all created database objects (tables, indices, etc). Note that with a single connection pool, the two schemas must be in the same database and some operations may join tables
-in the two schemas (probably just vospace.node join inventory.artifact).
+The _vospace.schema_ name is the name of the database schema used for all created database objects (tables, indices, etc). Note that with a single connection pool, the two schemas must currently be in the same database.
+TODO: augment config to support separate inventory and vospace pools.
 
-The root node owner has full read and write permission in the root container, so it can create and delete container 
-nodes at the root and assign container node properties that are normally read-only to normal users: owner, quota, 
-etc. This is probably an X509 distingushed name of the user (to start). **not fully implemented** TBD.
+The _root.owner_ owns the root node and has full read and write permission in the root container, so it can 
+create and delete container nodes at the root and assign container node properties that are normally read-only
+to normal users: owner, quota, etc. This must be set to the username of the admin.
 
-The _namespace_ configures `vault` to use the specified namespace in storage-inventory to store files. This only
-applies to new data nodes that are created and will not effect previously created nodes and artifacts. Probably don't
-want to change this... prevent change? TBD.
+The _storage.namespace_ configures `vault` to use the specified namespace in storage-inventory to store files. 
+This only applies to new data nodes that are created and will not effect previously created nodes and artifacts.
+Probably don't want to change this... prevent change? TBD.
 
 ### vault-availability.properties (optional)
 
@@ -91,9 +92,10 @@ Example:
 ```
 users = {user identity}
 ```
-`users` specifies the user(s) who are authorized to make calls to the service. The value is a list of user identities 
-(X500 distingushed name), one line per user. Optional: if the `vault-availability.properties` is not found or does not 
-list any `users`, the service will function in the default mode (ReadWrite) and the state will not be changeable.
+`users` specifies the user(s) who are authorized to make calls to the service. The value is a list of user
+identities (X500 distingushed name), one line per user. Optional: if the `vault-availability.properties` is 
+not found or does not list any `users`, the service will function in the default mode (ReadWrite) and the 
+state will not be changeable.
 
 ## building it
 ```
@@ -111,12 +113,3 @@ docker run --rm -it vault:latest /bin/bash
 docker run --rm --user tomcat:tomcat --volume=/path/to/external/config:/config:ro --name vault vault:latest
 ```
 
-## apply semantic version tags
-```bash
-. VERSION && echo "tags: $TAGS" 
-for t in $TAGS; do
-   docker image tag vault:latest vault:$t
-done
-unset TAGS
-docker image list vault
-```

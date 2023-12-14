@@ -77,10 +77,10 @@ import ca.nrc.cadc.vosi.Availability;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
@@ -203,11 +203,15 @@ public class VaultTransferGenerator implements TransferGenerator {
             }
         }
         
-        List<Protocol> ret = pg.getProtocols(artifactTrans);
-        log.warn("generated urls: " + ret.size());
-        for (Protocol p : ret) {
-            log.warn(p.getEndpoint() + " using " + p.getSecurityMethod());
+        try {
+            List<Protocol> ret = pg.getProtocols(artifactTrans);
+            log.warn("generated urls: " + ret.size());
+            for (Protocol p : ret) {
+                log.warn(p.getEndpoint() + " using " + p.getSecurityMethod());
+            }
+            return ret;
+        } catch (ResourceNotFoundException ex) {
+            return new ArrayList<Protocol>();
         }
-        return ret;
     }
 }
