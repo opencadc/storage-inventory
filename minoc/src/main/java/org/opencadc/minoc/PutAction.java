@@ -68,6 +68,7 @@
 package org.opencadc.minoc;
 
 import ca.nrc.cadc.db.TransactionManager;
+import ca.nrc.cadc.io.ByteCountInputStream;
 import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.WriteException;
@@ -214,14 +215,16 @@ public class PutAction extends ArtifactAction {
         StorageMetadata artifactMetadata = null;
         long startTime = System.currentTimeMillis();
         Long transferTime = null;
+        
         if (PUT_TXN_OP_COMMIT.equalsIgnoreCase(txnOP)) {
             artifactMetadata = storageAdapter.commitTransaction(txnID);
             txnID = null;
             profiler.checkpoint("storageAdapter.put.commit.ok");
         } else {
             log.debug("writing new artifact to " + storageAdapter.getClass().getName());
+            ByteCountInputStream bcis = new ByteCountInputStream(in);
             try {
-                artifactMetadata = storageAdapter.put(newArtifact, in, txnID);
+                artifactMetadata = storageAdapter.put(newArtifact, bcis, txnID);
                 transferTime = System.currentTimeMillis() - startTime;
                 profiler.checkpoint("storageAdapter.put.write.ok");
             } catch (ReadException ex) {
@@ -242,6 +245,10 @@ public class PutAction extends ArtifactAction {
             } catch (ByteLimitExceededException | PreconditionFailedException | TransientException ex) {
                 profiler.checkpoint("storageAdapter.put.write.fail");
                 throw ex;
+            } finally {
+                if (bcis.getByteCount() > 0) {
+                    logInfo.setBytes(bcis.getByteCount());
+                }
             }
             log.debug("writing new artifact to " + storageAdapter.getClass().getName() + " OK");
         }
@@ -330,8 +337,6 @@ public class PutAction extends ArtifactAction {
             syncOutput.setCode(201); // created
             syncOutput.setDigest(artifact.getContentChecksum());
             syncOutput.setHeader("content-length", 0);
-            
-            super.logInfo.setBytes(artifact.getContentLength());
             
             // this block could be passed off to a thread so request completes??
             if (newOSL != null) {
