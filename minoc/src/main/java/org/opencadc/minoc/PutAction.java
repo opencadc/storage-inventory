@@ -123,6 +123,7 @@ public class PutAction extends ArtifactAction {
     
     @Override
     public void initAction() throws Exception {
+        super.initAction();
         checkWritable();
         initAndAuthorize(WriteGrant.class);
         initDAO();

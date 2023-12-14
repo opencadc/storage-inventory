@@ -77,26 +77,21 @@ import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.rest.SyncInput;
 import ca.nrc.cadc.rest.Version;
 import ca.nrc.cadc.util.MultiValuedProperties;
-import ca.nrc.cadc.util.PropertiesReader;
-import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.AccessControlException;
 import java.security.cert.CertificateException;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.TreeMap;
 import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.db.ArtifactDAO;
-import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.permissions.Grant;
 import org.opencadc.permissions.ReadGrant;
@@ -133,76 +128,28 @@ public abstract class ArtifactAction extends RestAction {
     // servlet path minus the auth token
     String loggablePath;
     
-    // immutable state set in constructor
-    protected final MultiValuedProperties config;
-    protected final File publicKey;
-    protected final List<URI> readGrantServices = new ArrayList<>();
-    protected final List<URI> writeGrantServices = new ArrayList<>();
+    protected MinocConfig config;
     
     // lazy init
     protected ArtifactDAO artifactDAO;
     protected StorageAdapter storageAdapter;
     
-    private final boolean authenticateOnly;
-
     // constructor for unit tests with no config/init
     ArtifactAction(boolean init) {
         super();
         this.config = null;
         this.artifactDAO = null;
         this.storageAdapter = null;
-        this.authenticateOnly = false;
-        this.publicKey = null;
     }
 
     protected ArtifactAction() {
         super();
-        this.config = MinocInitAction.getConfig();
+    }
 
-        List<String> readGrants = config.getProperty(MinocInitAction.READ_GRANTS_KEY);
-        if (readGrants != null) {
-            for (String s : readGrants) {
-                try {
-                    URI u = new URI(s);
-                    readGrantServices.add(u);
-                } catch (URISyntaxException ex) {
-                    throw new IllegalStateException("invalid config: " + MinocInitAction.READ_GRANTS_KEY + "=" + s + " INVALID", ex);
-                }
-            }
-        }
-
-        List<String> writeGrants = config.getProperty(MinocInitAction.WRITE_GRANTS_KEY);
-        if (writeGrants != null) {
-            for (String s : writeGrants) {
-                try {
-                    URI u = new URI(s);
-                    writeGrantServices.add(u);
-                } catch (URISyntaxException ex) {
-                    throw new IllegalStateException("invalid config: " + MinocInitAction.WRITE_GRANTS_KEY + "=" + s + " INVALID", ex);
-                }
-            }
-        }
-        
-        String ao = config.getFirstPropertyValue(MinocInitAction.DEV_AUTH_ONLY_KEY);
-        if (ao != null) {
-            try {
-                this.authenticateOnly = Boolean.valueOf(ao);
-                if (authenticateOnly) {
-                    log.warn("(configuration) authenticateOnly = " + authenticateOnly);
-                }
-            } catch (Exception ex) {
-                throw new IllegalStateException("invalid config: " + MinocInitAction.DEV_AUTH_ONLY_KEY + "=" + ao + " must be true|false or not set");
-            }
-        } else {
-            authenticateOnly = false;
-        }
-
-        String pubkeyFileName = config.getFirstPropertyValue(MinocInitAction.PUBKEYFILE_KEY);
-        if (pubkeyFileName != null) {
-            this.publicKey = new File(System.getProperty("user.home") + "/config/" + pubkeyFileName);
-        } else {
-            this.publicKey = null; // no pre-auth
-        }
+    @Override
+    public void initAction() throws Exception {
+        super.initAction();
+        this.config = MinocInitAction.getConfig(appName);
     }
 
     @Override
@@ -258,32 +205,47 @@ public abstract class ArtifactAction extends RestAction {
         // do authorization (with token or subject)
         Subject subject = AuthenticationUtil.getCurrentSubject();
         if (authToken != null) {
-            if (publicKey == null) {
-                throw new IllegalArgumentException("unexpected pre-auth token in URL");
+            //if (publicKey == null) {
+            //    throw new IllegalArgumentException("unexpected pre-auth token in URL");
+            //}
+            //TokenTool tk = new TokenTool(publicKey);
+            for (Map.Entry<URI,byte[]> me : config.getTrustedServices().entrySet()) {
+                URI ts = me.getKey();
+                if (me.getValue() != null) {
+                    TokenTool tk = new TokenTool(me.getValue());
+                    log.warn("validate preauth with key from " + me.getKey());
+                    try {
+                        String tokenUser;
+                        if (allowReadWithWriteGrant && ReadGrant.class.isAssignableFrom(grantClass)) {
+                            // treat a WriteGrant as also granting read permission
+                            tokenUser = tk.validateToken(authToken, artifactURI, grantClass, WriteGrant.class);
+                        } else {
+                            tokenUser = tk.validateToken(authToken, artifactURI, grantClass);
+                        }
+                        subject.getPrincipals().clear();
+                        if (tokenUser != null) {
+                            subject.getPrincipals().add(new HttpPrincipal(tokenUser));
+                        }
+                        logInfo.setSubject(subject);
+                        logInfo.setResource(artifactURI);
+                        logInfo.setPath(syncInput.getContextPath() + syncInput.getComponentPath());
+                        if (ReadGrant.class.isAssignableFrom(grantClass)) {
+                            logInfo.setGrant("read: preauth-token from " + ts);
+                        } else if (WriteGrant.class.isAssignableFrom(grantClass)) {
+                            logInfo.setGrant("write: preauth-token from " + ts);
+                        } else {
+                            throw new IllegalStateException("Unsupported grant class: " + grantClass);
+                        }
+                        return;
+                    } catch (AccessControlException ex) {
+                        log.warn("token invalid vs keys from " + ts, ex);
+                    }
+                } else {
+                    log.warn("no keys from " + ts + " -- SKIP");
+                }
+                // no return from inside check
+                throw new AccessControlException("invalid auth token");
             }
-            TokenTool tk = new TokenTool(publicKey);
-            String tokenUser;
-            if (allowReadWithWriteGrant && ReadGrant.class.isAssignableFrom(grantClass)) {
-                // treat a WriteGrant as also granting read permission
-                tokenUser = tk.validateToken(authToken, artifactURI, grantClass, WriteGrant.class);
-            } else {
-                tokenUser = tk.validateToken(authToken, artifactURI, grantClass);
-            }
-            subject.getPrincipals().clear();
-            if (tokenUser != null) {
-                subject.getPrincipals().add(new HttpPrincipal(tokenUser));
-            }
-            logInfo.setSubject(subject);
-            logInfo.setResource(artifactURI);
-            logInfo.setPath(syncInput.getContextPath() + syncInput.getComponentPath());
-            if (ReadGrant.class.isAssignableFrom(grantClass)) {
-                logInfo.setGrant("read: preauth-token");
-            } else if (WriteGrant.class.isAssignableFrom(grantClass)) {
-                logInfo.setGrant("write: preauth-token");
-            } else {
-                throw new IllegalStateException("Unsupported grant class: " + grantClass);
-            }
-            return;
         }
             
         // augment subject (minoc is configured so augment is not done in rest library)
@@ -291,13 +253,13 @@ public abstract class ArtifactAction extends RestAction {
         logInfo.setSubject(subject);
         logInfo.setResource(artifactURI);
         logInfo.setPath(syncInput.getContextPath() + syncInput.getComponentPath());
-        PermissionsCheck permissionsCheck = new PermissionsCheck(artifactURI, authenticateOnly, logInfo);
+        PermissionsCheck permissionsCheck = new PermissionsCheck(artifactURI, config.isAuthenticateOnly(), logInfo);
         // TODO: allowReadWithWriteGrant could be implemented here, but grant services are probably configured
         // that way already so it's complexity that probably won't allow/enable any actions
         if (ReadGrant.class.isAssignableFrom(grantClass)) {
-            permissionsCheck.checkReadPermission(readGrantServices);
+            permissionsCheck.checkReadPermission(config.getReadGrantServices());
         } else if (WriteGrant.class.isAssignableFrom(grantClass)) {
-            permissionsCheck.checkWritePermission(writeGrantServices);
+            permissionsCheck.checkWritePermission(config.getWriteGrantServices());
         } else {
             throw new IllegalStateException("Unsupported grant class: " + grantClass);
         }
@@ -311,7 +273,7 @@ public abstract class ArtifactAction extends RestAction {
 
     protected void initDAO() {
         if (artifactDAO == null) {
-            Map<String, Object> configMap = MinocInitAction.getDaoConfig(config);
+            Map<String, Object> configMap = config.getDaoConfig();
             this.artifactDAO = new ArtifactDAO();
             artifactDAO.setConfig(configMap); // connectivity tested
         }
@@ -319,12 +281,10 @@ public abstract class ArtifactAction extends RestAction {
     
     protected void initStorageAdapter() {
         if (storageAdapter == null) {
-            this.storageAdapter = InventoryUtil.loadPlugin(config.getFirstPropertyValue(MinocInitAction.SA_KEY));
-            List<Namespace> rec = MinocInitAction.getRecoverableNamespaces(config);
-            storageAdapter.setRecoverableNamespaces(rec);
+            this.storageAdapter = config.getStorageAdapter();
         }
     }
-
+    
     /**
      * Parse the request path.
      */
@@ -372,67 +332,4 @@ public abstract class ArtifactAction extends RestAction {
         }
         return ret;
     }
-
-    protected List<String> getReadGrantServices(MultiValuedProperties props) {
-        String key = ReadGrant.class.getName() + ".resourceID";
-        List<String> values = props.getProperty(key);
-        if (values == null) {
-            return Collections.emptyList();
-        }
-        return values;
-    }
-    
-    protected List<String> getWriteGrantServices(MultiValuedProperties props) {
-        String key = WriteGrant.class.getName() + ".resourceID";
-        List<String> values = props.getProperty(key);
-        if (values == null) {
-            return Collections.emptyList();
-        }
-        return values;
-    }
-    
-    static MultiValuedProperties readConfig() {
-        PropertiesReader pr = new PropertiesReader("minoc.properties");
-        MultiValuedProperties props = pr.getAllProperties();
-
-        if (log.isDebugEnabled()) {
-            log.debug("minoc.properties:");
-            Set<String> keys = props.keySet();
-            for (String key : keys) {
-                log.debug("    " + key + " = " + props.getProperty(key));
-            }
-        }
-        return props;
-    }
-    
-    static Map<String, Object> getDaoConfig(MultiValuedProperties props) {
-        Map<String, Object> config = new HashMap<String, Object>();
-        Class cls = null;
-        List<String> sqlGenList = props.getProperty(MinocInitAction.SQLGEN_KEY);
-        if (sqlGenList != null && sqlGenList.size() > 0) {
-            try {
-                String sqlGenClass = sqlGenList.get(0);
-                cls = Class.forName(sqlGenClass);
-            } catch (ClassNotFoundException e) {
-                throw new IllegalStateException(
-                    "could not load SQLGenerator class: " + e.getMessage(), e);
-            }
-        } else {
-            // use the default SQL generator
-            cls = SQLGenerator.class;
-        }
-
-        config.put(MinocInitAction.SQLGEN_KEY, cls);
-        config.put("jndiDataSourceName", MinocInitAction.JNDI_DATASOURCE);
-        List<String> schemaList = props.getProperty(MinocInitAction.SCHEMA_KEY);
-        if (schemaList == null || schemaList.size() < 1) {
-            throw new IllegalStateException("a value for " + MinocInitAction.SCHEMA_KEY
-                + " is needed in minoc.properties");
-        }
-        config.put("schema", schemaList.get(0));
-        config.put("database", null);
-
-        return config;
-    }
-
 }

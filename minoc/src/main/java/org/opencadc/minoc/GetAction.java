@@ -138,6 +138,7 @@ public class GetAction extends ArtifactAction {
      */
     @Override
     public void initAction() throws Exception {
+        super.initAction();
         checkReadable();
         initAndAuthorize(ReadGrant.class);
         initDAO();
