@@ -78,7 +78,6 @@ import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.transfer.ProtocolsGenerator;
 import org.opencadc.permissions.ReadGrant;
-import org.opencadc.permissions.TokenTool;
 import org.opencadc.vospace.VOS;
 import org.opencadc.vospace.transfer.Direction;
 import org.opencadc.vospace.transfer.Protocol;
@@ -112,8 +111,12 @@ public class HeadFilesAction extends FilesAction {
         if (artifact == null) {
             if (this.preventNotFound) {
                 // check known storage sites
-                ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.tokenGen,
-                        this.user, this.siteAvailabilities, this.siteRules, this.preventNotFound, this.storageResolver);
+                ProtocolsGenerator pg = new ProtocolsGenerator(
+                        this.artifactDAO, this.siteAvailabilities, this.siteRules);
+                pg.tokenGen = this.tokenGen;
+                pg.user = this.user;
+                pg.preventNotFound = this.preventNotFound;
+                pg.storageResolver = this.storageResolver;
                 StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
                 Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace);
                 Protocol proto = new Protocol(VOS.PROTOCOL_HTTPS_GET);

@@ -71,7 +71,6 @@ import ca.nrc.cadc.rest.InitAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.util.StringUtil;
-import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
@@ -84,6 +83,7 @@ import javax.naming.NamingException;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.PreauthKeyPairDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.transfer.StorageSiteAvailabilityCheck;
@@ -105,8 +105,7 @@ public class RavenInitAction extends InitAction {
 
     static final String SCHEMA_KEY = RAVEN_KEY + ".inventory.schema";
 
-    static final String PUBKEYFILE_KEY = RAVEN_KEY + ".publicKeyFile";
-    static final String PRIVKEYFILE_KEY = RAVEN_KEY + ".privateKeyFile";
+    static final String PREAUTH_KEYPAIR = RAVEN_KEY + ".keyPair";
     static final String READ_GRANTS_KEY = RAVEN_KEY + ".readGrantProvider";
     static final String WRITE_GRANTS_KEY = RAVEN_KEY + ".writeGrantProvider";
 
@@ -129,7 +128,6 @@ public class RavenInitAction extends InitAction {
         initConfig();
         initDAO();
         initGrantProviders();
-        initKeys();
         initStorageSiteRules();
         initAvailabilityCheck();
     }
@@ -150,6 +148,8 @@ public class RavenInitAction extends InitAction {
         Map<String,Object> dc = getDaoConfig(props);
         ArtifactDAO artifactDAO = new ArtifactDAO();
         artifactDAO.setConfig(dc); // connectivity tested
+        PreauthKeyPairDAO kpDAO = new PreauthKeyPairDAO();
+        kpDAO.setConfig(dc);
         log.info("initDAO: OK");
     }
     
@@ -179,22 +179,6 @@ public class RavenInitAction extends InitAction {
             }
         }
         log.info("initGrantProviders: OK");
-    }
-    
-    void initKeys() {
-        log.info("initKeys: START");
-        String pubkeyFileName = props.getFirstPropertyValue(RavenInitAction.PUBKEYFILE_KEY);
-        String privkeyFileName = props.getFirstPropertyValue(RavenInitAction.PRIVKEYFILE_KEY);
-        if (pubkeyFileName == null && privkeyFileName == null) {
-            log.info("initKeys: disabled OK");
-            return;
-        }
-        File publicKeyFile = new File(System.getProperty("user.home") + "/config/" + pubkeyFileName);
-        File privateKeyFile = new File(System.getProperty("user.home") + "/config/" + privkeyFileName);
-        if (!publicKeyFile.exists() || !privateKeyFile.exists()) {
-            throw new IllegalStateException("invalid config: missing public/private key pair files -- " + publicKeyFile + " | " + privateKeyFile);
-        }
-        log.info("initKeys: OK");
     }
 
     void initStorageSiteRules() {
@@ -267,24 +251,6 @@ public class RavenInitAction extends InitAction {
             sb.append("OK");
         }
 
-        // optional
-        String pub = mvp.getFirstPropertyValue(RavenInitAction.PUBKEYFILE_KEY);
-        sb.append("\n\t").append(RavenInitAction.PUBKEYFILE_KEY).append(": ");
-        if (pub == null) {
-            sb.append("MISSING");
-        } else {
-            sb.append("OK");
-        }
-
-        String priv = mvp.getFirstPropertyValue(RavenInitAction.PRIVKEYFILE_KEY);
-        sb.append("\n\t").append(RavenInitAction.PRIVKEYFILE_KEY).append(": ");
-        if (priv == null) {
-            sb.append("MISSING");
-        } else {
-            sb.append("OK");
-        }
-
-        
         if (!ok) {
             throw new IllegalStateException(sb.toString());
         }
