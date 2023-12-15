@@ -41,16 +41,9 @@ overhead for the genuine not-found cases.
 The following optional keys configure raven to use external service(s) to obtain grant information in order
 to perform authorization checks:
 ```
-# keys to generate pre-auth URLs to minoc
-org.opencadc.raven.publicKeyFile={public key file name}
-org.opencadc.raven.privateKeyFile={private key file name}
-
 org.opencadc.raven.readGrantProvider={resourceID of a permission granting service}
 org.opencadc.raven.writeGrantProvider={resourceID of a permission granting service}
 ```
-The optional _privateKeyFile_ is used to sign pre-auth URLs (one-time token included in URL) so that a `minoc` service does not
-have to repeat permission checks. The _publicKeyFile_ is not currently used but may be required in future (either exported via URL
-or used to check if `minoc` services have the right key before generating pre-auth URLs: TBD).
 
 The optional _readGrantProvider_ and _writeGrantProvider_ keys configure minoc to call other services to get grants (permissions) for 
 operations. Multiple values of the permission granting service resourceID(s) may be provided by including multiple property 

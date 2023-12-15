@@ -73,10 +73,11 @@ import ca.nrc.cadc.net.StorageResolver;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.rest.Version;
 import ca.nrc.cadc.util.MultiValuedProperties;
+import ca.nrc.cadc.util.RsaSignatureGenerator;
 import ca.nrc.cadc.vosi.Availability;
-import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.security.KeyPair;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -85,7 +86,9 @@ import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.PreauthKeyPair;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.PreauthKeyPairDAO;
 import org.opencadc.inventory.transfer.StorageSiteRule;
 import org.opencadc.permissions.ReadGrant;
 import org.opencadc.permissions.TokenTool;
@@ -111,7 +114,9 @@ public abstract class ArtifactAction extends RestAction {
 
     // immutable state set in constructor
     protected final ArtifactDAO artifactDAO;
+    protected final PreauthKeyPairDAO preauthKeyPairDAO;
     protected final TokenTool tokenGen;
+    protected final byte[] publicKey;
     protected final List<URI> readGrantServices = new ArrayList<>();
     protected final List<URI> writeGrantServices = new ArrayList<>();
     protected StorageResolver storageResolver;
@@ -128,8 +133,10 @@ public abstract class ArtifactAction extends RestAction {
         this.authenticateOnly = false;
         this.tokenGen = null;
         this.artifactDAO = null;
+        this.preauthKeyPairDAO = null;
         this.preventNotFound = false;
         this.storageResolver = null;
+        this.publicKey = null;
     }
 
     protected ArtifactAction() {
@@ -174,26 +181,27 @@ public abstract class ArtifactAction extends RestAction {
 
         initResolver();
 
-        // technically, raven only needs the private key to generate pre-auth tokens
-        // but both are specified here for clarity
-        // - in principle, raven could export it's public key and minoc(s) could retrieve it
-        // - for now, minoc(s) need to be configured with the public key to validate pre-auth
-
-        String pubkeyFileName = props.getFirstPropertyValue(RavenInitAction.PUBKEYFILE_KEY);
-        String privkeyFileName = props.getFirstPropertyValue(RavenInitAction.PRIVKEYFILE_KEY);
-        if (pubkeyFileName == null && privkeyFileName == null) {
-            log.debug("public/private key preauth not enabled by config");
-            this.tokenGen = null;
-        } else {
-            File publicKeyFile = new File(System.getProperty("user.home") + "/config/" + pubkeyFileName);
-            File privateKeyFile = new File(System.getProperty("user.home") + "/config/" + privkeyFileName);
-            if (!publicKeyFile.exists() || !privateKeyFile.exists()) {
-                throw new IllegalStateException("invalid config: missing public/private key pair files -- " + publicKeyFile + " | " + privateKeyFile);
+        Map<String, Object> config = RavenInitAction.getDaoConfig(props);
+        this.preauthKeyPairDAO = new PreauthKeyPairDAO();
+        preauthKeyPairDAO.setConfig(config); // connectivity tested
+        PreauthKeyPair preauthKP = preauthKeyPairDAO.get(RavenInitAction.PREAUTH_KEYPAIR);
+        if (preauthKP == null) {
+            log.info("Generate the pre-auth key pair");
+            KeyPair keyPair = RsaSignatureGenerator.getKeyPair(4096); //TODO size?
+            preauthKP = new PreauthKeyPair(RavenInitAction.PREAUTH_KEYPAIR, keyPair.getPublic().getEncoded(), keyPair.getPrivate().getEncoded());
+            try {
+                preauthKeyPairDAO.put(preauthKP);
+            } catch (Exception ex) {
+                throw new IllegalStateException("Could not persist the pre-auth key pair.", ex);
             }
-            this.tokenGen = new TokenTool(publicKeyFile, privateKeyFile);
+            this.tokenGen = new TokenTool(keyPair.getPublic().getEncoded(), keyPair.getPrivate().getEncoded());
+            this.publicKey = keyPair.getPublic().getEncoded();
+        } else {
+            log.debug("Use existing pre-auth key pair");
+            this.tokenGen = new TokenTool(preauthKP.getPublicKey(), preauthKP.getPrivateKey());
+            this.publicKey = preauthKP.getPublicKey();
         }
 
-        Map<String, Object> config = RavenInitAction.getDaoConfig(props);
         this.artifactDAO = new ArtifactDAO();
         artifactDAO.setConfig(config); // connectivity tested
       
@@ -283,7 +291,6 @@ public abstract class ArtifactAction extends RestAction {
     protected String getServerImpl() {
         // no null version checking because fail to build correctly can't get past basic testing
         Version v = getVersionFromResource();
-        String ret = "storage-inventory/raven-" + v.getMajorMinor();
-        return ret;
+        return "storage-inventory/raven-" + v.getMajorMinor();
     }
 }

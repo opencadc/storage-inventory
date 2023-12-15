@@ -48,6 +48,16 @@
     </servlet>
 
   <servlet>
+    <servlet-name>PubKeyServlet</servlet-name>
+    <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
+    <init-param>
+      <param-name>get</param-name>
+      <param-value>org.opencadc.raven.GetPubKeyAction</param-value>
+    </init-param>
+    <load-on-startup>4</load-on-startup>
+  </servlet>
+
+  <servlet>
     <servlet-name>FilesServlet</servlet-name>
     <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
     <init-param>
@@ -105,6 +115,11 @@
   <servlet-mapping>
     <servlet-name>FilesServlet</servlet-name>
     <url-pattern>/files/*</url-pattern>
+  </servlet-mapping>
+
+  <servlet-mapping>
+    <servlet-name>PubKeyServlet</servlet-name>
+    <url-pattern>/pubkey</url-pattern>
   </servlet-mapping>
   
   <!-- Availability servlet endpoint -->
