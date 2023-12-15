@@ -65,7 +65,7 @@
 ************************************************************************
 */
 
-package org.opencadc.vault;
+package org.opencadc.inventory.transfer;
 
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
@@ -77,7 +77,9 @@ import org.apache.log4j.Logger;
 import org.opencadc.inventory.PreauthKeyPair;
 
 /**
- *
+ * Simple GET action that finds a PreauthKeyPair via JNDI and writes 
+ * the binary public key to the output.
+ * 
  * @author pdowler
  */
 public class GetKeyAction extends RestAction {
