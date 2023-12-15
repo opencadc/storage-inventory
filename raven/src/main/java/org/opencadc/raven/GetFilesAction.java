@@ -140,9 +140,11 @@ public class GetFilesAction extends FilesAction {
         proto.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
         transfer.getProtocols().add(proto);
 
-        ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.tokenGen,
-                                                       this.user, this.siteAvailabilities, this.siteRules,
-                                                       this.preventNotFound, this.storageResolver);
+        ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.siteAvailabilities, this.siteRules);
+        pg.tokenGen = this.tokenGen;
+        pg.user = this.user;
+        pg.preventNotFound = this.preventNotFound;
+        pg.storageResolver = this.storageResolver;
         List<Protocol> protos = pg.getProtocols(transfer);
         if (protos.isEmpty()) {
             throw new ResourceNotFoundException("not available: " + artifactURI);

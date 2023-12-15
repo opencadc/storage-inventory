@@ -160,9 +160,11 @@ public class PostAction extends ArtifactAction {
     public void doAction() throws Exception {
         initAndAuthorize();
 
-        ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.tokenGen,
-                                                       this.user, this.siteAvailabilities, this.siteRules,
-                                                       this.preventNotFound, this.storageResolver);
+        ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.siteAvailabilities, this.siteRules);
+        pg.tokenGen = this.tokenGen;
+        pg.user = this.user;
+        pg.preventNotFound = this.preventNotFound;
+        pg.storageResolver = this.storageResolver;
         Transfer ret = new Transfer(artifactURI, transfer.getDirection());
         // TODO: change from pg.getProtocols(transfer) to pg.getResolvedTransfer(transfer)??
         ret.getProtocols().addAll(pg.getProtocols(transfer));

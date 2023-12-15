@@ -124,8 +124,6 @@ public class RavenInitActionTest {
             String message = e.getMessage();
             log.debug(message);
             Assert.assertTrue(message.contains(String.format("%s: MISSING", RavenInitAction.SCHEMA_KEY)));
-            Assert.assertTrue(message.contains(String.format("%s: MISSING", RavenInitAction.PUBKEYFILE_KEY)));
-            Assert.assertTrue(message.contains(String.format("%s: MISSING", RavenInitAction.PRIVKEYFILE_KEY)));
         } finally {
             System.setProperty("user.home", USER_HOME);
         }

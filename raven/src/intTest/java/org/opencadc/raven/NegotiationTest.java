@@ -101,6 +101,8 @@ import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.db.version.InitDatabase;
 import org.opencadc.inventory.transfer.ProtocolsGenerator;
+import org.opencadc.permissions.TokenTool;
+import org.opencadc.permissions.WriteGrant;
 import org.opencadc.vospace.VOS;
 import org.opencadc.vospace.transfer.Direction;
 import org.opencadc.vospace.transfer.Protocol;
@@ -833,6 +835,61 @@ public class NegotiationTest extends RavenTest {
         } catch (Exception e) {
             log.error("unexpected exception", e);
             Assert.fail("unexpected exception: " + e);
+        }
+    }
+
+    @Test
+    public void testPreauthURL() throws Exception {
+
+        StorageSite site = new StorageSite(CONSIST_RESOURCE_ID, "site1", true, true);
+        try {
+            // get raven pub key
+            URL pubKeyURL = anonURL.toURI().resolve("./pubkey").toURL();
+            log.debug("raven pub key URL: " + pubKeyURL);
+            HttpGet getPubKey = new HttpGet(pubKeyURL, true);
+            getPubKey.run();
+            Assert.assertEquals(200, getPubKey.getResponseCode());
+            Assert.assertNull(getPubKey.getThrowable());
+            final byte[] buffer = new byte[64 * 1024];
+            final InputStream inputStream = getPubKey.getInputStream();
+            int bytesRead = inputStream.read(buffer);
+            if (bytesRead == buffer.length) {
+                // might be incomplete
+                throw new RuntimeException("BUG - pubkey input buffer is too small");
+            }
+            byte[] pubKey = new byte[bytesRead];
+            System.arraycopy(buffer, 0, pubKey, 0, bytesRead);
+
+            TokenTool tokenTool = new TokenTool(pubKey);
+            siteDAO.put(site);
+            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+                public Object run() throws Exception {
+                    URI artifactURI = URI.create("cadc:TEST/" + UUID.randomUUID() + ".fits");
+                    Protocol p = new Protocol(VOS.PROTOCOL_HTTPS_PUT);
+                    p.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
+                    Transfer transfer = new Transfer(artifactURI, Direction.pushToVoSpace);
+                    transfer.getProtocols().add(p);
+                    transfer.version = VOS.VOSPACE_21;
+                    Transfer negotiated = negotiate(transfer);
+                    List<String> endPoints = negotiated.getAllEndpoints(VOS.PROTOCOL_HTTPS_PUT.toASCIIString());
+                    Assert.assertEquals(1, endPoints.size());
+                    URI endPoint = URI.create(endPoints.get(0));
+                    String path = endPoint.getPath();
+                    int columnIndex = path.indexOf(":");
+                    Assert.assertTrue(columnIndex>0);
+                    String tmp = path.substring(0, columnIndex); // ignore artifact URI slashes
+                    String[] pathComp = tmp.split("/");
+                    String token = pathComp[pathComp.length - 2];
+                    URI resArtifactURI = URI.create(pathComp[pathComp.length - 1] + path.substring(columnIndex));
+                    log.debug("Result artifact URI: " + resArtifactURI);
+                    Assert.assertEquals(artifactURI, resArtifactURI);
+                    log.debug("token: " + token);
+                    tokenTool.validateToken(token, artifactURI, WriteGrant.class);
+                    return negotiated;
+                }
+            });
+        } finally {
+            siteDAO.delete(site.getID());
         }
     }
 }

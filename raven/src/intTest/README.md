@@ -46,5 +46,5 @@ org.opencadc.raven.putPreference=@SITE3
 org.opencadc.raven.consistency.preventNotFound=true
 
 # external resolvers
-ca.nrc.cadc.net.StorageResolver=mast ca.nrc.cadc.caom2.artifact.resolvers.MastResolver
+ca.nrc.cadc.net.StorageResolver=ca.nrc.cadc.caom2.artifact.resolvers.MastResolver
 ```
