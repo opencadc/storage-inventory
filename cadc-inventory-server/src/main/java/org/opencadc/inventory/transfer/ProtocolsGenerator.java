@@ -395,7 +395,7 @@ public class ProtocolsGenerator {
                                 log.debug("added: " + p);
 
                                 // add a plain anon URL
-                                if (authToken != null && Standards.SECURITY_METHOD_ANON.equals(sec)) {
+                                if (authToken != null && !requirePreauthAnon && Standards.SECURITY_METHOD_ANON.equals(sec)) {
                                     sb = new StringBuilder();
                                     sb.append(baseURL.toExternalForm()).append("/");
                                     sb.append(artifactURI.toASCIIString());

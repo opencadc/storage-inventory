@@ -99,9 +99,9 @@ public class GetKeyAction extends RestAction {
         String jndiPreauthKeys = appName + "-" + PreauthKeyPair.class.getName();
         Context ctx = new InitialContext();
         try {
-            log.warn("lookup: " + jndiPreauthKeys);
+            log.debug("lookup: " + jndiPreauthKeys);
             PreauthKeyPair keys = (PreauthKeyPair) ctx.lookup(jndiPreauthKeys);
-            log.warn("found: " + keys);
+            log.debug("found: " + keys);
             byte[] pub = keys.getPublicKey();
             syncOutput.setHeader("content-length", pub.length);
             syncOutput.setHeader("content-type", "application/octet-stream");
