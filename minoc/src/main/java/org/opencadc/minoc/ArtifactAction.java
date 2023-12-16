@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2022.                            (c) 2022.
+*  (c) 2023.                            (c) 2023.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -76,21 +76,16 @@ import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.rest.SyncInput;
 import ca.nrc.cadc.rest.Version;
-import ca.nrc.cadc.util.MultiValuedProperties;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.AccessControlException;
 import java.security.cert.CertificateException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.permissions.Grant;
@@ -205,15 +200,12 @@ public abstract class ArtifactAction extends RestAction {
         // do authorization (with token or subject)
         Subject subject = AuthenticationUtil.getCurrentSubject();
         if (authToken != null) {
-            //if (publicKey == null) {
-            //    throw new IllegalArgumentException("unexpected pre-auth token in URL");
-            //}
-            //TokenTool tk = new TokenTool(publicKey);
-            for (Map.Entry<URI,byte[]> me : config.getTrustedServices().entrySet()) {
-                URI ts = me.getKey();
+            Map<URI,byte[]> trusted = config.getTrustedServices();
+            log.debug("trusted services: " + trusted.size());
+            for (Map.Entry<URI,byte[]> me : trusted.entrySet()) {
                 if (me.getValue() != null) {
                     TokenTool tk = new TokenTool(me.getValue());
-                    log.warn("validate preauth with key from " + me.getKey());
+                    log.debug("validate preauth with key from " + me.getKey());
                     try {
                         String tokenUser;
                         if (allowReadWithWriteGrant && ReadGrant.class.isAssignableFrom(grantClass)) {
@@ -230,22 +222,23 @@ public abstract class ArtifactAction extends RestAction {
                         logInfo.setResource(artifactURI);
                         logInfo.setPath(syncInput.getContextPath() + syncInput.getComponentPath());
                         if (ReadGrant.class.isAssignableFrom(grantClass)) {
-                            logInfo.setGrant("read: preauth-token from " + ts);
+                            logInfo.setGrant("read:preauth-token:" + me.getKey());
                         } else if (WriteGrant.class.isAssignableFrom(grantClass)) {
-                            logInfo.setGrant("write: preauth-token from " + ts);
+                            logInfo.setGrant("write:preauth-token:" + me.getKey());
                         } else {
                             throw new IllegalStateException("Unsupported grant class: " + grantClass);
                         }
+                        // granted
                         return;
                     } catch (AccessControlException ex) {
-                        log.warn("token invalid vs keys from " + ts, ex);
+                        log.debug("token invalid vs keys from " + me.getKey());
                     }
                 } else {
-                    log.warn("no keys from " + ts + " -- SKIP");
+                    log.warn("no keys from " + me.getKey() + " -- SKIP");
                 }
-                // no return from inside check
-                throw new AccessControlException("invalid auth token");
             }
+            // no return from inside check
+            throw new AccessControlException("invalid auth token");
         }
             
         // augment subject (minoc is configured so augment is not done in rest library)

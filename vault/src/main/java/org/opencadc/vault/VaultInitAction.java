@@ -320,6 +320,9 @@ public class VaultInitAction extends InitAction {
             }
             ctx.bind(jndiPreauthKeys, keys);
             log.info("initKeyPair: created JNDI key: " + jndiPreauthKeys);
+            
+            Object o = ctx.lookup(jndiPreauthKeys);
+            log.info("checking... found: " + jndiPreauthKeys + " = " + o + " in " + ctx);
         } catch (Exception ex) {
             throw new RuntimeException("check/init " + KEY_PAIR_NAME + " failed", ex);
         }

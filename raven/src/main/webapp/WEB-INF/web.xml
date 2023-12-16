@@ -48,14 +48,18 @@
     </servlet>
 
   <servlet>
-    <servlet-name>PubKeyServlet</servlet-name>
-    <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
-    <init-param>
-      <param-name>get</param-name>
-      <param-value>org.opencadc.raven.GetPubKeyAction</param-value>
-    </init-param>
-    <load-on-startup>4</load-on-startup>
-  </servlet>
+        <servlet-name>PubKeyServlet</servlet-name>
+        <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
+        <init-param>
+          <param-name>augmentSubject</param-name>
+          <param-value>false</param-value>
+        </init-param>
+        <init-param>
+          <param-name>get</param-name>
+          <param-value>org.opencadc.inventory.transfer.GetKeyAction</param-value>
+        </init-param>
+        <load-on-startup>3</load-on-startup>
+    </servlet>
 
   <servlet>
     <servlet-name>FilesServlet</servlet-name>

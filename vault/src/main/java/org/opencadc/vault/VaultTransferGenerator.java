@@ -205,9 +205,9 @@ public class VaultTransferGenerator implements TransferGenerator {
         
         try {
             List<Protocol> ret = pg.getProtocols(artifactTrans);
-            log.warn("generated urls: " + ret.size());
+            log.debug("generated urls: " + ret.size());
             for (Protocol p : ret) {
-                log.warn(p.getEndpoint() + " using " + p.getSecurityMethod());
+                log.debug(p.getEndpoint() + " using " + p.getSecurityMethod());
             }
             return ret;
         } catch (ResourceNotFoundException ex) {
