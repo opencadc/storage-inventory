@@ -100,7 +100,7 @@ public class TransferTest extends org.opencadc.conformance.vos.TransferTest {
     }
     
     // these are the same as raven intTest
-    static String SERVER = "INVENTORY_TEST";
+    static String SERVER = "VAULT_TEST";
     static String DATABASE = "cadctest";
     static String SCHEMA = "inventory";
     
@@ -128,13 +128,13 @@ public class TransferTest extends org.opencadc.conformance.vos.TransferTest {
             dao.setConfig(config);
             Set<StorageSite> sites = dao.list();
             if (sites.isEmpty()) {
-                StorageSite ss = new StorageSite(URI.create("ivo://opencadc.org/minoc"), "test-minoc", true, true);
+                StorageSite ss = new StorageSite(URI.create("ivo://opencadc.org/minoc"), "vault-test-minoc", true, true);
                 dao.put(ss);
-                log.info("created record in global: " + ss);
+                log.info("created record in local db: " + ss);
             }
             sites = dao.list();
             for (StorageSite ss : sites) {
-                log.info("storage sites in global: " + ss);
+                log.info("storage sites in local db: " + ss);
             }
         } catch (Exception ex) {
             log.error("setup failed", ex);
