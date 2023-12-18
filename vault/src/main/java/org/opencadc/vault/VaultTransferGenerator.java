@@ -115,15 +115,17 @@ public class VaultTransferGenerator implements TransferGenerator {
     private final VOSpaceAuthorizer authorizer;
     private final ArtifactDAO artifactDAO;
     private final TokenTool tokenTool;
+    private final boolean preventNotFound;
     
     private Map<URI, StorageSiteRule> siteRules = new HashMap<>();
     private Map<URI, Availability> siteAvailabilities;
     
-    public VaultTransferGenerator(NodePersistenceImpl nodePersistence, ArtifactDAO artifactDAO, TokenTool tokenTool) {
+    public VaultTransferGenerator(NodePersistenceImpl nodePersistence, ArtifactDAO artifactDAO, TokenTool tokenTool, boolean preventNotFound) {
         this.nodePersistence = nodePersistence;
         this.authorizer = new VOSpaceAuthorizer(nodePersistence);
         this.artifactDAO = artifactDAO;
         this.tokenTool = tokenTool;
+        this.preventNotFound = preventNotFound;
         
         // TODO: get appname from ???
         String siteAvailabilitiesKey = "vault" + "-" + StorageSiteAvailabilityCheck.class.getName();
@@ -192,7 +194,7 @@ public class VaultTransferGenerator implements TransferGenerator {
         pg.tokenGen = tokenTool;
         pg.user = callingUser;
         pg.requirePreauthAnon = true;
-        //pg.preventNotFound = true;
+        pg.preventNotFound = preventNotFound;
         
         Transfer artifactTrans = new Transfer(node.storageID, trans.getDirection());
         for (Protocol p : trans.getProtocols()) {

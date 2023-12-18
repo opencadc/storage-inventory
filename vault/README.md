@@ -39,11 +39,20 @@ org.opencadc.vault.nodes.maxActive={max connections for vospace pool}
 org.opencadc.vault.nodes.username={username for vospace pool}
 org.opencadc.vault.nodes.password={password for vospace pool}
 org.opencadc.vault.nodes.url=jdbc:postgresql://{server}/{database}
+
+org.opencadc.vault.uws.maxActive={max connections for uws pool}
+org.opencadc.vault.uws.username={username for uws pool}
+org.opencadc.vault.uws.password={password for uws pool}
+org.opencadc.vault.uws.url=jdbc:postgresql://{server}/{database}
 ```
 The _nodes_ account owns and manages (create, alter, drop) vospace database objects and manages
 all the content (insert, update, delete). The database is specified in the JDBC URL and the schema name is specified 
 in the vault.properties (below). Failure to connect or initialize the database will show up in logs and in the 
 VOSI-availability output.
+
+The _uws_ account owns and manages (create, alter, drop) uws database objects in the `uws` schema and manages all
+the content (insert, update, delete). The database is specified in the JDBC URLFailure to connect or initialize the
+database will show up in logs and in the VOSI-availability output.
 
 ### cadc-registry.properties
 
@@ -54,6 +63,9 @@ A vault.properties file in /config is required to run this service.  The followi
 ```
 # service identity
 org.opencadc.vault.resourceID = ivo://{authority}/{name}
+
+# consistency settings
+org.opencadc.vault.consistency.preventNotFound=true|false
 
 # vault database settings
 org.opencadc.vault.inventory.schema = {inventory schema name}
@@ -66,6 +78,12 @@ org.opencadc.vault.root.owner = {owner of root node}
 org.opencadc.vault.storage.namespace = {a storage inventory namespace to use}
 ```
 The vault _resourceID_ is the resourceID of _this_ vault service.
+
+The _preventNotFound_ key can be used to configure `vault` to prevent artifact-not-found errors that might 
+result due to the eventual consistency nature of the storage system by directly checking for the artifact at 
+_all known_ sites. It only makes sense to enable this when `vault` is running in a global inventory (along with
+`raven` and/or `fenwick` instances syncing artifact metadata. This feature introduces an overhead for the 
+genuine not-found cases: transfer negotiation to GET the file that was never PUT.
 
 The _inventory.schema_ name is the name of the database schema that contains the inventory database objects. The
 account nominally requires read-only (select) permission on those objects. This currently must be "inventory" due

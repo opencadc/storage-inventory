@@ -159,6 +159,7 @@ public class NodePersistenceImpl implements NodePersistence {
     
     private final boolean localGroupsOnly;
     private URI resourceID;
+    private final boolean preventNotFound;
     
     public NodePersistenceImpl(URI resourceID) {
         if (resourceID == null) {
@@ -189,6 +190,14 @@ public class NodePersistenceImpl implements NodePersistence {
         this.storageNamespace = new Namespace(ns);
         
         this.localGroupsOnly = false;
+        
+        String pnf = config.getFirstPropertyValue(VaultInitAction.PREVENT_NOT_FOUND_KEY);
+        if (pnf != null) {
+            this.preventNotFound = Boolean.valueOf(pnf);
+            log.debug("Using consistency strategy: " + this.preventNotFound);
+        } else {
+            throw new IllegalStateException("invalid config: missing/invalid preventNotFound configuration");
+        }
     }
     
     private Subject getRootOwner(MultiValuedProperties mvp, IdentityManager im) {
@@ -212,7 +221,7 @@ public class NodePersistenceImpl implements NodePersistence {
         keyDAO.setConfig(nodeDaoConfig);
         PreauthKeyPair kp = keyDAO.get(VaultInitAction.KEY_PAIR_NAME);
         TokenTool tt = new TokenTool(kp.getPublicKey(), kp.getPrivateKey());
-        return new VaultTransferGenerator(this, getArtifactDAO(), tt);
+        return new VaultTransferGenerator(this, getArtifactDAO(), tt, preventNotFound);
     }
     
     private NodeDAO getDAO() {
