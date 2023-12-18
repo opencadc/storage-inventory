@@ -125,6 +125,7 @@ public abstract class ArtifactAction extends RestAction {
     protected Map<URI, StorageSiteRule> siteRules;
 
     protected final boolean preventNotFound;
+    protected final boolean preauthKeys;
 
     // constructor for unit tests with no config/init
     ArtifactAction(boolean init) {
@@ -132,6 +133,7 @@ public abstract class ArtifactAction extends RestAction {
         this.authenticateOnly = false;
         this.artifactDAO = null;
         this.preventNotFound = false;
+        this.preauthKeys = false;
         this.storageResolver = null;
     }
 
@@ -175,18 +177,27 @@ public abstract class ArtifactAction extends RestAction {
             authenticateOnly = false;
         }
 
-        Map<String, Object> config = RavenInitAction.getDaoConfig(props);
+        Map<String, Object> config = RavenInitAction.getDaoConfig(props, RavenInitAction.JNDI_QUERY_DATASOURCE);
         this.artifactDAO = new ArtifactDAO();
         artifactDAO.setConfig(config); // connectivity tested
       
         // get the storage site rules
         this.siteRules = RavenInitAction.getStorageSiteRules(props);
+        
         String pnf = props.getFirstPropertyValue(RavenInitAction.PREVENT_NOT_FOUND_KEY);
         if (pnf != null) {
             this.preventNotFound = Boolean.valueOf(pnf);
             log.debug("Using consistency strategy: " + this.preventNotFound);
         } else {
             throw new IllegalStateException("invalid config: missing preventNotFound configuration");
+        }
+        
+        String pak = props.getFirstPropertyValue(RavenInitAction.PREAUTH_KEY);
+        if (pak != null) {
+            this.preauthKeys = Boolean.valueOf(pak);
+            log.debug("Using preauth keys: " + this.preauthKeys);
+        } else {
+            throw new IllegalStateException("invalid config: missing keys.preauth configuration");
         }
     }
 
@@ -195,15 +206,17 @@ public abstract class ArtifactAction extends RestAction {
         super.initAction();
         initResolver();
         
-        String jndiPreauthKeys = appName + "-" + PreauthKeyPair.class.getName();
-        Context ctx = new InitialContext();
-        try {
-            log.debug("lookup: " + jndiPreauthKeys);
-            PreauthKeyPair keys = (PreauthKeyPair) ctx.lookup(jndiPreauthKeys);
-            log.debug("found: " + keys);
-            this.tokenGen = new TokenTool(keys.getPublicKey(), keys.getPrivateKey());
-        } catch (NamingException ex) {
-            throw new RuntimeException("BUG: failed to find keys via JNDI", ex);
+        if (preauthKeys) {
+            String jndiPreauthKeys = appName + "-" + PreauthKeyPair.class.getName();
+            Context ctx = new InitialContext();
+            try {
+                log.debug("lookup: " + jndiPreauthKeys);
+                PreauthKeyPair keys = (PreauthKeyPair) ctx.lookup(jndiPreauthKeys);
+                log.debug("found: " + keys);
+                this.tokenGen = new TokenTool(keys.getPublicKey(), keys.getPrivateKey());
+            } catch (NamingException ex) {
+                throw new RuntimeException("BUG: failed to find keys via JNDI", ex);
+            }
         }
     }
     
