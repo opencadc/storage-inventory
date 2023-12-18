@@ -182,6 +182,12 @@ public class MinocConfig {
         List<String> recov = configProperties.getProperty(RECOVERABLE_NS_KEY);
         if (recov != null) {
             for (String s : recov) {
+                try {
+                    Namespace ns = new Namespace(s);
+                    recoverableNamespaces.add(ns);
+                } catch (Exception ex) {
+                    throw new IllegalStateException("invalid config: " + RECOVERABLE_NS_KEY + "=" + s + " INVALID", ex);
+                }
             }
         }
     }
