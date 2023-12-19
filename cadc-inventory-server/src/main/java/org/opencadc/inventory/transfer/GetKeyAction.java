@@ -65,7 +65,7 @@
 ************************************************************************
 */
 
-package org.opencadc.vault;
+package org.opencadc.inventory.transfer;
 
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
@@ -77,7 +77,9 @@ import org.apache.log4j.Logger;
 import org.opencadc.inventory.PreauthKeyPair;
 
 /**
- *
+ * Simple GET action that finds a PreauthKeyPair via JNDI and writes 
+ * the binary public key to the output.
+ * 
  * @author pdowler
  */
 public class GetKeyAction extends RestAction {
@@ -97,9 +99,9 @@ public class GetKeyAction extends RestAction {
         String jndiPreauthKeys = appName + "-" + PreauthKeyPair.class.getName();
         Context ctx = new InitialContext();
         try {
-            log.warn("lookup: " + jndiPreauthKeys);
+            log.debug("lookup: " + jndiPreauthKeys);
             PreauthKeyPair keys = (PreauthKeyPair) ctx.lookup(jndiPreauthKeys);
-            log.warn("found: " + keys);
+            log.debug("found: " + keys);
             byte[] pub = keys.getPublicKey();
             syncOutput.setHeader("content-length", pub.length);
             syncOutput.setHeader("content-type", "application/octet-stream");

@@ -77,10 +77,10 @@ import ca.nrc.cadc.vosi.Availability;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
@@ -115,15 +115,17 @@ public class VaultTransferGenerator implements TransferGenerator {
     private final VOSpaceAuthorizer authorizer;
     private final ArtifactDAO artifactDAO;
     private final TokenTool tokenTool;
+    private final boolean preventNotFound;
     
     private Map<URI, StorageSiteRule> siteRules = new HashMap<>();
     private Map<URI, Availability> siteAvailabilities;
     
-    public VaultTransferGenerator(NodePersistenceImpl nodePersistence, ArtifactDAO artifactDAO, TokenTool tokenTool) {
+    public VaultTransferGenerator(NodePersistenceImpl nodePersistence, ArtifactDAO artifactDAO, TokenTool tokenTool, boolean preventNotFound) {
         this.nodePersistence = nodePersistence;
         this.authorizer = new VOSpaceAuthorizer(nodePersistence);
         this.artifactDAO = artifactDAO;
         this.tokenTool = tokenTool;
+        this.preventNotFound = preventNotFound;
         
         // TODO: get appname from ???
         String siteAvailabilitiesKey = "vault" + "-" + StorageSiteAvailabilityCheck.class.getName();
@@ -192,7 +194,7 @@ public class VaultTransferGenerator implements TransferGenerator {
         pg.tokenGen = tokenTool;
         pg.user = callingUser;
         pg.requirePreauthAnon = true;
-        //pg.preventNotFound = true;
+        pg.preventNotFound = preventNotFound;
         
         Transfer artifactTrans = new Transfer(node.storageID, trans.getDirection());
         for (Protocol p : trans.getProtocols()) {
@@ -203,11 +205,15 @@ public class VaultTransferGenerator implements TransferGenerator {
             }
         }
         
-        List<Protocol> ret = pg.getProtocols(artifactTrans);
-        log.warn("generated urls: " + ret.size());
-        for (Protocol p : ret) {
-            log.warn(p.getEndpoint() + " using " + p.getSecurityMethod());
+        try {
+            List<Protocol> ret = pg.getProtocols(artifactTrans);
+            log.debug("generated urls: " + ret.size());
+            for (Protocol p : ret) {
+                log.debug(p.getEndpoint() + " using " + p.getSecurityMethod());
+            }
+            return ret;
+        } catch (ResourceNotFoundException ex) {
+            return new ArrayList<Protocol>();
         }
-        return ret;
     }
 }

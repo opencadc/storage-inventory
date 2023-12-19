@@ -109,6 +109,7 @@ public class VaultInitAction extends InitAction {
     // config keys
     private static final String VAULT_KEY = "org.opencadc.vault";
     static final String RESOURCE_ID_KEY = VAULT_KEY + ".resourceID";
+    static final String PREVENT_NOT_FOUND_KEY = VAULT_KEY + ".consistency.preventNotFound";
     static final String INVENTORY_SCHEMA_KEY = VAULT_KEY + ".inventory.schema";
     static final String VOSPACE_SCHEMA_KEY = VAULT_KEY + ".vospace.schema";
 
@@ -176,6 +177,15 @@ public class VaultInitAction extends InitAction {
         String rid = mvp.getFirstPropertyValue(RESOURCE_ID_KEY);
         sb.append("\n\t" + RESOURCE_ID_KEY + ": ");
         if (rid == null) {
+            sb.append("MISSING");
+            ok = false;
+        } else {
+            sb.append("OK");
+        }
+        
+        String pnf = mvp.getFirstPropertyValue(PREVENT_NOT_FOUND_KEY);
+        sb.append("\n\t" + PREVENT_NOT_FOUND_KEY + ": ");
+        if (pnf == null) {
             sb.append("MISSING");
             ok = false;
         } else {
@@ -320,6 +330,9 @@ public class VaultInitAction extends InitAction {
             }
             ctx.bind(jndiPreauthKeys, keys);
             log.info("initKeyPair: created JNDI key: " + jndiPreauthKeys);
+            
+            Object o = ctx.lookup(jndiPreauthKeys);
+            log.info("checking... found: " + jndiPreauthKeys + " = " + o + " in " + ctx);
         } catch (Exception ex) {
             throw new RuntimeException("check/init " + KEY_PAIR_NAME + " failed", ex);
         }

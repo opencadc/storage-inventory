@@ -155,11 +155,11 @@ public class NodePersistenceImpl implements NodePersistence {
     
     private final Map<String,Object> nodeDaoConfig = new TreeMap<>();
     private final ContainerNode root;
-    private final ContainerNode trash;
     private final Namespace storageNamespace;
     
     private final boolean localGroupsOnly;
     private URI resourceID;
+    private final boolean preventNotFound;
     
     public NodePersistenceImpl(URI resourceID) {
         if (resourceID == null) {
@@ -181,31 +181,23 @@ public class NodePersistenceImpl implements NodePersistence {
         this.root = new ContainerNode(rootID, "");
         root.owner = getRootOwner(config, identityManager);
         root.ownerDisplay = identityManager.toDisplayString(root.owner);
-        log.warn("ROOT owner: " + root.owner);
+        log.info("ROOT owner: " + root.owner);
         root.ownerID = identityManager.toOwner(root.owner);
         root.isPublic = true;
         root.inheritPermissions = false;
 
-        // trash node
-        // TODO: do this setup in a txn with a lock on something
-        NodeDAO dao = getDAO();
-        ContainerNode tn = (ContainerNode) dao.get(root, ".trash");
-        if (tn == null) {
-            tn = new ContainerNode(".trash");
-        }
-        // always reset props to current config
-        tn.ownerID = root.ownerID;
-        tn.owner = root.owner;
-        tn.isPublic = false;
-        tn.inheritPermissions = false;
-        tn.parentID = rootID;
-        dao.put(tn);
-        this.trash = tn;
-        
         String ns = config.getFirstPropertyValue(VaultInitAction.STORAGE_NAMESPACE_KEY);
         this.storageNamespace = new Namespace(ns);
         
         this.localGroupsOnly = false;
+        
+        String pnf = config.getFirstPropertyValue(VaultInitAction.PREVENT_NOT_FOUND_KEY);
+        if (pnf != null) {
+            this.preventNotFound = Boolean.valueOf(pnf);
+            log.debug("Using consistency strategy: " + this.preventNotFound);
+        } else {
+            throw new IllegalStateException("invalid config: missing/invalid preventNotFound configuration");
+        }
     }
     
     private Subject getRootOwner(MultiValuedProperties mvp, IdentityManager im) {
@@ -229,7 +221,7 @@ public class NodePersistenceImpl implements NodePersistence {
         keyDAO.setConfig(nodeDaoConfig);
         PreauthKeyPair kp = keyDAO.get(VaultInitAction.KEY_PAIR_NAME);
         TokenTool tt = new TokenTool(kp.getPublicKey(), kp.getPrivateKey());
-        return new VaultTransferGenerator(this, getArtifactDAO(), tt);
+        return new VaultTransferGenerator(this, getArtifactDAO(), tt, preventNotFound);
     }
     
     private NodeDAO getDAO() {

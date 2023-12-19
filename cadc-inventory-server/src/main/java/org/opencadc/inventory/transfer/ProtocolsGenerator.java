@@ -330,8 +330,7 @@ public class ProtocolsGenerator {
 
         List<Protocol> protos = new ArrayList<>();
         Artifact artifact = artifactDAO.get(artifactURI);
-        // produce URLs to each of the copies for each of the protocols
-        List<StorageSite> storageSites = new ArrayList<>();
+        
         if (artifact == null) {
             if (this.preventNotFound) {
                 log.debug("Artifact " + artifactURI.toASCIIString() + " not found in global. Check sites.");
@@ -339,10 +338,23 @@ public class ProtocolsGenerator {
             }
         }
 
+        List<StorageSite> storageSites = new ArrayList<>();
         if (artifact != null) {
-            for (SiteLocation site : artifact.siteLocations) {
-                StorageSite storageSite = getSite(sites, site.getSiteID());
-                storageSites.add(storageSite);
+            if (artifact.storageLocation != null) {
+                // this is a single storage site
+                Iterator<StorageSite> iter = sites.iterator();
+                if (iter.hasNext()) {
+                    storageSites.add(iter.next());
+                }
+                if (iter.hasNext()) {
+                    log.error("BUG: found second StorageSite in database with assigned Artifact.storageLocation");
+                }
+            } else {
+                // this is a global inventory
+                for (SiteLocation site : artifact.siteLocations) {
+                    StorageSite storageSite = getSite(sites, site.getSiteID());
+                    storageSites.add(storageSite);
+                }
             }
         }
 
@@ -383,7 +395,7 @@ public class ProtocolsGenerator {
                                 log.debug("added: " + p);
 
                                 // add a plain anon URL
-                                if (authToken != null && Standards.SECURITY_METHOD_ANON.equals(sec)) {
+                                if (authToken != null && !requirePreauthAnon && Standards.SECURITY_METHOD_ANON.equals(sec)) {
                                     sb = new StringBuilder();
                                     sb.append(baseURL.toExternalForm()).append("/");
                                     sb.append(artifactURI.toASCIIString());
@@ -426,10 +438,8 @@ public class ProtocolsGenerator {
             }
         }
 
-        if (protos.isEmpty() && ((artifact == null) || artifact.siteLocations.size() == 0)) {
-            // artifact not find internally and has no external resolvers either
-            // TODO: second condition can currently happen but maybe should not:
-            // --- when the last siteLocation is removed, the artifact should be deleted (fenwick, ratik)
+        if (protos.isEmpty()) {
+            // unable to generate any URLs
             throw new ResourceNotFoundException("not found: " + artifactURI.toString());
         }
 

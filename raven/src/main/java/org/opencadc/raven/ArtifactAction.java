@@ -89,6 +89,7 @@ import org.apache.log4j.Logger;
 import org.opencadc.inventory.PreauthKeyPair;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.PreauthKeyPairDAO;
+import org.opencadc.inventory.transfer.StorageSiteAvailabilityCheck;
 import org.opencadc.inventory.transfer.StorageSiteRule;
 import org.opencadc.permissions.ReadGrant;
 import org.opencadc.permissions.TokenTool;
@@ -114,9 +115,7 @@ public abstract class ArtifactAction extends RestAction {
 
     // immutable state set in constructor
     protected final ArtifactDAO artifactDAO;
-    protected final PreauthKeyPairDAO preauthKeyPairDAO;
-    protected final TokenTool tokenGen;
-    protected final byte[] publicKey;
+    protected TokenTool tokenGen;
     protected final List<URI> readGrantServices = new ArrayList<>();
     protected final List<URI> writeGrantServices = new ArrayList<>();
     protected StorageResolver storageResolver;
@@ -126,17 +125,16 @@ public abstract class ArtifactAction extends RestAction {
     protected Map<URI, StorageSiteRule> siteRules;
 
     protected final boolean preventNotFound;
+    protected final boolean preauthKeys;
 
     // constructor for unit tests with no config/init
     ArtifactAction(boolean init) {
         super();
         this.authenticateOnly = false;
-        this.tokenGen = null;
         this.artifactDAO = null;
-        this.preauthKeyPairDAO = null;
         this.preventNotFound = false;
+        this.preauthKeys = false;
         this.storageResolver = null;
-        this.publicKey = null;
     }
 
     protected ArtifactAction() {
@@ -179,34 +177,13 @@ public abstract class ArtifactAction extends RestAction {
             authenticateOnly = false;
         }
 
-        initResolver();
-
-        Map<String, Object> config = RavenInitAction.getDaoConfig(props);
-        this.preauthKeyPairDAO = new PreauthKeyPairDAO();
-        preauthKeyPairDAO.setConfig(config); // connectivity tested
-        PreauthKeyPair preauthKP = preauthKeyPairDAO.get(RavenInitAction.PREAUTH_KEYPAIR);
-        if (preauthKP == null) {
-            log.info("Generate the pre-auth key pair");
-            KeyPair keyPair = RsaSignatureGenerator.getKeyPair(4096); //TODO size?
-            preauthKP = new PreauthKeyPair(RavenInitAction.PREAUTH_KEYPAIR, keyPair.getPublic().getEncoded(), keyPair.getPrivate().getEncoded());
-            try {
-                preauthKeyPairDAO.put(preauthKP);
-            } catch (Exception ex) {
-                throw new IllegalStateException("Could not persist the pre-auth key pair.", ex);
-            }
-            this.tokenGen = new TokenTool(keyPair.getPublic().getEncoded(), keyPair.getPrivate().getEncoded());
-            this.publicKey = keyPair.getPublic().getEncoded();
-        } else {
-            log.debug("Use existing pre-auth key pair");
-            this.tokenGen = new TokenTool(preauthKP.getPublicKey(), preauthKP.getPrivateKey());
-            this.publicKey = preauthKP.getPublicKey();
-        }
-
+        Map<String, Object> config = RavenInitAction.getDaoConfig(props, RavenInitAction.JNDI_QUERY_DATASOURCE);
         this.artifactDAO = new ArtifactDAO();
         artifactDAO.setConfig(config); // connectivity tested
       
         // get the storage site rules
         this.siteRules = RavenInitAction.getStorageSiteRules(props);
+        
         String pnf = props.getFirstPropertyValue(RavenInitAction.PREVENT_NOT_FOUND_KEY);
         if (pnf != null) {
             this.preventNotFound = Boolean.valueOf(pnf);
@@ -214,9 +191,36 @@ public abstract class ArtifactAction extends RestAction {
         } else {
             throw new IllegalStateException("invalid config: missing preventNotFound configuration");
         }
+        
+        String pak = props.getFirstPropertyValue(RavenInitAction.PREAUTH_KEY);
+        if (pak != null) {
+            this.preauthKeys = Boolean.valueOf(pak);
+            log.debug("Using preauth keys: " + this.preauthKeys);
+        } else {
+            throw new IllegalStateException("invalid config: missing keys.preauth configuration");
+        }
     }
 
-    protected void initResolver() {
+    @Override
+    public void initAction() throws Exception {
+        super.initAction();
+        initResolver();
+        
+        if (preauthKeys) {
+            String jndiPreauthKeys = appName + "-" + PreauthKeyPair.class.getName();
+            Context ctx = new InitialContext();
+            try {
+                log.debug("lookup: " + jndiPreauthKeys);
+                PreauthKeyPair keys = (PreauthKeyPair) ctx.lookup(jndiPreauthKeys);
+                log.debug("found: " + keys);
+                this.tokenGen = new TokenTool(keys.getPublicKey(), keys.getPrivateKey());
+            } catch (NamingException ex) {
+                throw new RuntimeException("BUG: failed to find keys via JNDI", ex);
+            }
+        }
+    }
+    
+    void initResolver() {
         MultiValuedProperties props = RavenInitAction.getConfig();
         String resolverName = props.getFirstPropertyValue(RavenInitAction.RESOLVER_ENTRY);
         if (resolverName != null) {
@@ -273,7 +277,7 @@ public abstract class ArtifactAction extends RestAction {
             throw new IllegalArgumentException("Missing artifact URI from path or request content");
         }
 
-        String siteAvailabilitiesKey = this.appName + RavenInitAction.JNDI_AVAILABILITY_NAME;
+        String siteAvailabilitiesKey = this.appName + "-" + StorageSiteAvailabilityCheck.class.getName();
         log.debug("siteAvailabilitiesKey: " + siteAvailabilitiesKey);
         try {
             Context initContext = new InitialContext();

@@ -67,26 +67,35 @@
 
 package org.opencadc.raven;
 
+import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.rest.InitAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
+import ca.nrc.cadc.util.RsaSignatureGenerator;
 import ca.nrc.cadc.util.StringUtil;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.security.KeyPair;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
+import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Namespace;
+import org.opencadc.inventory.PreauthKeyPair;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.PreauthKeyPairDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
+import org.opencadc.inventory.db.version.InitDatabase;
 import org.opencadc.inventory.transfer.StorageSiteAvailabilityCheck;
 import org.opencadc.inventory.transfer.StorageSiteRule;
+import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  *
@@ -95,26 +104,28 @@ import org.opencadc.inventory.transfer.StorageSiteRule;
 public class RavenInitAction extends InitAction {
     private static final Logger log = Logger.getLogger(RavenInitAction.class);
 
+    static String KEY_PAIR_NAME = "raven-preauth-keys";
+    
     // config keys
     private static final String RAVEN_KEY = "org.opencadc.raven";
-    private static final String RAVEN_CONSIST_KEY = "org.opencadc.raven.consistency";
 
-    static final String JNDI_DATASOURCE = "jdbc/inventory"; // context.xml
-    static final String JNDI_AVAILABILITY_NAME = ".availabilities";
+    static final String JNDI_QUERY_DATASOURCE = "jdbc/query"; // context.xml
+    static final String JNDI_ADMIN_DATASOURCE = "jdbc/inventory"; // context.xml
 
     static final String SCHEMA_KEY = RAVEN_KEY + ".inventory.schema";
-
-    static final String PREAUTH_KEYPAIR = RAVEN_KEY + ".keyPair";
+    static final String PREVENT_NOT_FOUND_KEY = RAVEN_KEY + ".consistency.preventNotFound";
+    static final String PREAUTH_KEY = RAVEN_KEY + ".keys.preauth";
+    
     static final String READ_GRANTS_KEY = RAVEN_KEY + ".readGrantProvider";
     static final String WRITE_GRANTS_KEY = RAVEN_KEY + ".writeGrantProvider";
-
     static final String RESOLVER_ENTRY = "ca.nrc.cadc.net.StorageResolver";
-    static final String PREVENT_NOT_FOUND_KEY = RAVEN_CONSIST_KEY + ".preventNotFound";
-
+    
     static final String DEV_AUTH_ONLY_KEY = RAVEN_KEY + ".authenticateOnly";
 
     // set init initConfig, used by subsequent init methods
     MultiValuedProperties props;
+    
+    private String jndiPreauthKeys;
     private String siteAvailabilitiesKey;
     private Thread availabilityCheck;
 
@@ -125,7 +136,9 @@ public class RavenInitAction extends InitAction {
     @Override
     public void doInit() {
         initConfig();
-        initDAO();
+        initDatabase();
+        initKeyPair();
+        initQueryDAO();
         initGrantProviders();
         initStorageSiteRules();
         initAvailabilityCheck();
@@ -133,7 +146,14 @@ public class RavenInitAction extends InitAction {
 
     @Override
     public void doShutdown() {
-        terminate();
+        try {
+            Context ctx = new InitialContext();
+            ctx.unbind(jndiPreauthKeys);
+        } catch (Exception oops) {
+            log.error("unbind failed during destroy", oops);
+        }
+        
+        terminateAvailabilityCheck();
     }
     
     void initConfig() {
@@ -142,9 +162,71 @@ public class RavenInitAction extends InitAction {
         log.info("initConfig: OK");
     }
     
-    void initDAO() {
+    private void initDatabase() {
+        log.info("initDatabase: START");
+        try {
+            Map<String,Object> daoConfig = getDaoConfig(props, JNDI_ADMIN_DATASOURCE);
+            String jndiDataSourceName = (String) daoConfig.get("jndiDataSourceName");
+            String database = (String) daoConfig.get("database");
+            String schema = (String) daoConfig.get("schema");
+            DataSource ds = DBUtil.findJNDIDataSource(jndiDataSourceName);
+            InitDatabase init = new InitDatabase(ds, database, schema);
+            init.doInit();
+            log.info("initDatabase: " + jndiDataSourceName + " " + schema + " OK");
+        } catch (Exception ex) {
+            throw new IllegalStateException("check/init database failed", ex);
+        }
+    }
+    
+    private void initKeyPair() {
+        String enablePreauthKeys = props.getFirstPropertyValue(PREAUTH_KEY);
+        if (enablePreauthKeys == null || !"true".equals(enablePreauthKeys)) {
+            log.info("initKeyPair: " + PREAUTH_KEY + " == " + enablePreauthKeys + " - SKIP");
+            return;
+        }
+        
+        log.info("initKeyPair: START");
+        jndiPreauthKeys = appName + "-" + PreauthKeyPair.class.getName();
+        try {
+            Map<String,Object> daoConfig = getDaoConfig(props, JNDI_ADMIN_DATASOURCE);
+            PreauthKeyPairDAO dao = new PreauthKeyPairDAO();
+            dao.setConfig(daoConfig);
+            PreauthKeyPair keys = dao.get(KEY_PAIR_NAME);
+            if (keys == null) {
+                KeyPair kp = RsaSignatureGenerator.getKeyPair(4096);
+                keys = new PreauthKeyPair(KEY_PAIR_NAME, kp.getPublic().getEncoded(), kp.getPrivate().getEncoded());
+                try {
+                    dao.put(keys);
+                    log.info("initKeyPair: new keys created - OK");
+                    
+                } catch (DataIntegrityViolationException oops) {
+                    log.warn("persist new " + PreauthKeyPair.class.getSimpleName() + " failed (" + oops + ") -- probably race condition");
+                    keys = dao.get(KEY_PAIR_NAME);
+                    if (keys != null) {
+                        log.info("race condition confirmed: another instance created keys - OK");
+                    } else {
+                        throw new RuntimeException("check/init " + KEY_PAIR_NAME + " failed", oops);
+                    }
+                }
+            } else {
+                log.info("initKeyPair: re-use existing keys - OK");
+            }
+            Context ctx = new InitialContext();
+            try {
+                ctx.unbind(jndiPreauthKeys);
+            } catch (NamingException ignore) {
+                log.debug("unbind previous JNDI key (" + jndiPreauthKeys + ") failed... ignoring");
+            }
+            ctx.bind(jndiPreauthKeys, keys);
+            log.info("initKeyPair: created JNDI key: " + jndiPreauthKeys);
+        } catch (Exception ex) {
+            throw new RuntimeException("check/init " + KEY_PAIR_NAME + " failed", ex);
+        }
+    }
+    
+    void initQueryDAO() {
         log.info("initDAO: START");
-        Map<String,Object> dc = getDaoConfig(props);
+        Map<String,Object> dc = getDaoConfig(props, JNDI_QUERY_DATASOURCE);
         ArtifactDAO artifactDAO = new ArtifactDAO();
         artifactDAO.setConfig(dc); // connectivity tested
         log.info("initDAO: OK");
@@ -186,16 +268,16 @@ public class RavenInitAction extends InitAction {
 
     void initAvailabilityCheck() {
         StorageSiteDAO storageSiteDAO = new StorageSiteDAO();
-        storageSiteDAO.setConfig(getDaoConfig(props));
+        storageSiteDAO.setConfig(getDaoConfig(props, JNDI_QUERY_DATASOURCE));
 
-        this.siteAvailabilitiesKey = this.appName + RavenInitAction.JNDI_AVAILABILITY_NAME;
-        terminate();
-        this.availabilityCheck = new Thread(new StorageSiteAvailabilityCheck(storageSiteDAO, this.siteAvailabilitiesKey));
+        this.siteAvailabilitiesKey = appName + "-" + StorageSiteAvailabilityCheck.class.getName();
+        terminateAvailabilityCheck();
+        this.availabilityCheck = new Thread(new StorageSiteAvailabilityCheck(storageSiteDAO, siteAvailabilitiesKey));
         this.availabilityCheck.setDaemon(true);
         this.availabilityCheck.start();
     }
 
-    private final void terminate() {
+    private final void terminateAvailabilityCheck() {
         if (this.availabilityCheck != null) {
             try {
                 log.info("terminating AvailabilityCheck Thread...");
@@ -247,6 +329,15 @@ public class RavenInitAction extends InitAction {
         } else {
             sb.append("OK");
         }
+        
+        String preauthKeys = mvp.getFirstPropertyValue(RavenInitAction.PREAUTH_KEY);
+        sb.append("\n\t").append(RavenInitAction.PREAUTH_KEY).append(": ");
+        if (preauthKeys == null) {
+            sb.append("MISSING");
+            ok = false;
+        } else {
+            sb.append("OK");
+        }
 
         if (!ok) {
             throw new IllegalStateException(sb.toString());
@@ -255,13 +346,13 @@ public class RavenInitAction extends InitAction {
         return mvp;
     }
 
-    static Map<String,Object> getDaoConfig(MultiValuedProperties props) {
+    static Map<String,Object> getDaoConfig(MultiValuedProperties props, String pool) {
         String cname = props.getFirstPropertyValue(SQLGenerator.class.getName());
         try {
             Map<String,Object> ret = new TreeMap<>();
             Class clz = Class.forName(cname);
             ret.put(SQLGenerator.class.getName(), clz);
-            ret.put("jndiDataSourceName", RavenInitAction.JNDI_DATASOURCE);
+            ret.put("jndiDataSourceName", pool);
             ret.put("schema", props.getFirstPropertyValue(RavenInitAction.SCHEMA_KEY));
             //config.put("database", null);
             return ret;
