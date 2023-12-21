@@ -87,6 +87,11 @@ public class NodeDAO extends AbstractDAO<Node> {
     public NodeDAO() {
         super(true);
     }
+    
+    // needed by vault migration tool: untested
+    public NodeDAO(boolean origin) {
+        super(origin);
+    }
 
     @Override
     public void put(Node val) {

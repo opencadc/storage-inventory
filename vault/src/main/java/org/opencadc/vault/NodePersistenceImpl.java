@@ -161,6 +161,10 @@ public class NodePersistenceImpl implements NodePersistence {
     private URI resourceID;
     private final boolean preventNotFound;
     
+    // possibly temporary hack so migration tool can set this to false and
+    // preserve lastModified timestamps on nodes
+    public boolean nodeOrigin = true;
+    
     public NodePersistenceImpl(URI resourceID) {
         if (resourceID == null) {
             throw new IllegalArgumentException("resource ID required");
@@ -225,7 +229,7 @@ public class NodePersistenceImpl implements NodePersistence {
     }
     
     private NodeDAO getDAO() {
-        NodeDAO instance = new NodeDAO();
+        NodeDAO instance = new NodeDAO(nodeOrigin);
         instance.setConfig(nodeDaoConfig);
         return instance;
     }
@@ -302,10 +306,12 @@ public class NodePersistenceImpl implements NodePersistence {
             Artifact a = artifactDAO.get(dn.storageID);
             if (a != null) {
                 DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+                ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_DATE, df.format(a.getContentLastModified())));
+                
                 ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, a.getContentLength().toString()));
                 // assume MD5
                 ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTMD5, a.getContentChecksum().getSchemeSpecificPart()));
-                ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_DATE, df.format(a.getContentLastModified())));
+                
                 if (a.contentEncoding != null) {
                     ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTENCODING, a.contentEncoding));
                 }

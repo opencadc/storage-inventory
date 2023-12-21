@@ -24,8 +24,9 @@ war {
         include 'VERSION'
     }
 }
-description = 'OpenCADC VOSpace server'
-def git_url = 'https://github.com/opencadc/vos'
+
+description = 'OpenCADC vault service'
+def git_url = 'https://github.com/opencadc/storage-inventory'
 
 dependencies {
     compile 'javax.servlet:javax.servlet-api:[3.1,4.0)'
