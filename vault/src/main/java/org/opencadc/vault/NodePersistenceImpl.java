@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2023.                            (c) 2023.
+*  (c) 2024.                            (c) 2024.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -70,7 +70,6 @@ package org.opencadc.vault;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.HttpPrincipal;
 import ca.nrc.cadc.auth.IdentityManager;
-import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.TransientException;
@@ -124,27 +123,28 @@ import org.opencadc.vospace.server.transfers.TransferGenerator;
 public class NodePersistenceImpl implements NodePersistence {
     private static final Logger log = Logger.getLogger(NodePersistenceImpl.class);
 
-    static final Set<URI> ADMIN_PROPS = new TreeSet<>(
+    private static final Set<URI> ADMIN_PROPS = new TreeSet<>(
         Arrays.asList(
             VOS.PROPERTY_URI_CREATOR,
             VOS.PROPERTY_URI_QUOTA
         )
     );
     
-    static final Set<URI> IMMUTABLE_PROPS = new TreeSet<>(
+    private static final Set<URI> IMMUTABLE_PROPS = new TreeSet<>(
         Arrays.asList(
             VOS.PROPERTY_URI_AVAILABLESPACE,
             VOS.PROPERTY_URI_CONTENTLENGTH,
             VOS.PROPERTY_URI_CONTENTMD5,
             VOS.PROPERTY_URI_CONTENTDATE,
-            VOS.PROPERTY_URI_DATE,
             VOS.PROPERTY_URI_CREATOR,
+            VOS.PROPERTY_URI_DATE,
             VOS.PROPERTY_URI_QUOTA
         )
     );
     
     private static final Set<URI> ARTIFACT_PROPS = new TreeSet<>(
         Arrays.asList(
+            // immutable
             VOS.PROPERTY_URI_CONTENTLENGTH,
             VOS.PROPERTY_URI_CONTENTMD5,
             VOS.PROPERTY_URI_CONTENTDATE,
@@ -482,6 +482,7 @@ public class NodePersistenceImpl implements NodePersistence {
         
         if (node instanceof DataNode) {
             DataNode dn = (DataNode) node;
+            boolean knownNoArtifact = false;
             if (dn.storageID == null) {
                 // new data node? if lastModified is assigned, this looks sketchy
                 if (dn.getLastModified() != null) {
@@ -493,44 +494,44 @@ public class NodePersistenceImpl implements NodePersistence {
                 // once someone puts the file to minoc, so Node.storageID == Artifact.uri
                 // but the artifact may or may not exist
                 dn.storageID = generateStorageID();
-
-            } else {
-                // update existing data node
-                // need to remove all artifact props from the node.getProperties()
-                // and use artifactDAO to set the mutable ones
-                NodeProperty contentType = null;
-                NodeProperty contentEncoding = null;
-
-                Iterator<NodeProperty> i = dn.getProperties().iterator();
-                while (i.hasNext()) {
-                    NodeProperty np = i.next();
-                    if (VOS.PROPERTY_URI_TYPE.equals(np.getKey())) {
-                        contentType = np;
-                    } else if (VOS.PROPERTY_URI_CONTENTENCODING.equals(np.getKey())) {
-                        contentEncoding = np;
-                    }
-                    
-                    if (ARTIFACT_PROPS.contains(np.getKey())) {
-                        i.remove();
-                    }
+                knownNoArtifact = true;
+            } 
+            
+            // need to remove all artifact props from the node.getProperties()
+            // and use artifactDAO to set the mutable ones
+            NodeProperty contentType = null;
+            NodeProperty contentEncoding = null;
+            Iterator<NodeProperty> i = dn.getProperties().iterator();
+            while (i.hasNext()) {
+                NodeProperty np = i.next();
+                if (VOS.PROPERTY_URI_TYPE.equals(np.getKey())) {
+                    contentType = np;
+                } else if (VOS.PROPERTY_URI_CONTENTENCODING.equals(np.getKey())) {
+                    contentEncoding = np;
                 }
-                if (contentType != null || contentEncoding != null) { // optimization
-                    ArtifactDAO artifactDAO = getArtifactDAO();
-                    Artifact a = artifactDAO.get(dn.storageID);
-                    log.warn("put: " + contentType + " " + contentEncoding + " -> " + a);
-                    if (a != null) {
-                        if (contentType == null) {
-                            a.contentType = null;
-                        } else {
-                            a.contentType = contentType.getValue();
-                        }
-                        if (contentEncoding == null) {
-                            a.contentEncoding = null;
-                        } else {
-                            a.contentEncoding = contentEncoding.getValue();
-                        }
-                        artifactDAO.put(a);
+
+                if (ARTIFACT_PROPS.contains(np.getKey())) {
+                    i.remove();
+                }
+            }
+            // optimization: avoid query when we know artifact doesn't exist 
+            //          and: avoid query if we don't need to update it
+            if (!knownNoArtifact && (contentType != null || contentEncoding != null)) {
+                ArtifactDAO artifactDAO = getArtifactDAO();
+                Artifact a = artifactDAO.get(dn.storageID);
+                log.warn("put: " + contentType + " " + contentEncoding + " -> " + a);
+                if (a != null) {
+                    if (contentType == null) {
+                        a.contentType = null;
+                    } else {
+                        a.contentType = contentType.getValue();
                     }
+                    if (contentEncoding == null) {
+                        a.contentEncoding = null;
+                    } else {
+                        a.contentEncoding = contentEncoding.getValue();
+                    }
+                    artifactDAO.put(a);
                 }
             }
         }
