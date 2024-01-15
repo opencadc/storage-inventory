@@ -83,6 +83,7 @@ import java.net.URI;
 import java.text.DateFormat;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -110,6 +111,7 @@ import org.opencadc.vospace.NodeProperty;
 import org.opencadc.vospace.VOS;
 import org.opencadc.vospace.VOSURI;
 import org.opencadc.vospace.db.NodeDAO;
+import org.opencadc.vospace.io.NodeWriter;
 import org.opencadc.vospace.server.LocalServiceURI;
 import org.opencadc.vospace.server.NodePersistence;
 import org.opencadc.vospace.server.Views;
@@ -134,7 +136,7 @@ public class NodePersistenceImpl implements NodePersistence {
             VOS.PROPERTY_URI_AVAILABLESPACE,
             VOS.PROPERTY_URI_CONTENTLENGTH,
             VOS.PROPERTY_URI_CONTENTMD5,
-            VOS.PROPERTY_URI_CREATION_DATE,
+            VOS.PROPERTY_URI_CONTENTDATE,
             VOS.PROPERTY_URI_DATE,
             VOS.PROPERTY_URI_CREATOR,
             VOS.PROPERTY_URI_QUOTA
@@ -145,7 +147,7 @@ public class NodePersistenceImpl implements NodePersistence {
         Arrays.asList(
             VOS.PROPERTY_URI_CONTENTLENGTH,
             VOS.PROPERTY_URI_CONTENTMD5,
-            VOS.PROPERTY_URI_CREATION_DATE,
+            VOS.PROPERTY_URI_CONTENTDATE,
             VOS.PROPERTY_URI_DATE,
             // mutable
             VOS.PROPERTY_URI_CONTENTENCODING,
@@ -160,6 +162,10 @@ public class NodePersistenceImpl implements NodePersistence {
     private final boolean localGroupsOnly;
     private URI resourceID;
     private final boolean preventNotFound;
+    
+    // possibly temporary hack so migration tool can set this to false and
+    // preserve lastModified timestamps on nodes
+    public boolean nodeOrigin = true;
     
     public NodePersistenceImpl(URI resourceID) {
         if (resourceID == null) {
@@ -225,7 +231,7 @@ public class NodePersistenceImpl implements NodePersistence {
     }
     
     private NodeDAO getDAO() {
-        NodeDAO instance = new NodeDAO();
+        NodeDAO instance = new NodeDAO(nodeOrigin);
         instance.setConfig(nodeDaoConfig);
         return instance;
     }
@@ -301,11 +307,28 @@ public class NodePersistenceImpl implements NodePersistence {
             ArtifactDAO artifactDAO = getArtifactDAO();
             Artifact a = artifactDAO.get(dn.storageID);
             if (a != null) {
-                DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+                DateFormat df = NodeWriter.getDateFormat();
+                
+                Date d = ret.getLastModified();
+                Date cd = null;
+                if (ret.getLastModified().before(a.getLastModified())) {
+                    d = a.getLastModified();
+                }
+                if (d.before(a.getContentLastModified())) {
+                    // probably not possible
+                    d = a.getContentLastModified();
+                } else {
+                    cd = a.getContentLastModified();
+                }
+                ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_DATE, df.format(d)));
+                if (cd != null) {
+                    ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTDATE, df.format(cd)));
+                }
+                
                 ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, a.getContentLength().toString()));
                 // assume MD5
                 ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTMD5, a.getContentChecksum().getSchemeSpecificPart()));
-                ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_DATE, df.format(a.getContentLastModified())));
+                
                 if (a.contentEncoding != null) {
                     ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTENCODING, a.contentEncoding));
                 }
@@ -494,20 +517,17 @@ public class NodePersistenceImpl implements NodePersistence {
                 if (contentType != null || contentEncoding != null) { // optimization
                     ArtifactDAO artifactDAO = getArtifactDAO();
                     Artifact a = artifactDAO.get(dn.storageID);
+                    log.warn("put: " + contentType + " " + contentEncoding + " -> " + a);
                     if (a != null) {
-                        if (contentType != null) {
-                            if (contentType.isMarkedForDeletion()) {
-                                a.contentType = null;
-                            } else {
-                                a.contentType = contentType.getValue();
-                            }
+                        if (contentType == null) {
+                            a.contentType = null;
+                        } else {
+                            a.contentType = contentType.getValue();
                         }
-                        if (contentEncoding != null) {
-                            if (contentEncoding.isMarkedForDeletion()) {
-                                a.contentEncoding = null;
-                            } else {
-                                a.contentEncoding = contentEncoding.getValue();
-                            }
+                        if (contentEncoding == null) {
+                            a.contentEncoding = null;
+                        } else {
+                            a.contentEncoding = contentEncoding.getValue();
                         }
                         artifactDAO.put(a);
                     }
