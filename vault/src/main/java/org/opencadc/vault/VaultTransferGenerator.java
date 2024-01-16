@@ -120,6 +120,7 @@ public class VaultTransferGenerator implements TransferGenerator {
     private Map<URI, StorageSiteRule> siteRules = new HashMap<>();
     private Map<URI, Availability> siteAvailabilities;
     
+    @SuppressWarnings("unchecked")
     public VaultTransferGenerator(NodePersistenceImpl nodePersistence, ArtifactDAO artifactDAO, TokenTool tokenTool, boolean preventNotFound) {
         this.nodePersistence = nodePersistence;
         this.authorizer = new VOSpaceAuthorizer(nodePersistence);
