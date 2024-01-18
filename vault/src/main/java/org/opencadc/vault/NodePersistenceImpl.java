@@ -655,7 +655,7 @@ public class NodePersistenceImpl implements NodePersistence {
             log.debug("commit txn: OK");
 
             if (!singlePool && a != null) {
-                log.warn("starting artifact transaction");
+                log.debug("starting artifact transaction");
                 atxn.startTransaction();
                 log.debug("start txn: OK");
             
@@ -669,7 +669,7 @@ public class NodePersistenceImpl implements NodePersistence {
                 log.debug("commit artifact txn...");
                 atxn.commitTransaction();
                 atxn = null;
-                log.warn("commit artifact txn: OK");
+                log.debug("commit artifact txn: OK");
             }
         } catch (Exception ex) {
             if (txn.isOpen()) {
