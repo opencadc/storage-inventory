@@ -157,6 +157,7 @@ public class NodePersistenceImpl implements NodePersistence {
     
     private final Map<String,Object> nodeDaoConfig;
     private final Map<String,Object> invDaoConfig;
+    private final Map<String,Object> kpDaoConfig;
     private final boolean singlePool;
     
     private final ContainerNode root;
@@ -178,6 +179,7 @@ public class NodePersistenceImpl implements NodePersistence {
         MultiValuedProperties config = VaultInitAction.getConfig();
         this.nodeDaoConfig = VaultInitAction.getDaoConfig(config);
         this.invDaoConfig = VaultInitAction.getInvConfig(config);
+        this.kpDaoConfig = VaultInitAction.getKeyPairConfig(config);
         this.singlePool = nodeDaoConfig.get("jndiDataSourceName").equals(invDaoConfig.get("jndiDataSourceName"));
         
         // root node
@@ -223,7 +225,7 @@ public class NodePersistenceImpl implements NodePersistence {
     @Override
     public TransferGenerator getTransferGenerator() {
         PreauthKeyPairDAO keyDAO = new PreauthKeyPairDAO();
-        keyDAO.setConfig(nodeDaoConfig);
+        keyDAO.setConfig(kpDaoConfig);
         PreauthKeyPair kp = keyDAO.get(VaultInitAction.KEY_PAIR_NAME);
         TokenTool tt = new TokenTool(kp.getPublicKey(), kp.getPrivateKey());
         return new VaultTransferGenerator(this, getArtifactDAO(), tt, preventNotFound);

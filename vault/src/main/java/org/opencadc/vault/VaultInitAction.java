@@ -259,6 +259,14 @@ public class VaultInitAction extends InitAction {
         ret.put("schema", props.getFirstPropertyValue(org.opencadc.vault.VaultInitAction.INVENTORY_SCHEMA_KEY));
         return ret;
     }
+    
+    static Map<String, Object> getKeyPairConfig(MultiValuedProperties props) {
+        Map<String, Object> ret = new TreeMap<>();
+        ret.put(SQLGenerator.class.getName(), SQLGenerator.class); // not configurable right now
+        ret.put("jndiDataSourceName", org.opencadc.vault.VaultInitAction.JNDI_VOS_DATASOURCE);
+        ret.put("schema", props.getFirstPropertyValue(org.opencadc.vault.VaultInitAction.VOSPACE_SCHEMA_KEY));
+        return ret;
+    }
 
     private void initConfig() {
         log.info("initConfig: START");
@@ -335,10 +343,10 @@ public class VaultInitAction extends InitAction {
     
     private void initKeyPair() {
         log.info("initKeyPair: START");
-        jndiPreauthKeys = appName + "-" + PreauthKeyPair.class.getName();
+        //jndiPreauthKeys = appName + "-" + PreauthKeyPair.class.getName();
         try {
             PreauthKeyPairDAO dao = new PreauthKeyPairDAO();
-            dao.setConfig(vosDaoConfig);
+            dao.setConfig(getKeyPairConfig(props));
             PreauthKeyPair keys = dao.get(KEY_PAIR_NAME);
             if (keys == null) {
                 KeyPair kp = RsaSignatureGenerator.getKeyPair(4096);
@@ -359,6 +367,7 @@ public class VaultInitAction extends InitAction {
             } else {
                 log.info("initKeyPair: re-use existing keys - OK");
             }
+            /*
             Context ctx = new InitialContext();
             try {
                 ctx.unbind(jndiPreauthKeys);
@@ -370,6 +379,7 @@ public class VaultInitAction extends InitAction {
             
             Object o = ctx.lookup(jndiPreauthKeys);
             log.info("checking... found: " + jndiPreauthKeys + " = " + o + " in " + ctx);
+            */
         } catch (Exception ex) {
             throw new RuntimeException("check/init " + KEY_PAIR_NAME + " failed", ex);
         }
