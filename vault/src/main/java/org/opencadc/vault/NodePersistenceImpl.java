@@ -155,7 +155,10 @@ public class NodePersistenceImpl implements NodePersistence {
         )
     );
     
-    private final Map<String,Object> nodeDaoConfig = new TreeMap<>();
+    private final Map<String,Object> nodeDaoConfig;
+    private final Map<String,Object> invDaoConfig;
+    private final boolean singlePool;
+    
     private final ContainerNode root;
     private final Namespace storageNamespace;
     
@@ -173,13 +176,9 @@ public class NodePersistenceImpl implements NodePersistence {
         }
         this.resourceID = resourceID;
         MultiValuedProperties config = VaultInitAction.getConfig();
-        String dataSourceName = VaultInitAction.JNDI_DATASOURCE;
-        String inventorySchema = config.getFirstPropertyValue(VaultInitAction.INVENTORY_SCHEMA_KEY);
-        String vospaceSchema = config.getFirstPropertyValue(VaultInitAction.VOSPACE_SCHEMA_KEY);
-        nodeDaoConfig.put(SQLGenerator.class.getName(), SQLGenerator.class);
-        nodeDaoConfig.put("jndiDataSourceName", dataSourceName);
-        nodeDaoConfig.put("schema", inventorySchema);
-        nodeDaoConfig.put("vosSchema", vospaceSchema);
+        this.nodeDaoConfig = VaultInitAction.getDaoConfig(config);
+        this.invDaoConfig = VaultInitAction.getInvConfig(config);
+        this.singlePool = nodeDaoConfig.get("jndiDataSourceName").equals(invDaoConfig.get("jndiDataSourceName"));
         
         // root node
         IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
@@ -480,9 +479,28 @@ public class NodePersistenceImpl implements NodePersistence {
             }
         }
         
+        NodeProperty contentType = null;
+        NodeProperty contentEncoding = null;
+        // need to remove all artifact props from the node.getProperties()
+        // and use artifactDAO to set the mutable ones
+        Iterator<NodeProperty> i = node.getProperties().iterator();
+        while (i.hasNext()) {
+            NodeProperty np = i.next();
+            if (VOS.PROPERTY_URI_TYPE.equals(np.getKey())) {
+                contentType = np;
+            } else if (VOS.PROPERTY_URI_CONTENTENCODING.equals(np.getKey())) {
+                contentEncoding = np;
+            }
+
+            if (ARTIFACT_PROPS.contains(np.getKey())) {
+                i.remove();
+            }
+        }
+            
+        ArtifactDAO artifactDAO = null;
+        Artifact a = null;
         if (node instanceof DataNode) {
             DataNode dn = (DataNode) node;
-            boolean knownNoArtifact = false;
             if (dn.storageID == null) {
                 // new data node? if lastModified is assigned, this looks sketchy
                 if (dn.getLastModified() != null) {
@@ -494,50 +512,45 @@ public class NodePersistenceImpl implements NodePersistence {
                 // once someone puts the file to minoc, so Node.storageID == Artifact.uri
                 // but the artifact may or may not exist
                 dn.storageID = generateStorageID();
-                knownNoArtifact = true;
-            } 
-            
-            // need to remove all artifact props from the node.getProperties()
-            // and use artifactDAO to set the mutable ones
-            NodeProperty contentType = null;
-            NodeProperty contentEncoding = null;
-            Iterator<NodeProperty> i = dn.getProperties().iterator();
-            while (i.hasNext()) {
-                NodeProperty np = i.next();
-                if (VOS.PROPERTY_URI_TYPE.equals(np.getKey())) {
-                    contentType = np;
-                } else if (VOS.PROPERTY_URI_CONTENTENCODING.equals(np.getKey())) {
-                    contentEncoding = np;
-                }
-
-                if (ARTIFACT_PROPS.contains(np.getKey())) {
-                    i.remove();
-                }
-            }
-            // optimization: avoid query when we know artifact doesn't exist 
-            //          and: avoid query if we don't need to update it
-            if (!knownNoArtifact && (contentType != null || contentEncoding != null)) {
-                ArtifactDAO artifactDAO = getArtifactDAO();
-                Artifact a = artifactDAO.get(dn.storageID);
-                log.warn("put: " + contentType + " " + contentEncoding + " -> " + a);
-                if (a != null) {
-                    if (contentType == null) {
-                        a.contentType = null;
-                    } else {
-                        a.contentType = contentType.getValue();
-                    }
-                    if (contentEncoding == null) {
-                        a.contentEncoding = null;
-                    } else {
-                        a.contentEncoding = contentEncoding.getValue();
-                    }
-                    artifactDAO.put(a);
+            } else {
+                if (contentType != null || contentEncoding != null) {
+                    // update possibly required
+                    artifactDAO = getArtifactDAO();
+                    a = artifactDAO.get(dn.storageID);
+                } else {
+                    log.debug("no artifact props to update - skipping ArtifactDAO.get");
                 }
             }
         }
+            
+        boolean useTxn = singlePool && a != null; // TODO
         
+        // update node
         NodeDAO dao = getDAO();
         dao.put(node);
+        
+        // update artifact after node
+        if (a != null) {
+            if (contentType == null || contentType.isMarkedForDeletion()) {
+                a.contentType = null;
+            } else {
+                a.contentType = contentType.getValue();
+            }
+            if (contentEncoding == null || contentEncoding.isMarkedForDeletion()) {
+                a.contentEncoding = null;
+            } else {
+                a.contentEncoding = contentEncoding.getValue();
+            }
+            artifactDAO.put(a);
+        
+            // re-add node props
+            if (contentType != null && !contentType.isMarkedForDeletion()) {
+                node.getProperties().add(contentType);
+            }
+            if (contentEncoding != null && !contentEncoding.isMarkedForDeletion()) {
+                node.getProperties().add(contentEncoding);
+            }
+        }
         return node;
     }
 
@@ -583,12 +596,21 @@ public class NodePersistenceImpl implements NodePersistence {
             throw new IllegalArgumentException("arg cannot be null: node");
         }
         
+        Artifact a = null;
         final NodeDAO dao = getDAO();
         final ArtifactDAO artifactDAO = getArtifactDAO();
         TransactionManager txn = dao.getTransactionManager();
-        
+        TransactionManager atxn = null;
         try {
-            log.debug("starting transaction");
+            if (node instanceof DataNode) {
+                DataNode dn = (DataNode) node;
+                a = artifactDAO.get(dn.storageID);
+            }
+            if (a != null && !singlePool) {
+                atxn = artifactDAO.getTransactionManager();
+            }
+            
+            log.debug("starting node transaction");
             txn.startTransaction();
             log.debug("start txn: OK");
             
@@ -614,29 +636,51 @@ public class NodePersistenceImpl implements NodePersistence {
                     }
                 } // else: LinkNode can always be deleted
 
-                if (storageID != null) {
-                    Artifact a = artifactDAO.get(storageID);
-                    if (a != null) {
-                        DeletedArtifactEventDAO daeDAO = new DeletedArtifactEventDAO(artifactDAO);
-                        DeletedArtifactEvent dae = new DeletedArtifactEvent(a.getID());
-                        daeDAO.put(dae);
-                        artifactDAO.delete(a.getID());
-                    }
+                if (singlePool && a != null) {
+                    // inventory ops inside main txn
+                    DeletedArtifactEventDAO daeDAO = new DeletedArtifactEventDAO(artifactDAO);
+                    DeletedArtifactEvent dae = new DeletedArtifactEvent(a.getID());
+                    daeDAO.put(dae);
+                    artifactDAO.delete(a.getID());
                 }
+                
                 // TODO: need DeletedNodeDAO to create DeletedNodeEvent
                 dao.delete(node.getID());
             } else {
                 log.debug("failed to lock node " + node.getID() + " - assume deleted by another process");
             }
-            
+
             log.debug("commit txn...");
             txn.commitTransaction();
             log.debug("commit txn: OK");
+
+            if (!singlePool && a != null) {
+                log.warn("starting artifact transaction");
+                atxn.startTransaction();
+                log.debug("start txn: OK");
+            
+                Artifact alock = artifactDAO.lock(a);
+                if (alock != null) {
+                    DeletedArtifactEventDAO daeDAO = new DeletedArtifactEventDAO(artifactDAO);
+                    DeletedArtifactEvent dae = new DeletedArtifactEvent(alock.getID());
+                    daeDAO.put(dae);
+                    artifactDAO.delete(alock.getID());
+                }
+                log.debug("commit artifact txn...");
+                atxn.commitTransaction();
+                atxn = null;
+                log.warn("commit artifact txn: OK");
+            }
         } catch (Exception ex) {
             if (txn.isOpen()) {
                 log.error("failed to delete " + node.getID() + " aka " + node.getName(), ex);
                 txn.rollbackTransaction();
                 log.debug("rollback txn: OK");
+            }
+            if (atxn != null && atxn.isOpen()) {
+                log.error("failed to delete " + a.getID() + " aka " + a.getURI(), ex);
+                atxn.rollbackTransaction();
+                log.debug("rollback artifact txn: OK");
             }
             throw ex;
         } finally {
@@ -644,6 +688,11 @@ public class NodePersistenceImpl implements NodePersistence {
                 log.error("BUG - open transaction in finally");
                 txn.rollbackTransaction();
                 log.error("rollback txn: OK");
+            }
+            if (atxn != null && atxn.isOpen()) {
+                log.error("BUG - open artifact transaction in finally");
+                atxn.rollbackTransaction();
+                log.error("rollback artifact txn: OK");
             }
         }
     }
