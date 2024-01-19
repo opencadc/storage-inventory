@@ -242,9 +242,10 @@ public class VaultInitAction extends InitAction {
     static Map<String, Object> getDaoConfig(MultiValuedProperties props) {
         Map<String, Object> ret = new TreeMap<>();
         ret.put(SQLGenerator.class.getName(), SQLGenerator.class); // not configurable right now
-        ret.put("jndiDataSourceName", org.opencadc.vault.VaultInitAction.JNDI_VOS_DATASOURCE);
-        ret.put("schema", props.getFirstPropertyValue(org.opencadc.vault.VaultInitAction.INVENTORY_SCHEMA_KEY));
-        ret.put("vosSchema", props.getFirstPropertyValue(org.opencadc.vault.VaultInitAction.VOSPACE_SCHEMA_KEY));
+        ret.put("jndiDataSourceName", VaultInitAction.JNDI_VOS_DATASOURCE);
+        // unused, but inventory "schema" required by cadc-inventory-db
+        ret.put("schema", props.getFirstPropertyValue(INVENTORY_SCHEMA_KEY));
+        ret.put("vosSchema", props.getFirstPropertyValue(VOSPACE_SCHEMA_KEY));
         return ret;
     }
     
@@ -255,16 +256,16 @@ public class VaultInitAction extends InitAction {
         }
         Map<String, Object> ret = new TreeMap<>();
         ret.put(SQLGenerator.class.getName(), SQLGenerator.class); // not configurable right now
-        ret.put("jndiDataSourceName", org.opencadc.vault.VaultInitAction.JNDI_INV_DATASOURCE);
-        ret.put("schema", props.getFirstPropertyValue(org.opencadc.vault.VaultInitAction.INVENTORY_SCHEMA_KEY));
+        ret.put("jndiDataSourceName", JNDI_INV_DATASOURCE);
+        ret.put("schema", props.getFirstPropertyValue(INVENTORY_SCHEMA_KEY));
         return ret;
     }
     
     static Map<String, Object> getKeyPairConfig(MultiValuedProperties props) {
         Map<String, Object> ret = new TreeMap<>();
         ret.put(SQLGenerator.class.getName(), SQLGenerator.class); // not configurable right now
-        ret.put("jndiDataSourceName", org.opencadc.vault.VaultInitAction.JNDI_VOS_DATASOURCE);
-        ret.put("schema", props.getFirstPropertyValue(org.opencadc.vault.VaultInitAction.VOSPACE_SCHEMA_KEY));
+        ret.put("jndiDataSourceName", JNDI_VOS_DATASOURCE);
+        ret.put("schema", props.getFirstPropertyValue(VOSPACE_SCHEMA_KEY));
         return ret;
     }
 
