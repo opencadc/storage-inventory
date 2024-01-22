@@ -88,6 +88,7 @@ import org.opencadc.inventory.PreauthKeyPair;
 import org.opencadc.inventory.db.PreauthKeyPairDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
+import org.opencadc.inventory.db.version.InitDatabase;
 import org.opencadc.inventory.transfer.StorageSiteAvailabilityCheck;
 import org.opencadc.vospace.db.InitDatabaseVOS;
 import org.opencadc.vospace.server.NodePersistence;
@@ -103,7 +104,8 @@ public class VaultInitAction extends InitAction {
 
     static String KEY_PAIR_NAME = "vault-preauth-keys";
     
-    static final String JNDI_DATASOURCE = "jdbc/nodes"; // context.xml
+    static final String JNDI_VOS_DATASOURCE = "jdbc/nodes"; // context.xml
+    static final String JNDI_INV_DATASOURCE = "jdbc/inventory"; // context.xml
     static final String JNDI_UWS_DATASOURCE = "jdbc/uws"; // context.xml
 
     // config keys
@@ -112,6 +114,7 @@ public class VaultInitAction extends InitAction {
     static final String PREVENT_NOT_FOUND_KEY = VAULT_KEY + ".consistency.preventNotFound";
     static final String INVENTORY_SCHEMA_KEY = VAULT_KEY + ".inventory.schema";
     static final String VOSPACE_SCHEMA_KEY = VAULT_KEY + ".vospace.schema";
+    static final String SINGLE_POOL_KEY = VAULT_KEY + ".singlePool";
 
     static final String ROOT_OWNER = VAULT_KEY + ".root.owner"; // numeric?
 
@@ -120,7 +123,8 @@ public class VaultInitAction extends InitAction {
     MultiValuedProperties props;
     private URI resourceID;
     private Namespace storageNamespace;
-    private Map<String, Object> daoConfig;
+    private Map<String, Object> vosDaoConfig;
+    private Map<String, Object> invDaoConfig;
 
     private String jndiNodePersistence;
     private String jndiPreauthKeys;
@@ -209,6 +213,15 @@ public class VaultInitAction extends InitAction {
         } else {
             sb.append("OK");
         }
+        
+        String sp = mvp.getFirstPropertyValue(SINGLE_POOL_KEY);
+        sb.append("\n\t").append(SINGLE_POOL_KEY).append(": ");
+        if (sp == null) {
+            sb.append("MISSING");
+            ok = false;
+        } else {
+            sb.append("OK");
+        }
 
         String ns = mvp.getFirstPropertyValue(STORAGE_NAMESPACE_KEY);
         sb.append("\n\t").append(STORAGE_NAMESPACE_KEY).append(": ");
@@ -227,12 +240,32 @@ public class VaultInitAction extends InitAction {
     }
 
     static Map<String, Object> getDaoConfig(MultiValuedProperties props) {
-        
         Map<String, Object> ret = new TreeMap<>();
         ret.put(SQLGenerator.class.getName(), SQLGenerator.class); // not configurable right now
-        ret.put("jndiDataSourceName", org.opencadc.vault.VaultInitAction.JNDI_DATASOURCE);
-        ret.put("schema", props.getFirstPropertyValue(org.opencadc.vault.VaultInitAction.INVENTORY_SCHEMA_KEY));
-        ret.put("vosSchema", props.getFirstPropertyValue(org.opencadc.vault.VaultInitAction.VOSPACE_SCHEMA_KEY));
+        ret.put("jndiDataSourceName", VaultInitAction.JNDI_VOS_DATASOURCE);
+        // unused, but inventory "schema" required by cadc-inventory-db
+        ret.put("schema", props.getFirstPropertyValue(INVENTORY_SCHEMA_KEY));
+        ret.put("vosSchema", props.getFirstPropertyValue(VOSPACE_SCHEMA_KEY));
+        return ret;
+    }
+    
+    static Map<String, Object> getInvConfig(MultiValuedProperties props) {
+        boolean usp = Boolean.parseBoolean(props.getFirstPropertyValue(SINGLE_POOL_KEY));
+        if (usp) {
+            return getDaoConfig(props);
+        }
+        Map<String, Object> ret = new TreeMap<>();
+        ret.put(SQLGenerator.class.getName(), SQLGenerator.class); // not configurable right now
+        ret.put("jndiDataSourceName", JNDI_INV_DATASOURCE);
+        ret.put("schema", props.getFirstPropertyValue(INVENTORY_SCHEMA_KEY));
+        return ret;
+    }
+    
+    static Map<String, Object> getKeyPairConfig(MultiValuedProperties props) {
+        Map<String, Object> ret = new TreeMap<>();
+        ret.put(SQLGenerator.class.getName(), SQLGenerator.class); // not configurable right now
+        ret.put("jndiDataSourceName", JNDI_VOS_DATASOURCE);
+        ret.put("schema", props.getFirstPropertyValue(VOSPACE_SCHEMA_KEY));
         return ret;
     }
 
@@ -244,7 +277,8 @@ public class VaultInitAction extends InitAction {
         try {
             this.resourceID = new URI(rid);
             this.storageNamespace = new Namespace(ns);
-            this.daoConfig = getDaoConfig(props);
+            this.vosDaoConfig = getDaoConfig(props);
+            this.invDaoConfig = getInvConfig(props);
             log.info("initConfig: OK");
         } catch (URISyntaxException ex) {
             throw new IllegalStateException("invalid config: " + RESOURCE_ID_KEY + " must be a valid URI");
@@ -252,33 +286,45 @@ public class VaultInitAction extends InitAction {
     }
 
     private void initDatabase() {
-        log.info("initDatabase: START");
         try {
-            DataSource ds = DBUtil.findJNDIDataSource(JNDI_DATASOURCE);
-            String schema = (String) daoConfig.get("vosSchema");
+            String dsname = (String) vosDaoConfig.get("jndiDataSourceName");
+            String schema = (String) vosDaoConfig.get("vosSchema");
+            log.info("initDatabase: " + dsname + " " + schema + " START");
+            DataSource ds = DBUtil.findJNDIDataSource(dsname);
             InitDatabaseVOS init = new InitDatabaseVOS(ds, null, schema);
             init.doInit();
-            log.info("initDatabase: " + JNDI_DATASOURCE + " " + schema + " OK");
+            log.info("initDatabase: " + dsname + " " + schema + " OK");
         } catch (Exception ex) {
-            throw new IllegalStateException("check/init database failed", ex);
+            throw new IllegalStateException("check/init vospace database failed", ex);
+        }
+
+        try {
+            String dsname = (String) invDaoConfig.get("jndiDataSourceName");
+            String schema = (String) invDaoConfig.get("schema");
+            log.info("initDatabase: " + dsname + " " + schema + " START");
+            DataSource ds = DBUtil.findJNDIDataSource(dsname);
+            InitDatabase init = new InitDatabase(ds, null, schema);
+            init.doInit();
+            log.info("initDatabase: " + dsname + " " + schema + " OK");
+        } catch (Exception ex) {
+            throw new IllegalStateException("check/init inventory database failed", ex);
         }
     }
 
     private void initUWSDatabase() {
-        log.info("initUWSDatabase: START");
         try {
-            // Init UWS database
+            log.info("initDatabase: " + JNDI_UWS_DATASOURCE + " uws START");
             DataSource uws = DBUtil.findJNDIDataSource(JNDI_UWS_DATASOURCE);
             InitDatabaseUWS uwsi = new InitDatabaseUWS(uws, null, "uws");
             uwsi.doInit();
             log.info("initDatabase: " + JNDI_UWS_DATASOURCE + " uws OK");
-
         } catch (Exception ex) {
             throw new RuntimeException("check/init uws database failed", ex);
         }
     }
 
     private void initNodePersistence() {
+        log.info("initNodePersistence: START");
         jndiNodePersistence = appName + "-" + NodePersistence.class.getName();
         try {
             Context ctx = new InitialContext();
@@ -290,7 +336,7 @@ public class VaultInitAction extends InitAction {
             NodePersistence npi = new NodePersistenceImpl(resourceID);
             ctx.bind(jndiNodePersistence, npi);
 
-            log.info("created JNDI key: " + jndiNodePersistence + " impl: " + npi.getClass().getName());
+            log.info("initNodePersistence: created JNDI key: " + jndiNodePersistence + " impl: " + npi.getClass().getName());
         } catch (Exception ex) {
             log.error("Failed to create JNDI Key " + jndiNodePersistence, ex);
         }
@@ -298,10 +344,10 @@ public class VaultInitAction extends InitAction {
     
     private void initKeyPair() {
         log.info("initKeyPair: START");
-        jndiPreauthKeys = appName + "-" + PreauthKeyPair.class.getName();
+        //jndiPreauthKeys = appName + "-" + PreauthKeyPair.class.getName();
         try {
             PreauthKeyPairDAO dao = new PreauthKeyPairDAO();
-            dao.setConfig(daoConfig);
+            dao.setConfig(getKeyPairConfig(props));
             PreauthKeyPair keys = dao.get(KEY_PAIR_NAME);
             if (keys == null) {
                 KeyPair kp = RsaSignatureGenerator.getKeyPair(4096);
@@ -322,6 +368,7 @@ public class VaultInitAction extends InitAction {
             } else {
                 log.info("initKeyPair: re-use existing keys - OK");
             }
+            /*
             Context ctx = new InitialContext();
             try {
                 ctx.unbind(jndiPreauthKeys);
@@ -333,6 +380,7 @@ public class VaultInitAction extends InitAction {
             
             Object o = ctx.lookup(jndiPreauthKeys);
             log.info("checking... found: " + jndiPreauthKeys + " = " + o + " in " + ctx);
+            */
         } catch (Exception ex) {
             throw new RuntimeException("check/init " + KEY_PAIR_NAME + " failed", ex);
         }

@@ -40,6 +40,12 @@ org.opencadc.vault.nodes.username={username for vospace pool}
 org.opencadc.vault.nodes.password={password for vospace pool}
 org.opencadc.vault.nodes.url=jdbc:postgresql://{server}/{database}
 
+org.opencadc.vault.inventory.maxActive={max connections for inventory pool}
+# optional: config for separate inventory pool
+org.opencadc.vault.inventory.username={username for inventory pool}
+org.opencadc.vault.inventory.password={password for inventory pool}
+org.opencadc.vault.inventory.url=jdbc:postgresql://{server}/{database}
+
 org.opencadc.vault.uws.maxActive={max connections for uws pool}
 org.opencadc.vault.uws.username={username for uws pool}
 org.opencadc.vault.uws.password={password for uws pool}
@@ -49,6 +55,15 @@ The _nodes_ account owns and manages (create, alter, drop) vospace database obje
 all the content (insert, update, delete). The database is specified in the JDBC URL and the schema name is specified 
 in the vault.properties (below). Failure to connect or initialize the database will show up in logs and in the 
 VOSI-availability output.
+
+The _inventory_ account owns and manages (create, alter, drop) inventory database objects and manages
+all the content (update and delete Artifact,  insert DeletedArtifactEvent). The database is specified 
+in the JDBC URL and the schema name is specified in the minoc.properties (below). Failure to connect or 
+initialize the database will show up in logs and in the VOSI-availability output. The _inventory_ content 
+may be in the same database as the _nodes_, in a different database in the same server, or in a different 
+server entirely. See `org.opencadc.vault.singlePool` below for the pros and cons. Note: it is a good
+idea to set `maxActive` to a valid integer (e.g. 0) when using a single pool; this avoids an ugly but
+meaningless stack trace in the logs at startup.
 
 The _uws_ account owns and manages (create, alter, drop) uws database objects in the `uws` schema and manages all
 the content (insert, update, delete). The database is specified in the JDBC URLFailure to connect or initialize the
@@ -70,6 +85,7 @@ org.opencadc.vault.consistency.preventNotFound=true|false
 # vault database settings
 org.opencadc.vault.inventory.schema = {inventory schema name}
 org.opencadc.vault.vospace.schema = {vospace schema name}
+org.opencadc.vault.singlePool = {true|false}
 
 # root container nodes
 org.opencadc.vault.root.owner = {owner of root node}
@@ -91,6 +107,14 @@ to configuration limitations in <a href="../luskan">luskan</a>.
 
 The _vospace.schema_ name is the name of the database schema used for all created database objects (tables, indices, etc). Note that with a single connection pool, the two schemas must currently be in the same database.
 TODO: augment config to support separate inventory and vospace pools.
+
+The _singlePool_ key configures `vault` to use a single pool (the _nodes_ pool) for both vospace and inventory 
+operations. The inventory and vospace content must be in the same database for this to work. When configured 
+to use a single pool, delete node operations can delete a DataNode and the associated Artifact and create the 
+DeletedArtifactEvent in a single transaction. When configured to use separate pools, the delete Artifact and create 
+DeletedArtifactEvent are done in a separate transaction and if that fails the Artifact will be left behind and 
+orphaned until the vault validation (see ???) runs and fixes such a discrepancy. However, _singlePool_ = `false` allows
+the content to be stored in two separate databases or servers.
 
 The _root.owner_ owns the root node and has full read and write permission in the root container, so it can 
 create and delete container nodes at the root and assign container node properties that are normally read-only
