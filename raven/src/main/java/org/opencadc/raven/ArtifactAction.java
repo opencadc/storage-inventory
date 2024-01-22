@@ -197,7 +197,7 @@ public abstract class ArtifactAction extends RestAction {
             this.preauthKeys = Boolean.valueOf(pak);
             log.debug("Using preauth keys: " + this.preauthKeys);
         } else {
-            throw new IllegalStateException("invalid config: missing keys.preauth configuration");
+            this.preauthKeys = false;
         }
     }
 

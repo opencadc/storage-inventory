@@ -330,15 +330,6 @@ public class RavenInitAction extends InitAction {
             sb.append("OK");
         }
         
-        String preauthKeys = mvp.getFirstPropertyValue(RavenInitAction.PREAUTH_KEY);
-        sb.append("\n\t").append(RavenInitAction.PREAUTH_KEY).append(": ");
-        if (preauthKeys == null) {
-            sb.append("MISSING");
-            ok = false;
-        } else {
-            sb.append("OK");
-        }
-
         if (!ok) {
             throw new IllegalStateException(sb.toString());
         }
