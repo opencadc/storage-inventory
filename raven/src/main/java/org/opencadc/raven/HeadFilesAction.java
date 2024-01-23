@@ -72,9 +72,11 @@ import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.rest.SyncOutput;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Set;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.transfer.ProtocolsGenerator;
 import org.opencadc.permissions.ReadGrant;
@@ -108,8 +110,10 @@ public class HeadFilesAction extends FilesAction {
         log.debug("Starting HEAD action for " + artifactURI.toASCIIString());
         Artifact artifact = artifactDAO.get(artifactURI);
         
-        if (artifact == null) {
-            if (this.preventNotFound) {
+        if (artifact == null && preventNotFound) {
+            StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
+            Set<StorageSite> sites = storageSiteDAO.list();
+            if (!sites.isEmpty()) {
                 // check known storage sites
                 ProtocolsGenerator pg = new ProtocolsGenerator(
                         this.artifactDAO, this.siteAvailabilities, this.siteRules);
@@ -117,14 +121,16 @@ public class HeadFilesAction extends FilesAction {
                 pg.user = this.user;
                 pg.preventNotFound = this.preventNotFound;
                 pg.storageResolver = this.storageResolver;
-                StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
+
                 Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace);
                 Protocol proto = new Protocol(VOS.PROTOCOL_HTTPS_GET);
                 proto.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
                 transfer.getProtocols().add(proto);
-                // TODO: tokenGen is optional so this can fail
-                String authToken = tokenGen.generateToken(artifactURI, ReadGrant.class, user);
-                artifact = pg.getUnsyncedArtifact(artifactURI, transfer, storageSiteDAO.list(), authToken);
+                String authToken = null;
+                if (tokenGen != null) {
+                    authToken = tokenGen.generateToken(artifactURI, ReadGrant.class, user);
+                }
+                artifact = pg.getUnsyncedArtifact(artifactURI, transfer, sites, authToken);
             }
         }
         

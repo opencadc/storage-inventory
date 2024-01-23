@@ -499,29 +499,31 @@ public class ProtocolsGenerator {
                         if (sec == null) {
                             sec = Standards.SECURITY_METHOD_ANON;
                         }
-                        boolean incToken = Standards.SECURITY_METHOD_ANON.equals(sec);
+                        boolean anon = Standards.SECURITY_METHOD_ANON.equals(sec);
                         Interface iface = filesCap.findInterface(sec);
                         log.debug("PUT: " + storageSite + " proto: " + proto + " iface: " + iface);
                         if (iface != null) {
                             URL baseURL = iface.getAccessURL().getURL();
                             //log.debug("base url for site " + storageSite.getResourceID() + ": " + baseURL);
                             if (protocolCompat(proto, baseURL)) {
+                                // // no plain anon URL for put: !anon or anon+token
+                                boolean gen = (!anon || (anon && authToken != null));
+                                if (gen) {
+                                    StringBuilder sb = new StringBuilder();
+                                    sb.append(baseURL.toExternalForm()).append("/");
+                                    if (authToken != null && anon) {
+                                        sb.append(authToken).append("/");
+                                    }
+                                    sb.append(artifactURI.toASCIIString());
+                                    Protocol p = new Protocol(proto.getUri());
+                                    if (transfer.version == VOS.VOSPACE_21) {
+                                        p.setSecurityMethod(proto.getSecurityMethod());
+                                    }
+                                    p.setEndpoint(sb.toString());
+                                    protos.add(p);
+                                    log.debug("added: " + p);
+                                }
                                 
-                                StringBuilder sb = new StringBuilder();
-                                sb.append(baseURL.toExternalForm()).append("/");
-                                if (authToken != null && incToken) {
-                                    sb.append(authToken).append("/");
-                                }
-                                sb.append(artifactURI.toASCIIString());
-                                Protocol p = new Protocol(proto.getUri());
-                                if (transfer.version == VOS.VOSPACE_21) {
-                                    p.setSecurityMethod(proto.getSecurityMethod());
-                                }
-                                p.setEndpoint(sb.toString());
-                                protos.add(p);
-                                log.debug("added: " + p);
-
-                                // no plain anon URL for put
                             } else {
                                 log.debug("PUT: " + storageSite + "PUT: reject protocol: " + proto
                                         + " reason: no compatible URL protocol");

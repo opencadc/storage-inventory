@@ -70,6 +70,7 @@ package org.opencadc.inventory.transfer;
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
 import java.io.OutputStream;
+import java.io.PrintWriter;
 import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
@@ -111,7 +112,14 @@ public class GetKeyAction extends RestAction {
                 ostream.flush();
             }
         } catch (NamingException ex) {
-            throw new RuntimeException("BUG: failed to find keys via JNDI", ex);
+            syncOutput.setHeader("content-type", "test/plain");
+            syncOutput.setCode(404);
+            try (OutputStream ostream = syncOutput.getOutputStream()) {
+                PrintWriter w  = new PrintWriter(ostream);
+                w.println("not found: key signing disabled");
+                w.flush();
+                w.close();
+            }
         }
     }
 }
