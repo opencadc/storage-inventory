@@ -131,7 +131,7 @@ public class HeadAction extends ArtifactAction {
             artifact = getArtifact(artifactURI);
         }
         if (artifact != null) {
-            setHeaders(artifact, syncOutput);
+            setHeaders(artifact, filenameOverride, syncOutput);
         }
     }
     
@@ -140,7 +140,7 @@ public class HeadAction extends ArtifactAction {
      * @param artifact The artifact with metadata
      * @param syncOutput The target response
      */
-    static void setHeaders(Artifact artifact, SyncOutput syncOutput) {
+    static void setHeaders(Artifact artifact, String filenameOverride, SyncOutput syncOutput) {
         syncOutput.setHeader(ARTIFACT_ID_HDR, artifact.getID().toString());
         syncOutput.setDigest(artifact.getContentChecksum());
         syncOutput.setLastModified(artifact.getContentLastModified());
@@ -149,7 +149,10 @@ public class HeadAction extends ArtifactAction {
         DateFormat df = DateUtil.getDateFormat(DateUtil.HTTP_DATE_FORMAT, DateUtil.GMT);
         syncOutput.setHeader("Last-Modified", df.format(artifact.getContentLastModified()));
 
-        String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
+        String filename = filenameOverride;
+        if (filename == null) {
+            filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
+        }
         syncOutput.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
 
         if (artifact.contentEncoding != null) {

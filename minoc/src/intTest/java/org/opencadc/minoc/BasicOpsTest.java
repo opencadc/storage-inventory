@@ -146,10 +146,12 @@ public class BasicOpsTest extends MinocTest {
             long contentLength = get.getContentLength();
             String contentType = get.getContentType();
             String contentEncoding = get.getContentEncoding();
+            String contentDisposition = get.getResponseHeader("content-disposition");
             Assert.assertEquals(computeChecksumURI(data), checksumURI);
             Assert.assertEquals(data.length, contentLength);
             Assert.assertEquals(type, contentType);
             Assert.assertEquals(encoding, contentEncoding);
+            Assert.assertTrue(contentDisposition.contains("filename=") && contentDisposition.contains("file.txt"));
             Date lastModified = get.getLastModified(); 
             Assert.assertNotNull(lastModified);
 
@@ -181,10 +183,12 @@ public class BasicOpsTest extends MinocTest {
             contentLength = head.getContentLength();
             contentType = head.getContentType();
             contentEncoding = head.getContentEncoding();
+            contentDisposition = head.getResponseHeader("content-disposition");
             Assert.assertEquals(computeChecksumURI(data), checksumURI);
             Assert.assertEquals(data.length, contentLength);
             Assert.assertEquals(newType, contentType);
             Assert.assertEquals(newEncoding, contentEncoding);
+            Assert.assertTrue(contentDisposition.contains("filename=") && contentDisposition.contains("file.txt"));
             lastModified = head.getLastModified(); 
             Assert.assertNotNull(lastModified);
 
@@ -331,6 +335,114 @@ public class BasicOpsTest extends MinocTest {
         }
     }
 
+    @Test
+    public void testFilenameOverride() {
+        try {
+            URI artifactURI = URI.create("cadc:TEST/testFilenameOverride.txt");
+            URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
+
+            String content = "abcdefghijklmnopqrstuvwxyz";
+            String encoding = "test-encoding";
+            String type = "text/plain";
+            byte[] data = content.getBytes();
+            URI expectedChecksum = computeChecksumURI(data);
+
+            // put: no length or checksum
+            InputStream in = new ByteArrayInputStream(data);
+            HttpUpload put = new HttpUpload(in, artifactURL);
+            put.setRequestProperty(HttpTransfer.CONTENT_TYPE, type);
+            put.setRequestProperty(HttpTransfer.CONTENT_ENCODING, encoding);
+            put.setDigest(expectedChecksum);
+
+            Subject.doAs(userSubject, new RunnableAction(put));
+            log.info("put: " + put.getResponseCode() + " " + put.getThrowable());
+            log.info("headers: " + put.getResponseHeader("content-length") + " " + put.getResponseHeader("digest"));
+            Assert.assertNull(put.getThrowable());
+            Assert.assertEquals("Created", 201, put.getResponseCode());
+
+            // head
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            HttpGet head = new HttpGet(artifactURL, bos);
+            head.setHeadOnly(true);
+            log.info("head: " + artifactURL.toExternalForm());
+            Subject.doAs(userSubject, new RunnableAction(head));
+            log.info("head: " + head.getResponseCode() + " " + head.getThrowable());
+            log.info("headers: " + head.getResponseHeader("content-length") + " " + head.getResponseHeader("digest"));
+            log.warn("head output: " + bos.toString());
+            Assert.assertNull(head.getThrowable());
+            URI checksumURI = head.getDigest();
+            long contentLength = head.getContentLength();
+            String contentType = head.getContentType();
+            String contentEncoding = head.getContentEncoding();
+            String contentDisposition = head.getResponseHeader("content-disposition");
+            Assert.assertEquals(computeChecksumURI(data), checksumURI);
+            Assert.assertEquals(data.length, contentLength);
+            Assert.assertEquals(type, contentType);
+            Assert.assertEquals(encoding, contentEncoding);
+            log.info("content-disposition: " + contentDisposition);
+            Assert.assertTrue(contentDisposition.contains("filename=") && contentDisposition.contains("testFilenameOverride.txt"));
+            Date lastModified = head.getLastModified(); 
+            Assert.assertNotNull(lastModified);
+
+            URL foURL = new URL(artifactURL.toExternalForm() + ":fo/alternate.txt");
+            head = new HttpGet(foURL, bos);
+            head.setHeadOnly(true);
+            log.info("head: " + foURL.toExternalForm());
+            Subject.doAs(userSubject, new RunnableAction(head));
+            log.info("head: " + head.getResponseCode() + " " + head.getThrowable());
+            log.info("headers: " + head.getResponseHeader("content-length") + " " + head.getResponseHeader("digest"));
+            log.warn("head output: " + bos.toString());
+            Assert.assertNull(head.getThrowable());
+            checksumURI = head.getDigest();
+            contentLength = head.getContentLength();
+            contentType = head.getContentType();
+            contentEncoding = head.getContentEncoding();
+            contentDisposition = head.getResponseHeader("content-disposition");
+            Assert.assertEquals(computeChecksumURI(data), checksumURI);
+            Assert.assertEquals(data.length, contentLength);
+            Assert.assertEquals(type, contentType);
+            Assert.assertEquals(encoding, contentEncoding);
+            log.info("content-disposition: " + contentDisposition);
+            Assert.assertTrue(contentDisposition.contains("filename=") && contentDisposition.contains("alternate.txt"));
+            Date lastModified2 = head.getLastModified(); 
+            Assert.assertEquals(lastModified, lastModified2);
+            
+            // get
+            bos = new ByteArrayOutputStream();
+            log.info("get: " + foURL.toExternalForm());
+            HttpGet get = new HttpGet(foURL, bos);
+            Subject.doAs(userSubject, new RunnableAction(get));
+            log.info("get: " + get.getResponseCode() + " " + get.getThrowable());
+            log.info("headers: " + get.getResponseHeader("content-length") + " " + get.getResponseHeader("digest"));
+            log.warn("get output: " + bos.toString());
+            Assert.assertNull(get.getThrowable());
+            checksumURI = get.getDigest();
+            contentLength = get.getContentLength();
+            contentType = get.getContentType();
+            contentEncoding = get.getContentEncoding();
+            contentDisposition = get.getResponseHeader("content-disposition");
+            Assert.assertEquals(computeChecksumURI(data), checksumURI);
+            Assert.assertEquals(data.length, contentLength);
+            Assert.assertEquals(type, contentType);
+            Assert.assertEquals(encoding, contentEncoding);
+            log.info("content-disposition: " + contentDisposition);
+            Assert.assertTrue(contentDisposition.contains("filename=") && contentDisposition.contains("alternate.txt"));
+            Date lastModified3 = get.getLastModified(); 
+            Assert.assertEquals(lastModified, lastModified3);
+            
+            // delete
+            HttpDelete delete = new HttpDelete(artifactURL, false);
+            Subject.doAs(userSubject, new RunnableAction(delete));
+            log.info("delete: " + delete.getResponseCode() + " " + delete.getThrowable());
+            Assert.assertNull(delete.getThrowable());
+            Assert.assertEquals("no content", 204, delete.getResponseCode());
+            
+        } catch (Exception t) {
+            log.error("unexpected throwable", t);
+            Assert.fail("unexpected throwable: " + t);
+        }
+    }
+    
     @Test
     public void testGetNotFound() {
         try {

@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2023.                            (c) 2023.
+*  (c) 2024.                            (c) 2024.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -116,6 +116,9 @@ public abstract class ArtifactAction extends RestAction {
     
     // The target artifact
     URI artifactURI;
+    
+    // alternmate filename for content-disposition header, usually null
+    String filenameOverride;
     
     // The (possibly null) authentication token.
     String authToken;
@@ -285,16 +288,29 @@ public abstract class ArtifactAction extends RestAction {
         String path = this.syncInput.getPath();
         log.debug("path: " + path);
         if (path != null) {
-            int colonIndex = path.indexOf(":");
-            int firstSlashIndex = path.indexOf("/");
-            if (colonIndex != -1) {
-                if (firstSlashIndex < 0 || firstSlashIndex > colonIndex) {
-                    // no auth token--artifact URI is complete path
-                    this.artifactURI = createArtifactURI(path);
-                } else {
-                    this.artifactURI = createArtifactURI(path.substring(firstSlashIndex + 1));
-                    this.authToken = path.substring(0, firstSlashIndex);
-                    log.debug("authToken: " + this.authToken);
+            int colon1 = path.indexOf(":");
+            int slash1 = path.indexOf("/");
+            if (colon1 != -1) {
+                if (slash1 >= 0 && slash1 < colon1) {
+                    // auth token
+                    this.authToken = path.substring(0, slash1);
+                    path = path.substring(slash1 + 1);
+                }
+                try {
+                    String[] up = path.split(":");
+                    if (up.length > 1) {
+                        URI auri = new URI(up[0] + ":" + up[1]);
+                        InventoryUtil.validateArtifactURI(ArtifactAction.class, auri);
+                        this.artifactURI = auri;
+                    }
+                    for (int i = 2; i < up.length; i++) {
+                        String[] esp = up[2].split("/");
+                        if (esp.length == 2 && "fo".equals(esp[0])) {
+                            this.filenameOverride = esp[1];
+                        }
+                    }
+                } catch (URISyntaxException | IllegalArgumentException e) {
+                    log.debug("illegal artifact URI: " + path, e);
                 }
             }
         }
@@ -306,23 +322,5 @@ public abstract class ArtifactAction extends RestAction {
             throw new ResourceNotFoundException("not found: " + artifactURI);
         }
         return artifact;
-    }
-    
-    /**
-     * Create a valid artifact uri.
-     * @param uri The input string.
-     * @return The artifact uri object.
-     */
-    private URI createArtifactURI(String uri) {
-        log.debug("artifact URI: " + uri);
-        URI ret;
-        try {
-            ret = new URI(uri);
-            InventoryUtil.validateArtifactURI(ArtifactAction.class, ret);
-        } catch (URISyntaxException | IllegalArgumentException e) {
-            ret = null;
-            log.debug("illegal artifact URI: " + uri, e);
-        }
-        return ret;
     }
 }
