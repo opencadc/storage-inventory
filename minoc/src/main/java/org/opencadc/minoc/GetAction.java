@@ -124,6 +124,7 @@ public class GetAction extends ArtifactAction {
     // constructor for unit tests with no config/init
     GetAction(boolean init) {
         super(init);
+        this.extractFilenameOverride = true;
     }
 
     /**
@@ -131,6 +132,7 @@ public class GetAction extends ArtifactAction {
      */
     public GetAction() {
         super();
+        this.extractFilenameOverride = true;
     }
 
     /**
@@ -194,7 +196,7 @@ public class GetAction extends ArtifactAction {
             }
             
             // default: complete download
-            HeadAction.setHeaders(artifact, syncOutput);
+            HeadAction.setHeaders(artifact, filenameOverride, syncOutput);
             bcos = new ByteCountOutputStream(syncOutput.getOutputStream());
             
             // create tmp StorageLocation with expected checksum so adapter can potentially
@@ -238,7 +240,7 @@ public class GetAction extends ArtifactAction {
     private ByteCountOutputStream doByteRangeRequest(Artifact artifact, ByteRange byteRange) 
             throws InterruptedException, IOException, ResourceNotFoundException, 
                 ReadException, WriteException, StorageEngageException, TransientException {
-        HeadAction.setHeaders(artifact, syncOutput);
+        HeadAction.setHeaders(artifact, filenameOverride, syncOutput);
         syncOutput.setCode(206);
         long lastByte = byteRange.getOffset() + byteRange.getLength() - 1;
         syncOutput.setHeader(CONTENT_RANGE, "bytes " + byteRange.getOffset() + "-"

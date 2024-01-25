@@ -344,7 +344,7 @@ public class VaultInitAction extends InitAction {
     
     private void initKeyPair() {
         log.info("initKeyPair: START");
-        //jndiPreauthKeys = appName + "-" + PreauthKeyPair.class.getName();
+        jndiPreauthKeys = appName + "-" + PreauthKeyPair.class.getName();
         try {
             PreauthKeyPairDAO dao = new PreauthKeyPairDAO();
             dao.setConfig(getKeyPairConfig(props));
@@ -368,7 +368,6 @@ public class VaultInitAction extends InitAction {
             } else {
                 log.info("initKeyPair: re-use existing keys - OK");
             }
-            /*
             Context ctx = new InitialContext();
             try {
                 ctx.unbind(jndiPreauthKeys);
@@ -380,7 +379,6 @@ public class VaultInitAction extends InitAction {
             
             Object o = ctx.lookup(jndiPreauthKeys);
             log.info("checking... found: " + jndiPreauthKeys + " = " + o + " in " + ctx);
-            */
         } catch (Exception ex) {
             throw new RuntimeException("check/init " + KEY_PAIR_NAME + " failed", ex);
         }

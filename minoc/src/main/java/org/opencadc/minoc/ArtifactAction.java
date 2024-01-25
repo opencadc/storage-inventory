@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2023.                            (c) 2023.
+*  (c) 2024.                            (c) 2024.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -116,6 +116,11 @@ public abstract class ArtifactAction extends RestAction {
     
     // The target artifact
     URI artifactURI;
+    String errMsg;
+    
+    // alternmate filename for content-disposition header, usually null
+    boolean extractFilenameOverride = false;
+    String filenameOverride;
     
     // The (possibly null) authentication token.
     String authToken;
@@ -260,6 +265,10 @@ public abstract class ArtifactAction extends RestAction {
 
     void init() {
         if (this.artifactURI == null) {
+            if (errMsg != null) {
+                throw new IllegalArgumentException(errMsg);
+            }
+            // generic
             throw new IllegalArgumentException("missing or invalid artifact URI");
         }
     }
@@ -285,16 +294,29 @@ public abstract class ArtifactAction extends RestAction {
         String path = this.syncInput.getPath();
         log.debug("path: " + path);
         if (path != null) {
-            int colonIndex = path.indexOf(":");
-            int firstSlashIndex = path.indexOf("/");
-            if (colonIndex != -1) {
-                if (firstSlashIndex < 0 || firstSlashIndex > colonIndex) {
-                    // no auth token--artifact URI is complete path
-                    this.artifactURI = createArtifactURI(path);
-                } else {
-                    this.artifactURI = createArtifactURI(path.substring(firstSlashIndex + 1));
-                    this.authToken = path.substring(0, firstSlashIndex);
-                    log.debug("authToken: " + this.authToken);
+            int colon1 = path.indexOf(":");
+            int slash1 = path.indexOf("/");
+            if (colon1 != -1) {
+                if (slash1 >= 0 && slash1 < colon1) {
+                    // auth token in front
+                    this.authToken = path.substring(0, slash1);
+                    path = path.substring(slash1 + 1);
+                }
+                try {
+                    int foi = path.indexOf(":fo/");
+                    if (foi > 0 && extractFilenameOverride) {
+                        // filename override appended
+                        this.filenameOverride = path.substring(foi + 4);
+                        path = path.substring(0, foi);
+                    } else if (foi > 0) {
+                        throw new IllegalArgumentException("detected misuse of :fo/ filename override");
+                    }
+                    URI auri = new URI(path);
+                    InventoryUtil.validateArtifactURI(ArtifactAction.class, auri);
+                    this.artifactURI = auri;
+                } catch (URISyntaxException | IllegalArgumentException e) {
+                    this.errMsg = "illegal artifact URI: " + path + " reason: " + e.getMessage();
+                    log.debug(errMsg, e);
                 }
             }
         }
@@ -306,23 +328,5 @@ public abstract class ArtifactAction extends RestAction {
             throw new ResourceNotFoundException("not found: " + artifactURI);
         }
         return artifact;
-    }
-    
-    /**
-     * Create a valid artifact uri.
-     * @param uri The input string.
-     * @return The artifact uri object.
-     */
-    private URI createArtifactURI(String uri) {
-        log.debug("artifact URI: " + uri);
-        URI ret;
-        try {
-            ret = new URI(uri);
-            InventoryUtil.validateArtifactURI(ArtifactAction.class, ret);
-        } catch (URISyntaxException | IllegalArgumentException e) {
-            ret = null;
-            log.debug("illegal artifact URI: " + uri, e);
-        }
-        return ret;
     }
 }
