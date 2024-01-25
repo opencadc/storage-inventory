@@ -124,6 +124,7 @@ public class GetAction extends ArtifactAction {
     // constructor for unit tests with no config/init
     GetAction(boolean init) {
         super(init);
+        this.extractFilenameOverride = true;
     }
 
     /**
@@ -131,6 +132,7 @@ public class GetAction extends ArtifactAction {
      */
     public GetAction() {
         super();
+        this.extractFilenameOverride = true;
     }
 
     /**

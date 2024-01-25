@@ -93,6 +93,7 @@ public class HeadAction extends ArtifactAction {
      */
     public HeadAction() {
         super();
+        this.extractFilenameOverride = true;
     }
     
     /**

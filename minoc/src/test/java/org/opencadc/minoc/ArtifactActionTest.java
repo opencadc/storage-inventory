@@ -127,6 +127,9 @@ public class ArtifactActionTest {
     
     private void assertCorrectPath(String path, String expURI, String expToken, String expFilenameOverride) {
         ArtifactAction action = new TestArtifactAction(path);
+        if (expFilenameOverride != null) {
+            action.extractFilenameOverride = true;
+        }
         action.parsePath();
         log.info(path + " -> " + action.artifactURI + " - " + action.authToken + " - " + action.filenameOverride);
         Assert.assertEquals("artifactURI", URI.create(expURI), action.artifactURI);
@@ -157,6 +160,8 @@ public class ArtifactActionTest {
             
             assertCorrectPath("cadc:vault/uuid:fo/something.fits", "cadc:vault/uuid", null, "something.fits");
             assertCorrectPath("token/cadc:vault/uuid:fo/something.fits", "cadc:vault/uuid", "token", "something.fits");
+            
+            assertCorrectPath("cadc:vault/uuid:/something.fits", "cadc:vault/uuid:/something.fits", null, null);
 
             assertIllegalPath(null);
             assertIllegalPath("");

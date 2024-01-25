@@ -116,8 +116,10 @@ public abstract class ArtifactAction extends RestAction {
     
     // The target artifact
     URI artifactURI;
+    String errMsg;
     
     // alternmate filename for content-disposition header, usually null
+    boolean extractFilenameOverride = false;
     String filenameOverride;
     
     // The (possibly null) authentication token.
@@ -263,6 +265,10 @@ public abstract class ArtifactAction extends RestAction {
 
     void init() {
         if (this.artifactURI == null) {
+            if (errMsg != null) {
+                throw new IllegalArgumentException(errMsg);
+            }
+            // generic
             throw new IllegalArgumentException("missing or invalid artifact URI");
         }
     }
@@ -292,25 +298,25 @@ public abstract class ArtifactAction extends RestAction {
             int slash1 = path.indexOf("/");
             if (colon1 != -1) {
                 if (slash1 >= 0 && slash1 < colon1) {
-                    // auth token
+                    // auth token in front
                     this.authToken = path.substring(0, slash1);
                     path = path.substring(slash1 + 1);
                 }
                 try {
-                    String[] up = path.split(":");
-                    if (up.length > 1) {
-                        URI auri = new URI(up[0] + ":" + up[1]);
-                        InventoryUtil.validateArtifactURI(ArtifactAction.class, auri);
-                        this.artifactURI = auri;
+                    int foi = path.indexOf(":fo/");
+                    if (foi > 0 && extractFilenameOverride) {
+                        // filename override appended
+                        this.filenameOverride = path.substring(foi + 4);
+                        path = path.substring(0, foi);
+                    } else if (foi > 0) {
+                        throw new IllegalArgumentException("detected misuse of :fo/ filename override");
                     }
-                    for (int i = 2; i < up.length; i++) {
-                        String[] esp = up[2].split("/");
-                        if (esp.length == 2 && "fo".equals(esp[0])) {
-                            this.filenameOverride = esp[1];
-                        }
-                    }
+                    URI auri = new URI(path);
+                    InventoryUtil.validateArtifactURI(ArtifactAction.class, auri);
+                    this.artifactURI = auri;
                 } catch (URISyntaxException | IllegalArgumentException e) {
-                    log.debug("illegal artifact URI: " + path, e);
+                    this.errMsg = "illegal artifact URI: " + path + " reason: " + e.getMessage();
+                    log.debug(errMsg, e);
                 }
             }
         }
