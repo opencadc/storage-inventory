@@ -384,6 +384,7 @@ public abstract class InventoryUtil {
         boolean slash = (test.indexOf('/') >= 0);
         boolean escape = (test.indexOf('\\') >= 0);
         boolean percent = (test.indexOf('%') >= 0);
+        boolean colon = (test.indexOf(":") >= 0);
         boolean semic = (test.indexOf(';') >= 0);
         boolean amp = (test.indexOf('&') >= 0);
         boolean dollar = (test.indexOf('$') >= 0);
@@ -398,7 +399,7 @@ public abstract class InventoryUtil {
             }
             throw new IllegalArgumentException(s + name + ": " + test
                     + " reason: path component may not contain space ( ), slash (/), escape (\\), percent (%),"
-                    + " semi-colon (;), ampersand (&), or dollar ($), question (?), or square brackets ([])");
+                    + " colon (:), semi-colon (;), ampersand (&), dollar ($), question (?), or square brackets ([])");
         }
     }
 
