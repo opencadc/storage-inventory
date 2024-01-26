@@ -62,8 +62,9 @@ in the JDBC URL and the schema name is specified in the minoc.properties (below)
 initialize the database will show up in logs and in the VOSI-availability output. The _inventory_ content 
 may be in the same database as the _nodes_, in a different database in the same server, or in a different 
 server entirely. See `org.opencadc.vault.singlePool` below for the pros and cons. Note: it is a good
-idea to set `maxActive` to a valid integer (e.g. 0) when using a single pool; this avoids an ugly but
-meaningless stack trace in the logs at startup.
+idea to set `maxActive` to a valid integer (e.g. 1 because the tomcat connection pool doesn't like 0 and
+decides to make it 100 instead) when using a single pool; this avoids an ugly but meaningless stack trace 
+in the logs at startup.
 
 The _uws_ account owns and manages (create, alter, drop) uws database objects in the `uws` schema and manages all
 the content (insert, update, delete). The database is specified in the JDBC URLFailure to connect or initialize the
@@ -101,20 +102,19 @@ _all known_ sites. It only makes sense to enable this when `vault` is running in
 `raven` and/or `fenwick` instances syncing artifact metadata. This feature introduces an overhead for the 
 genuine not-found cases: transfer negotiation to GET the file that was never PUT.
 
-The _inventory.schema_ name is the name of the database schema that contains the inventory database objects. The
-account nominally requires read-only (select) permission on those objects. This currently must be "inventory" due
-to configuration limitations in <a href="../luskan">luskan</a>.
+The _inventory.schema_ name is the name of the database schema used for all inventory database objects. This 
+currently must be "inventory" due to configuration limitations in <a href="../luskan">luskan</a>.
 
-The _vospace.schema_ name is the name of the database schema used for all created database objects (tables, indices, etc). Note that with a single connection pool, the two schemas must currently be in the same database.
-TODO: augment config to support separate inventory and vospace pools.
+The _vospace.schema_ name is the name of the database schema used for all vospace database objects. Note that 
+with a single connection pool, the two schemas must be in the same database.
 
 The _singlePool_ key configures `vault` to use a single pool (the _nodes_ pool) for both vospace and inventory 
 operations. The inventory and vospace content must be in the same database for this to work. When configured 
 to use a single pool, delete node operations can delete a DataNode and the associated Artifact and create the 
 DeletedArtifactEvent in a single transaction. When configured to use separate pools, the delete Artifact and create 
 DeletedArtifactEvent are done in a separate transaction and if that fails the Artifact will be left behind and 
-orphaned until the vault validation (see ???) runs and fixes such a discrepancy. However, _singlePool_ = `false` allows
-the content to be stored in two separate databases or servers.
+orphaned until the vault validation (see ???) runs and fixes such a discrepancy. However, _singlePool_ = `false` 
+allows the content to be stored in two separate databases or servers.
 
 The _root.owner_ owns the root node and has full read and write permission in the root container, so it can 
 create and delete container nodes at the root and assign container node properties that are normally read-only

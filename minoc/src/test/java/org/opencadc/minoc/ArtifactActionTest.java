@@ -122,10 +122,19 @@ public class ArtifactActionTest {
     }
     
     private void assertCorrectPath(String path, String expURI, String expToken) {
+        assertCorrectPath(path, expURI, expToken, null);
+    }
+    
+    private void assertCorrectPath(String path, String expURI, String expToken, String expFilenameOverride) {
         ArtifactAction action = new TestArtifactAction(path);
+        if (expFilenameOverride != null) {
+            action.extractFilenameOverride = true;
+        }
         action.parsePath();
+        log.info(path + " -> " + action.artifactURI + " - " + action.authToken + " - " + action.filenameOverride);
         Assert.assertEquals("artifactURI", URI.create(expURI), action.artifactURI);
         Assert.assertEquals("authToken", expToken, action.authToken);
+        Assert.assertEquals("filenameOverride", expFilenameOverride, action.filenameOverride);
         if (action.artifactURI == null) {
             Assert.fail("Failed to parse legal path: " + path);
         }
@@ -134,9 +143,7 @@ public class ArtifactActionTest {
     private void assertIllegalPath(String path) {
         ArtifactAction action = new TestArtifactAction(path);
         action.parsePath();
-        if (action.artifactURI != null) {
-            Assert.fail("Should have failed to parse path: " + path);
-        }
+        Assert.assertNull(action.artifactURI);
     }
     
     @Test
@@ -147,10 +154,16 @@ public class ArtifactActionTest {
             assertCorrectPath("token/cadc:TEST/myartifact", "cadc:TEST/myartifact", "token");
             assertCorrectPath("cadc:TEST/myartifact", "cadc:TEST/myartifact", null);
             assertCorrectPath("token/cadc:TEST/myartifact", "cadc:TEST/myartifact", "token");
-            assertCorrectPath("mast:long/uri/with/segments/fits.fits", "mast:long/uri/with/segments/fits.fits", null);
+            assertCorrectPath("mast:long/uri/with/segments/something.fits", "mast:long/uri/with/segments/something.fits", null);
             assertCorrectPath("token/mast:long/uri/with/segments/fits.fits", "mast:long/uri/with/segments/fits.fits", "token");
             assertCorrectPath("token-with-dashes/cadc:TEST/myartifact", "cadc:TEST/myartifact", "token-with-dashes");
             
+            assertCorrectPath("cadc:vault/uuid:fo/something.fits", "cadc:vault/uuid", null, "something.fits");
+            assertCorrectPath("token/cadc:vault/uuid:fo/something.fits", "cadc:vault/uuid", "token", "something.fits");
+            
+            assertCorrectPath("cadc:vault/uuid:/something.fits", "cadc:vault/uuid:/something.fits", null, null);
+
+            assertIllegalPath(null);
             assertIllegalPath("");
             assertIllegalPath("noschemeinuri");
             assertIllegalPath("token/noschemeinuri");
@@ -161,9 +174,6 @@ public class ArtifactActionTest {
             assertIllegalPath("cadc://:port/path");
             assertIllegalPath("artifacts/token1/token2/cadc:FOO/bar");
             assertIllegalPath("artifacts/token/cadc:ccda:FOO/bar");
-            
-            assertIllegalPath(null);
-            
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);

@@ -74,7 +74,6 @@ import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.uws.Job;
 import ca.nrc.cadc.uws.Parameter;
 import ca.nrc.cadc.vosi.Availability;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
@@ -91,9 +90,7 @@ import org.opencadc.inventory.transfer.ProtocolsGenerator;
 import org.opencadc.inventory.transfer.StorageSiteAvailabilityCheck;
 import org.opencadc.inventory.transfer.StorageSiteRule;
 import org.opencadc.permissions.TokenTool;
-import org.opencadc.vospace.ContainerNode;
 import org.opencadc.vospace.DataNode;
-import org.opencadc.vospace.LinkingException;
 import org.opencadc.vospace.Node;
 import org.opencadc.vospace.NodeNotFoundException;
 import org.opencadc.vospace.VOSURI;
@@ -155,34 +152,27 @@ public class VaultTransferGenerator implements TransferGenerator {
         List<Protocol> ret = null;
         try {
             Direction dir = transfer.getDirection();
-            PathResolver ps = new PathResolver(nodePersistence, authorizer, true);
-            Node n = ps.getNode(target.getParentURI().getPath());
-            // assume not null and Container already checked by caller (TransferRunner)
-            ContainerNode parent = (ContainerNode) n;
-            Node node = nodePersistence.get(parent, target.getName());
+            PathResolver ps = new PathResolver(nodePersistence, authorizer);
+            Node node = ps.getNode(target.getPath(), true);
+            if (node == null) {
+                throw new NodeNotFoundException(target.getPath());
+            }
 
             Subject currentSubject = AuthenticationUtil.getCurrentSubject();
-            if (Direction.pushToVoSpace.equals(dir) && node == null) {
-                // create new data node?? this currently does not happen because the library
-                // create DataNode the way that CreateNodeAction would
-                //ret = handleDataNode(dn, transfer, currentSubject);
-                throw new RuntimeException("BUG: expected DataNode to be created already: " + target.getPath());
-            } else if (node instanceof DataNode) {
+            if (node instanceof DataNode) {
                 DataNode dn = (DataNode) node;
-                ret = handleDataNode(dn, transfer, currentSubject);
+                ret = handleDataNode(dn, target.getName(), transfer, currentSubject);
             } else {
-                throw new UnsupportedOperationException(node.getClass().getSimpleName() + " transfer "
-                    + target.getPath());
+                throw new UnsupportedOperationException("transfer: " + node.getClass().getSimpleName()
+                    + " at " + target.getPath());
             }
-        } catch (NodeNotFoundException ex) {
-            throw new FileNotFoundException(target.getPath());
-        } catch (LinkingException ex) {
-            throw new RuntimeException("OOPS: failed to resolve link?", ex);
+        } finally {
+            // nothing right now
         }
         return ret;
     }
     
-    private List<Protocol> handleDataNode(DataNode node, Transfer trans, Subject s) 
+    private List<Protocol> handleDataNode(DataNode node, String filename, Transfer trans, Subject s) 
             throws IOException, ResourceNotFoundException {
         log.debug("handleDataNode: " + node);
         
@@ -203,11 +193,12 @@ public class VaultTransferGenerator implements TransferGenerator {
             URI secM = p.getSecurityMethod();
             if (secM == null || secM.equals(Standards.SECURITY_METHOD_ANON)) {
                 artifactTrans.getProtocols().add(p);
+                log.debug("allow protocol: " + p);
             }
         }
         
         try {
-            List<Protocol> ret = pg.getProtocols(artifactTrans);
+            List<Protocol> ret = pg.getProtocols(artifactTrans, filename);
             log.debug("generated urls: " + ret.size());
             for (Protocol p : ret) {
                 log.debug(p.getEndpoint() + " using " + p.getSecurityMethod());
