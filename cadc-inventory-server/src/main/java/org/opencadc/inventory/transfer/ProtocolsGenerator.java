@@ -163,12 +163,8 @@ public class ProtocolsGenerator {
     public ProtocolsGenerator(ArtifactDAO artifactDAO, Map<URI, Availability> siteAvailabilities, Map<URI, StorageSiteRule> siteRules) {
         this.artifactDAO = artifactDAO;
         this.deletedArtifactEventDAO = new DeletedArtifactEventDAO(this.artifactDAO);
-        this.user = user;
-        this.tokenGen = tokenGen;
         this.siteAvailabilities = siteAvailabilities;
         this.siteRules = siteRules;
-        this.preventNotFound = preventNotFound;
-        this.storageResolver = storageResolver;
     }
     
     public boolean getStorageResolverAdded() {
@@ -195,8 +191,11 @@ public class ProtocolsGenerator {
         if (Direction.pullFromVoSpace.equals(transfer.getDirection())) {
             // filename override only on GET
             protos = doPullFrom(artifactURI, transfer, authToken, filenameOverride);
-        } else {
+        } else if (Direction.pushToVoSpace.equals(transfer.getDirection())) {
             protos = doPushTo(artifactURI, transfer, authToken);
+        } else {
+            throw new UnsupportedOperationException("unexpected transfer direction: " + transfer.getDirection().getValue());
+                    
         }
         return protos;
     }
@@ -274,16 +273,6 @@ public class ProtocolsGenerator {
         return result;
     }
     
-    static void prioritizePullFromSites(List<StorageSite> storageSites) {
-        // contains the algorithm for prioritizing storage sites to pull from.
-        
-        // was: prefer read/write sites to put less load on a read-only "seeder" site during migration
-        //storageSites.sort((site1, site2) -> Boolean.compare(!site1.getAllowWrite(), !site2.getAllowWrite()));
-        
-        // random
-        Collections.shuffle(storageSites);
-    }
-
     Artifact getRemoteArtifact(URL location, URI artifactURI) {
         try {
             HttpGet head = new HttpGet(location, true);
@@ -327,8 +316,23 @@ public class ProtocolsGenerator {
         return filesCap;
     }
 
+    // contains the algorithm for prioritizing storage sites to get file
+    static List<StorageSite> prioritizePullFromSites(List<StorageSite> storageSites) {
+        // filter out non-readble
+        List<StorageSite> ret = new ArrayList<>(storageSites.size());
+        for (StorageSite s : storageSites) {
+            if (s.getAllowRead()) {
+                ret.add(s);
+            } else {
+                log.debug("storage site is not readable: " + s.getResourceID());
+            }
+        }
+        
+        // random
+        Collections.shuffle(ret);
+        return ret;
+    }
     
-
     List<Protocol> doPullFrom(URI artifactURI, Transfer transfer, String authToken, String filenameOverride) 
             throws ResourceNotFoundException, IOException {
         StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
@@ -365,9 +369,9 @@ public class ProtocolsGenerator {
             }
         }
         
-        prioritizePullFromSites(storageSites);
-        log.debug("available sites: " + storageSites.size());
-        for (StorageSite storageSite : storageSites) {
+        List<StorageSite> readableSites = prioritizePullFromSites(storageSites);
+        log.debug("pullFrom: known sites " + storageSites.size() + " -> readableSites " + readableSites.size());
+        for (StorageSite storageSite : readableSites) {
             log.debug("trying site: " + storageSite.getResourceID() + " allowRead=" + storageSite.getAllowRead());
             Capability filesCap = getFilesCapability(storageSite);
             if (filesCap != null && storageSite.getAllowRead()) {
@@ -459,13 +463,16 @@ public class ProtocolsGenerator {
         return protos;
     }
 
+    // the algorithm for prioritizing storage sites to put file
     static SortedSet<StorageSite> prioritizePushToSites(Set<StorageSite> storageSites, URI artifactURI,
                                                         Map<URI, StorageSiteRule> siteRules) {
         PrioritizingStorageSiteComparator comparator = new PrioritizingStorageSiteComparator(siteRules, artifactURI, null);
         TreeSet<StorageSite> orderedSet = new TreeSet<>(comparator);
-        for (StorageSite storageSite : storageSites) {
-            if (storageSite.getAllowWrite()) {
-                orderedSet.add(storageSite);
+        for (StorageSite s : storageSites) {
+            if (s.getAllowWrite()) {
+                orderedSet.add(s);
+            } else {
+                log.debug("storage site is not writable: " + s.getResourceID());
             }
         }
         return orderedSet;
@@ -477,8 +484,10 @@ public class ProtocolsGenerator {
         Set<StorageSite> storageSites = storageSiteDAO.list(); // this set could be cached
 
         List<Protocol> protos = new ArrayList<>();
-        SortedSet<StorageSite> orderedSites = prioritizePushToSites(storageSites, artifactURI, this.siteRules);
+        // prioritize also filters out non-writable sites
+        Set<StorageSite> orderedSites = prioritizePushToSites(storageSites, artifactURI, this.siteRules);
         // produce URLs for all writable sites
+        log.debug("pushTo: known sites " + storageSites.size() + " -> writableSites " + orderedSites.size());
         for (StorageSite storageSite : orderedSites) {
             // check if site is currently offline
             if (!isAvailable(storageSite.getResourceID())) {
@@ -486,7 +495,7 @@ public class ProtocolsGenerator {
                 continue;
             }
             
-            //log.warn("PUT: " + storageSite);
+            log.debug("pushTo: trying site " + storageSite.getResourceID());
             Capability filesCap = null;
             try {
                 Capabilities caps = regClient.getCapabilities(storageSite.getResourceID());
@@ -499,52 +508,50 @@ public class ProtocolsGenerator {
             }
             if (filesCap != null) {
                 for (Protocol proto : transfer.getProtocols()) {
-                    //log.warn("PUT: " + storageSite + " proto: " + proto);
-                    if (storageSite.getAllowWrite()) {
-                        // less generic request for service that implements
-                        // HACK: this is filesCap specific in here
-                        if (proto.getUri().equals(filesCap.getStandardID())) {
-                            Protocol p = new Protocol(proto.getUri());
-                            p.setEndpoint(storageSite.getResourceID().toASCIIString());
-                            protos.add(p);
-                        }
-                        URI sec = proto.getSecurityMethod();
-                        if (sec == null) {
-                            sec = Standards.SECURITY_METHOD_ANON;
-                        }
-                        boolean anon = Standards.SECURITY_METHOD_ANON.equals(sec);
-                        Interface iface = filesCap.findInterface(sec);
-                        log.debug("PUT: " + storageSite + " proto: " + proto + " iface: " + iface);
-                        if (iface != null) {
-                            URL baseURL = iface.getAccessURL().getURL();
-                            //log.debug("base url for site " + storageSite.getResourceID() + ": " + baseURL);
-                            if (protocolCompat(proto, baseURL)) {
-                                // // no plain anon URL for put: !anon or anon+token
-                                boolean gen = (!anon || (anon && authToken != null));
-                                if (gen) {
-                                    StringBuilder sb = new StringBuilder();
-                                    sb.append(baseURL.toExternalForm()).append("/");
-                                    if (authToken != null && anon) {
-                                        sb.append(authToken).append("/");
-                                    }
-                                    sb.append(artifactURI.toASCIIString());
-                                    Protocol p = new Protocol(proto.getUri());
-                                    if (transfer.version == VOS.VOSPACE_21) {
-                                        p.setSecurityMethod(proto.getSecurityMethod());
-                                    }
-                                    p.setEndpoint(sb.toString());
-                                    protos.add(p);
-                                    log.debug("added: " + p);
+                    log.debug("pushTo: " + storageSite + " proto: " + proto);
+                    // less generic request for service that implements
+                    // HACK: this is filesCap specific in here
+                    if (proto.getUri().equals(filesCap.getStandardID())) {
+                        Protocol p = new Protocol(proto.getUri());
+                        p.setEndpoint(storageSite.getResourceID().toASCIIString());
+                        protos.add(p);
+                    }
+                    URI sec = proto.getSecurityMethod();
+                    if (sec == null) {
+                        sec = Standards.SECURITY_METHOD_ANON;
+                    }
+                    boolean anon = Standards.SECURITY_METHOD_ANON.equals(sec);
+                    Interface iface = filesCap.findInterface(sec);
+                    log.debug("pushTo: " + storageSite + " proto: " + proto + " iface: " + iface);
+                    if (iface != null) {
+                        URL baseURL = iface.getAccessURL().getURL();
+                        //log.debug("base url for site " + storageSite.getResourceID() + ": " + baseURL);
+                        if (protocolCompat(proto, baseURL)) {
+                            // // no plain anon URL for put: !anon or anon+token
+                            boolean gen = (!anon || (anon && authToken != null));
+                            if (gen) {
+                                StringBuilder sb = new StringBuilder();
+                                sb.append(baseURL.toExternalForm()).append("/");
+                                if (authToken != null && anon) {
+                                    sb.append(authToken).append("/");
                                 }
-                                
-                            } else {
-                                log.debug("PUT: " + storageSite + "PUT: reject protocol: " + proto
-                                        + " reason: no compatible URL protocol");
+                                sb.append(artifactURI.toASCIIString());
+                                Protocol p = new Protocol(proto.getUri());
+                                if (transfer.version == VOS.VOSPACE_21) {
+                                    p.setSecurityMethod(proto.getSecurityMethod());
+                                }
+                                p.setEndpoint(sb.toString());
+                                protos.add(p);
+                                log.debug("added: " + p);
                             }
+
                         } else {
                             log.debug("PUT: " + storageSite + "PUT: reject protocol: " + proto
-                                    + " reason: unsupported security method: " + proto.getSecurityMethod());
+                                    + " reason: no compatible URL protocol");
                         }
+                    } else {
+                        log.debug("PUT: " + storageSite + "PUT: reject protocol: " + proto
+                                + " reason: unsupported security method: " + proto.getSecurityMethod());
                     }
                 }
             }
