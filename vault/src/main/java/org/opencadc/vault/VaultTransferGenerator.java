@@ -74,7 +74,6 @@ import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.uws.Job;
 import ca.nrc.cadc.uws.Parameter;
 import ca.nrc.cadc.vosi.Availability;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
@@ -91,9 +90,7 @@ import org.opencadc.inventory.transfer.ProtocolsGenerator;
 import org.opencadc.inventory.transfer.StorageSiteAvailabilityCheck;
 import org.opencadc.inventory.transfer.StorageSiteRule;
 import org.opencadc.permissions.TokenTool;
-import org.opencadc.vospace.ContainerNode;
 import org.opencadc.vospace.DataNode;
-import org.opencadc.vospace.LinkingException;
 import org.opencadc.vospace.Node;
 import org.opencadc.vospace.NodeNotFoundException;
 import org.opencadc.vospace.VOSURI;
@@ -155,8 +152,8 @@ public class VaultTransferGenerator implements TransferGenerator {
         List<Protocol> ret = null;
         try {
             Direction dir = transfer.getDirection();
-            PathResolver ps = new PathResolver(nodePersistence, authorizer, true);
-            Node node = ps.getNode(target.getPath());
+            PathResolver ps = new PathResolver(nodePersistence, authorizer);
+            Node node = ps.getNode(target.getPath(), true);
             if (node == null) {
                 throw new NodeNotFoundException(target.getPath());
             }

@@ -239,7 +239,7 @@ public class NodePersistenceImpl implements NodePersistence {
     
     private ArtifactDAO getArtifactDAO() {
         ArtifactDAO instance = new ArtifactDAO(true); // origin==true?
-        instance.setConfig(nodeDaoConfig);
+        instance.setConfig(invDaoConfig);
         return instance;
     }
     
