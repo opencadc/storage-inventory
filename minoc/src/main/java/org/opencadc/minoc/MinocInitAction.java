@@ -196,9 +196,13 @@ public class MinocInitAction extends InitAction {
         if (name.charAt(0) == '/') {
             name = name.substring(1);
         }
+
+        // possibly temporary hack: advertise readable and writable if this service
+        // is configured to accept preauth tokens
+        boolean trustPreauth = !config.getTrustedServices().isEmpty();
         
-        boolean allowRead = !config.getReadGrantServices().isEmpty();
-        boolean allowWrite = !config.getWriteGrantServices().isEmpty();
+        boolean allowRead = trustPreauth || !config.getReadGrantServices().isEmpty();
+        boolean allowWrite = trustPreauth || !config.getWriteGrantServices().isEmpty();
             
         StorageSite self = null;
         if (curlist.isEmpty()) {
