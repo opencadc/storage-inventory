@@ -384,7 +384,7 @@ public abstract class InventoryUtil {
         boolean slash = (test.indexOf('/') >= 0);
         boolean escape = (test.indexOf('\\') >= 0);
         boolean percent = (test.indexOf('%') >= 0);
-        boolean colon = (test.indexOf(":") >= 0);
+        boolean colon = (test.indexOf(':') >= 0);
         boolean semic = (test.indexOf(';') >= 0);
         boolean amp = (test.indexOf('&') >= 0);
         boolean dollar = (test.indexOf('$') >= 0);
@@ -392,7 +392,7 @@ public abstract class InventoryUtil {
         boolean sqopen = (test.indexOf('[') >= 0);
         boolean sqclose = (test.indexOf(']') >= 0);
 
-        if (space || slash || escape || percent || semic || amp || dollar || question || sqopen || sqclose) {
+        if (space || slash || escape || percent || colon || semic || amp || dollar || question || sqopen || sqclose) {
             String s = "invalid ";
             if (caller != null) {
                 s += caller.getSimpleName() + ".";
