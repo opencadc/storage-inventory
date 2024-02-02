@@ -5,8 +5,8 @@ The definitive source of content-length (file size) of a DataNode comes from the
 In the case of a `vault` service co-located with a single storage site (`minoc`),
 the new Artifact is visible in the database as soon as the PUT to `minoc` is
 completed. In the case of a `vault` service co-located with a global SI, the new 
-Artifact is visible in the database once it is synced from the site of the PUT to
-`minoc` to the global database by `fenwick` (or worst case: `ratik`).
+Artifact is visible in the database once it is synced from the site of the PUT to 
+the global database by `fenwick` (or worst case: `ratik`).
 
 ## TODO
 The design below only takes into account incremental propagation of space used 
@@ -61,6 +61,9 @@ but there is nothing there right now.
 
 ## validation
 
+### ContainerNode vs child nodes discrepancies
+TODO: figure out how to validate ContainerNode sizes vs sum(child sizes) in a live system
+
 ### DataNode vs Artifact discrepancies
 These can be validated in parallel by multiple threads, subdivide work by bucket.
 
@@ -73,37 +76,38 @@ else: ??
 
 discrepancy 2: DataNode exists but Artifact does not
 explanation: DataNode created, Artifact never (successfully) put
-evidence: dataNode.size == 0
-action: none
+evidence: 
+action: set nodeSize = 0
 
 discrepancy 3: DataNode exists but Artifact does not
 explanation: deleted or lost Artifact
 evidence: DataNode.size != 0 (deleted vs lost: DeletedArtifactEvent exists)
-action: fix DataNode.size
+action: fix nodeSize
 
-discrepancy 4: DataNode.size != Artifact.contentLength
+discrepancy 4: nodeSize != Artifact.contentLength
 explanation: pending/missed Artifact event
 action: fix DataNode and propagate delta to parent ContainerNode (same as incremental)
 ```
 
-This could be accomplished with a single query on on inventory.Artifact full outer join 
-vospace.Node to get all the pairs. The more generic approach would be to do a merge join 
-of two iterators:
-
-Iterator<Artifact> aiter = artifactDAO.iterator(vaultNamespace, bucket);
-Iterator<DataNode> niter = nodeDAO.iterator(vaultNamespace, bucket);
-
-The more generic dual iterator approach could be made to work if the inventory and vospace 
-content are in different PG database or server - TBD.
+The most generic implementation is a merge join of two iterators (see ratik, tantar):
+```
+Iterator<Artifact> aiter = artifactDAO.iterator(vaultNamespace, bucket);  // artifact.uri order
+Iterator<DataNode> niter = nodeDAO.iterator(vaultNamespace, bucket);      // storageID order 
+```
 
 ## database changes required
 note: all field and column names TBD
-* add `size` and `delta` fields to ContainerNode (transient)
-* add `size` field to DataNode (transient)
-* add `size` to the `vospace.Node` table
+note: fields in Node classes probably not transient but TBD
+* add `nodeSize` and `delta` fields to ContainerNode
+* add `nodeSize` field to DataNode (no size props in LinkNode!)
+* add `nodeSize` to the `vospace.Node` table
 * add `delta` to the `vospace.Node` table
+* add `storageBucket` to DataNode
 * add `storageBucket` to `vospace.Node` table (validation)
-* incremental sync query/iterator (ArtifactDAO?)
-* lookup DataNode by storageID (ArtifactDAO?)
+## cadc-inventory-db API required
+* incremental sync query/iterator: ArtifactDAO.iterator(Namespace ns, String uriBucketPrefix, Date minLastModified)?
+* lookup DataNode by storageID: NodeDAO.getDataNode(URI storageID)?
+* validate-by-bucket: use ArtifactDAO.iterator(String uriBucketPrefix, boolean ordered, Namespace ns)
+* validate-by-bucket: NodeDAO.dataNodeIterator(String storageBucketPrefix, boolean ordered)
 * indices to support new queries
 
