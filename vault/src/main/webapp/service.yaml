@@ -17,6 +17,49 @@ schemes:
   - https
 basePath: /vault
 paths:
+  /files/{filePath}:
+
+    get:
+      description: |
+        Get the specified file.
+      tags:
+        - Files
+      responses:
+        '200':
+          description: Successful response
+        '400':
+          description: If the user requested a container node (directory).
+        '403':
+          description: If the user does not have permission.
+        '404':
+          description: If the file or part of the path to the file could not be found.
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+        default:
+          description: Unexpected error
+    head:
+      description: |
+        Get the metadata of the specified file.
+      tags:
+        - Files
+      responses:
+        '200':
+          description: Successful response
+        '400':
+          description: If the user requested a container node (directory).
+        '403':
+          description: If the user does not have permission.
+        '404':
+          description: If the file or part of the path to the file could not be found.
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+        default:
+          description: Unexpected error
+
   /nodes/{nodePath}:
     put:
       description: |
@@ -96,11 +139,32 @@ paths:
           schema:
             $ref: '#/definitions/Error'
       parameters:
-        - name: nodePath
-            in: path
-            description: The path for the node
-            required: true
-            type: string
+        - name: detail
+          in: query
+          description: set the node detail level
+          required: false
+          type: string
+          enum:
+            - min
+            - max
+            - properties
+        - name: uri
+          in: query
+          description: for container nodes, the uri of a child node of the container on which to start the list of children.
+          required: false
+          type: string
+        - name: limit
+          in: query
+          description: for container nodes, the number of children to return.
+          required: false
+          type: string
+        - name: view
+          in: query
+          description: for data nodes, a specific view
+          required: false
+          type: string
+          enum:
+            - data
     post:
       description: |
         Set the property values for a specific Node

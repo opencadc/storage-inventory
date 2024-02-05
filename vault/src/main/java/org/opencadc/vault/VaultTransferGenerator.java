@@ -71,7 +71,6 @@ import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.IdentityManager;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.uws.Job;
 import ca.nrc.cadc.uws.Parameter;
 import ca.nrc.cadc.vosi.Availability;
 import java.io.IOException;
@@ -97,7 +96,6 @@ import org.opencadc.vospace.VOSURI;
 import org.opencadc.vospace.server.PathResolver;
 import org.opencadc.vospace.server.auth.VOSpaceAuthorizer;
 import org.opencadc.vospace.server.transfers.TransferGenerator;
-import org.opencadc.vospace.transfer.Direction;
 import org.opencadc.vospace.transfer.Protocol;
 import org.opencadc.vospace.transfer.Transfer;
 
@@ -114,8 +112,8 @@ public class VaultTransferGenerator implements TransferGenerator {
     private final TokenTool tokenTool;
     private final boolean preventNotFound;
     
-    private Map<URI, StorageSiteRule> siteRules = new HashMap<>();
-    private Map<URI, Availability> siteAvailabilities;
+    private final Map<URI, StorageSiteRule> siteRules = new HashMap<>();
+    private final Map<URI, Availability> siteAvailabilities;
     
     @SuppressWarnings("unchecked")
     public VaultTransferGenerator(NodePersistenceImpl nodePersistence, ArtifactDAO artifactDAO, TokenTool tokenTool, boolean preventNotFound) {
@@ -141,7 +139,7 @@ public class VaultTransferGenerator implements TransferGenerator {
     }
 
     @Override
-    public List<Protocol> getEndpoints(VOSURI target, Transfer transfer, Job job, List<Parameter> additionalParams) throws Exception {
+    public List<Protocol> getEndpoints(VOSURI target, Transfer transfer, List<Parameter> additionalParams) throws Exception {
         log.debug("getEndpoints: " + target);
         if (target == null) {
             throw new IllegalArgumentException("target is required");
@@ -149,19 +147,17 @@ public class VaultTransferGenerator implements TransferGenerator {
         if (transfer == null) {
             throw new IllegalArgumentException("transfer is required");
         }
-        List<Protocol> ret = null;
+        List<Protocol> ret;
         try {
-            Direction dir = transfer.getDirection();
             PathResolver ps = new PathResolver(nodePersistence, authorizer);
             Node node = ps.getNode(target.getPath(), true);
             if (node == null) {
                 throw new NodeNotFoundException(target.getPath());
             }
 
-            Subject currentSubject = AuthenticationUtil.getCurrentSubject();
             if (node instanceof DataNode) {
                 DataNode dn = (DataNode) node;
-                ret = handleDataNode(dn, target.getName(), transfer, currentSubject);
+                ret = handleDataNode(dn, target.getName(), transfer);
             } else {
                 throw new UnsupportedOperationException("transfer: " + node.getClass().getSimpleName()
                     + " at " + target.getPath());
@@ -172,8 +168,8 @@ public class VaultTransferGenerator implements TransferGenerator {
         return ret;
     }
     
-    private List<Protocol> handleDataNode(DataNode node, String filename, Transfer trans, Subject s) 
-            throws IOException, ResourceNotFoundException {
+    private List<Protocol> handleDataNode(DataNode node, String filename, Transfer trans)
+            throws IOException {
         log.debug("handleDataNode: " + node);
         
         IdentityManager im = AuthenticationUtil.getIdentityManager();
@@ -205,7 +201,7 @@ public class VaultTransferGenerator implements TransferGenerator {
             }
             return ret;
         } catch (ResourceNotFoundException ex) {
-            return new ArrayList<Protocol>();
+            return new ArrayList<>();
         }
     }
 }

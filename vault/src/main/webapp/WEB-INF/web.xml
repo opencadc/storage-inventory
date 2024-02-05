@@ -63,6 +63,28 @@
     </init-param>
     <load-on-startup>2</load-on-startup>
   </servlet>
+
+  <servlet>
+    <servlet-name>FilesServlet</servlet-name>
+    <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
+    <init-param>
+      <param-name>augmentSubject</param-name>
+      <param-value>true</param-value>
+    </init-param>
+    <init-param>
+      <param-name>init</param-name>
+      <param-value>org.opencadc.vault.VaultInitAction</param-value>
+    </init-param>
+    <init-param>
+      <param-name>get</param-name>
+      <param-value>org.opencadc.vault.files.GetAction</param-value>
+    </init-param>
+    <init-param>
+      <param-name>head</param-name>
+      <param-value>org.opencadc.vault.files.HeadAction</param-value>
+    </init-param>
+    <load-on-startup>2</load-on-startup>
+  </servlet>
   
     <servlet>
         <servlet-name>PubKeyServlet</servlet-name>
@@ -247,6 +269,11 @@
   <servlet-mapping>
     <servlet-name>NodesServlet</servlet-name>
     <url-pattern>/nodes/*</url-pattern>
+  </servlet-mapping>
+
+  <servlet-mapping>
+    <servlet-name>FilesServlet</servlet-name>
+    <url-pattern>/files/*</url-pattern>
   </servlet-mapping>
 
   <servlet-mapping>

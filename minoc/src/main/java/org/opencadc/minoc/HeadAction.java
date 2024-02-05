@@ -154,7 +154,7 @@ public class HeadAction extends ArtifactAction {
         if (filename == null) {
             filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
         }
-        syncOutput.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+        syncOutput.setHeader("Content-Disposition", "inline; filename=\"" + filename + "\"");
 
         if (artifact.contentEncoding != null) {
             syncOutput.setHeader("Content-Encoding", artifact.contentEncoding);

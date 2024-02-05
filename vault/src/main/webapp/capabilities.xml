@@ -41,6 +41,16 @@
     </interface>
   </capability>
 
+  <capability standardID="ivo://ivoa.net/std/VOSpace#files-proto">
+    <interface xsi:type="vs:ParamHTTP" role="std">
+      <accessURL use="base">https://replace.me.com/vault/files</accessURL>
+      <securityMethod/>
+      <securityMethod standardID="ivo://ivoa.net/sso#cookie"/>
+      <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate"/>
+      <securityMethod standardID="ivo://ivoa.net/sso#token"/>
+    </interface>
+  </capability>
+
   <capability standardID="ivo://ivoa.net/std/VOSpace#recursive-delete-proto">
     <interface xsi:type="vs:ParamHTTP" role="std">
       <accessURL use="base">https://replace.me.com/vault/async-delete</accessURL>
