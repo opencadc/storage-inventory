@@ -202,12 +202,97 @@ paths:
         description: The path for the node
         required: true
         type: string
-  /recursiveDelete:
+    /transfers:
+      post:
+        description: |
+          Post a transfer request document to the asynchronous VOSpace UWS Job endpoint.  This is the first step in performing any transfer for data objects:
+          
+          - uploading a data object
+          - downloading a data object
+          - moving a data object
+          - copying a data object
+        tags:
+          - Transfering data
+        consumes:
+          - text/xml
+        responses:
+          '200':
+            description: Successful response
+          '201':
+            description: Successful response
+          '403':
+            description: If the user does not have permission.
+          '404':
+            description: If the source node could not be found.
+          '409':
+            description: If the destination node already exists.
+          '500':
+            description: Internal error
+          '503':
+            description: Service busy
+          default:
+            description: Unexpeced error
+        parameters:
+          - name: Transfer
+            in: body
+            description: The transfer negotiation document
+            required: true
+            schema:
+              $ref: '#/definitions/Transfer'
+    /synctrans:
+      post:
+        description: |
+          Post a via query parameters a transfer request to the synchronous VOSpace UWS Job endpoint.  This is the first step in performing any transfer for data objects:
+          
+          - uploading a data object
+          - downloading a data object
+          - moving a data object
+          - copying a data object
+        tags:
+          - Transfering data
+        consumes:
+          - text/xml
+        responses:
+          '200':
+            description: Successful response
+          '201':
+            description: Successful response
+          '403':
+            description: If the user does not have permission.
+          '404':
+            description: If the source node could not be found.
+          '409':
+            description: If the destination node already exists.
+          '500':
+            description: Internal error
+          '503':
+            description: Service busy
+          default:
+            description: Unexpeced error
+        parameters:
+          - name: target
+            in: query
+            description: The target parameter
+            required: true
+            type: string
+            format: uri
+          - name: direction
+            in: query
+            description: The direction of the transfer
+            required: true
+            type: string
+          - name: protocol
+            in: query
+            description: The protocol to use for the transfer
+            required: true
+            type: string
+            format: uri
+  /async-delete:
     post:
       description: |
         Post a recursive delete command. This is an IVOA UWS end point.
       tags:
-        - Recursive delete
+        - Recursive operations (async)
       consumes:
         - None
       responses:
@@ -233,6 +318,40 @@ paths:
         - name: nodeURI
           in: query
           description: The base node (typically a container) to recursively delete
+          required: true
+          type: string
+          format: uri
+  /async-setprops:
+    post:
+      description: |
+        Post a recursive set properties command. This is an IVOA UWS end point.
+      tags:
+        - Recursive operations (async)
+      consumes:
+        - None
+      responses:
+        '200':
+          description: Successful response
+        '201':
+          description: Successful response
+        '403':
+          description: If the user does not have permission.
+        '404':
+          description: If the source node could not be found.
+        '409':
+          description: If the destination node already exists.
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+        default:
+          description: Unexpeced error
+          schema:
+            $ref: '#/definitions/Error'
+      parameters:
+        - name: nodeURI
+          in: query
+          description: The base node (typically a container) to recursively set properties to
           required: true
           type: string
           format: uri
