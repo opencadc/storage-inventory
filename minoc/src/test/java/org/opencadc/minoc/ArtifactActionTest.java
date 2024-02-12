@@ -161,8 +161,6 @@ public class ArtifactActionTest {
             assertCorrectPath("cadc:vault/uuid:fo/something.fits", "cadc:vault/uuid", null, "something.fits");
             assertCorrectPath("token/cadc:vault/uuid:fo/something.fits", "cadc:vault/uuid", "token", "something.fits");
             
-            //assertCorrectPath("cadc:vault/uuid:/something.fits", "cadc:vault/uuid:/something.fits", null, null);
-
             assertIllegalPath(null);
             assertIllegalPath("");
             assertIllegalPath("noschemeinuri");
@@ -172,8 +170,9 @@ public class ArtifactActionTest {
             assertIllegalPath("cadc:path#fragment?query");
             assertIllegalPath("cadc://host/path");
             assertIllegalPath("cadc://:port/path");
-            assertIllegalPath("artifacts/token1/token2/cadc:FOO/bar");
-            assertIllegalPath("artifacts/token/cadc:ccda:FOO/bar");
+            assertIllegalPath("artifacts/token1/token2/cadc:FOO/bar"); // sketchy scheme
+            assertIllegalPath("cadc:ccda:FOO/bar"); // sketchy extra colons
+            assertIllegalPath("cadc:vault/uuid:/something.fits"); // extra colons in path component
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);

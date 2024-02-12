@@ -75,12 +75,15 @@ import java.util.UUID;
  * @author pdowler
  */
 public abstract class Entity extends org.opencadc.persist.Entity {
-
+    // DO NOT CHANGE
+    private static final boolean ENTITY_TRUNCATE_DATES = false;
+    private static final boolean ENTITY_DIGEST_FIELD_NAMES = false;
+    
     public Entity() {
-        super(false);
+        super(ENTITY_TRUNCATE_DATES, ENTITY_DIGEST_FIELD_NAMES);
     }
 
     public Entity(UUID id) {
-        super(id, false);
+        super(id, ENTITY_TRUNCATE_DATES, ENTITY_DIGEST_FIELD_NAMES);
     }
 }

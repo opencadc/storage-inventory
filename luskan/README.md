@@ -103,6 +103,10 @@ org.opencadc.luskan.uwsRollover = 180
 ```
 Assuming instances are restarted regularly, this would cause rollover approximatelty once every 6 months.
 
+### cadc-log.properties (optional)
+See <a href="https://github.com/opencadc/core/tree/master/cadc-log">cadc-log</a> for common 
+dynamic logging control.
+
 ### cadcproxy.pem (optional)
 This client certificate is used to make authenticated server-to-server calls for system-level A&A purposes.
 
