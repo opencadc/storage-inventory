@@ -335,7 +335,6 @@ public class NodePersistenceImpl implements NodePersistence {
                     ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_TYPE, a.contentType));
                 }
             } else {
-                ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_DATE, df.format(ret.getLastModified())));
                 // default size to 0
                 ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "0"));
             }

@@ -67,6 +67,7 @@
 
 package org.opencadc.vault.files;
 
+import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
 import java.net.URI;
@@ -132,7 +133,7 @@ public class HeadAction extends RestAction {
         Node node = pathResolver.getNode(filePath, true);
 
         if (node == null) {
-            throw new IllegalArgumentException("Target not found: " + filePath);
+            throw new ResourceNotFoundException("Target not found: " + filePath);
         }
 
         if (!(node instanceof DataNode)) {
@@ -158,9 +159,7 @@ public class HeadAction extends RestAction {
                 URI md5 = new URI("md5:" + contentMD5);
                 syncOutput.setDigest(md5);
             } catch (URISyntaxException ex) {
-                log.error("found invalid checksum attribute " + contentMD5 + " on node " + nodeURI);
-                // yes, just skip: users can set attributes so hard to tell if this is a bug or
-                // user mistake
+                throw new RuntimeException("BUG: invalid " + VOS.PROPERTY_URI_CONTENTMD5 + " value " + contentMD5);
             }
         }
         syncOutput.setCode(200);

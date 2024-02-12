@@ -75,10 +75,6 @@
       <param-value>true</param-value>
     </init-param>
     <init-param>
-      <param-name>init</param-name>
-      <param-value>org.opencadc.vault.VaultInitAction</param-value>
-    </init-param>
-    <init-param>
       <param-name>get</param-name>
       <param-value>org.opencadc.vault.files.GetAction</param-value>
     </init-param>
@@ -86,7 +82,7 @@
       <param-name>head</param-name>
       <param-value>org.opencadc.vault.files.HeadAction</param-value>
     </init-param>
-    <load-on-startup>2</load-on-startup>
+    <load-on-startup>3</load-on-startup>
   </servlet>
   
     <servlet>
