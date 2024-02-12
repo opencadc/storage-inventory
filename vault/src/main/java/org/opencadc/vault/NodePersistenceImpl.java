@@ -100,7 +100,6 @@ import org.opencadc.inventory.PreauthKeyPair;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.PreauthKeyPairDAO;
-import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.permissions.TokenTool;
 import org.opencadc.vospace.ContainerNode;
 import org.opencadc.vospace.DataNode;
@@ -307,9 +306,8 @@ public class NodePersistenceImpl implements NodePersistence {
             DataNode dn = (DataNode) ret;
             ArtifactDAO artifactDAO = getArtifactDAO();
             Artifact a = artifactDAO.get(dn.storageID);
+            DateFormat df = NodeWriter.getDateFormat();
             if (a != null) {
-                DateFormat df = NodeWriter.getDateFormat();
-                
                 Date d = ret.getLastModified();
                 Date cd = null;
                 if (ret.getLastModified().before(a.getLastModified())) {
@@ -336,6 +334,9 @@ public class NodePersistenceImpl implements NodePersistence {
                 if (a.contentType != null) {
                     ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_TYPE, a.contentType));
                 }
+            } else {
+                // default size to 0
+                ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "0"));
             }
         }
         return ret;

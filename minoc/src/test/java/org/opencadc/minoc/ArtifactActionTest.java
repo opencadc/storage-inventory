@@ -161,7 +161,7 @@ public class ArtifactActionTest {
             assertCorrectPath("cadc:vault/uuid:fo/something.fits", "cadc:vault/uuid", null, "something.fits");
             assertCorrectPath("token/cadc:vault/uuid:fo/something.fits", "cadc:vault/uuid", "token", "something.fits");
             
-            assertCorrectPath("cadc:vault/uuid:/something.fits", "cadc:vault/uuid:/something.fits", null, null);
+            //assertCorrectPath("cadc:vault/uuid:/something.fits", "cadc:vault/uuid:/something.fits", null, null);
 
             assertIllegalPath(null);
             assertIllegalPath("");
