@@ -186,11 +186,9 @@ public class VaultTransferGenerator implements TransferGenerator {
         Transfer artifactTrans = new Transfer(node.storageID, trans.getDirection());
         for (Protocol p : trans.getProtocols()) {
             log.debug("requested protocol: " + p);
-            URI secM = p.getSecurityMethod();
-            if (secM == null || secM.equals(Standards.SECURITY_METHOD_ANON)) {
-                artifactTrans.getProtocols().add(p);
-                log.debug("allow protocol: " + p);
-            }
+            p.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
+            artifactTrans.getProtocols().add(p);
+            log.debug("allow only anon method for " + p);
         }
         
         try {
