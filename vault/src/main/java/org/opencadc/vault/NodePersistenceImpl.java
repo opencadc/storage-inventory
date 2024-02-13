@@ -218,7 +218,7 @@ public class NodePersistenceImpl implements NodePersistence {
 
     @Override
     public Views getViews() {
-        throw new UnsupportedOperationException();
+        return new Views();
     }
 
     @Override

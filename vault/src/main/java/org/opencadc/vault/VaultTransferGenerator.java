@@ -77,8 +77,10 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
@@ -184,12 +186,17 @@ public class VaultTransferGenerator implements TransferGenerator {
         pg.preventNotFound = preventNotFound;
         
         Transfer artifactTrans = new Transfer(node.storageID, trans.getDirection());
+        Set<URI> protoURIs = new HashSet<>();
+        // storage nodes only work with pre-auth URLs. Return those regardless of the security method
+        // requested by the user
         for (Protocol p : trans.getProtocols()) {
             log.debug("requested protocol: " + p);
-            URI secM = p.getSecurityMethod();
-            if (secM == null || secM.equals(Standards.SECURITY_METHOD_ANON)) {
+            if (!protoURIs.contains(p.getUri())) {
+                Protocol anonProto = new Protocol(p.getUri());
+                anonProto.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
                 artifactTrans.getProtocols().add(p);
-                log.debug("allow protocol: " + p);
+                protoURIs.add(p.getUri());
+                log.debug("Added anon protocol for " + p.getUri());
             }
         }
         
