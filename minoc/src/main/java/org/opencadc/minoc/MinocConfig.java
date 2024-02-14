@@ -72,6 +72,7 @@ import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpTransfer;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
+import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import java.io.ByteArrayOutputStream;
@@ -107,6 +108,8 @@ public class MinocConfig {
     static final String TRUST_KEY = MINOC_KEY + ".trust.preauth";
     static final String READ_GRANTS_KEY = MINOC_KEY + ".readGrantProvider";
     static final String WRITE_GRANTS_KEY = MINOC_KEY + ".writeGrantProvider";
+    static final String READABLE_KEY = MINOC_KEY + ".readable";
+    static final String WRITABLE_KEY = MINOC_KEY + ".writable";
     static final String RECOVERABLE_NS_KEY = MINOC_KEY + ".recoverableNamespace";
     static final String DEV_AUTH_ONLY_KEY = MINOC_KEY + ".authenticateOnly";
     
@@ -116,6 +119,8 @@ public class MinocConfig {
     private boolean trustedServiceKeySync = false;
     private final List<URI> readGrantServices = new ArrayList<>();
     private final List<URI> writeGrantServices = new ArrayList<>();
+    private final boolean readable;
+    private final boolean writable;
     private final List<Namespace> recoverableNamespaces = new ArrayList<>();
     
     final boolean authenticateOnly;
@@ -190,6 +195,20 @@ public class MinocConfig {
                 }
             }
         }
+        
+        // optional
+        String sread = configProperties.getFirstPropertyValue(MinocConfig.READABLE_KEY);
+        if (sread != null) {
+            this.readable = Boolean.parseBoolean(sread);
+        } else {
+            this.readable = !readGrantServices.isEmpty() || !trustedServices.isEmpty();
+        }
+        String swrite = configProperties.getFirstPropertyValue(MinocConfig.WRITABLE_KEY);
+        if (swrite != null) {
+            this.writable = Boolean.parseBoolean(swrite);
+        } else {
+            this.writable = !writeGrantServices.isEmpty() || !trustedServices.isEmpty();
+        }
     }
  
     private void validateConfigProps(MultiValuedProperties mvp) {
@@ -206,7 +225,7 @@ public class MinocConfig {
         } else {
             sb.append("OK");
         }
-
+        
         String sac = mvp.getFirstPropertyValue(SA_KEY);
         sb.append("\n\t").append(SA_KEY).append(": ");
         if (sac == null) {
@@ -286,6 +305,30 @@ public class MinocConfig {
         }
         
         // optional
+        String sread = mvp.getFirstPropertyValue(MinocConfig.READABLE_KEY);
+        sb.append("\n\t" + READABLE_KEY + ": ");
+        if (sread != null) {
+            if ("true".equals(sread) || "false".equals(sread)) {
+                sb.append(" OK");
+            } else {
+                sb.append(" INVALID");
+                ok = false;
+            }
+        }
+        
+        // optional
+        String swrite = mvp.getFirstPropertyValue(MinocConfig.WRITABLE_KEY);
+        sb.append("\n\t" + WRITABLE_KEY + ": ");
+        if (sread != null) {
+            if ("true".equals(swrite) || "false".equals(swrite)) {
+                sb.append(" OK");
+            } else {
+                sb.append(" INVALID");
+                ok = false;
+            }
+        }
+        
+        // optional
         List<String> rawRecNS = mvp.getProperty(RECOVERABLE_NS_KEY);
         if (rawRecNS != null) {
             for (String s : rawRecNS) {
@@ -299,7 +342,7 @@ public class MinocConfig {
         }
 
         if (!ok) {
-            throw new IllegalStateException(sb.toString());
+            throw new InvalidConfigException(sb.toString());
         }
     }
     
@@ -349,6 +392,14 @@ public class MinocConfig {
         }
     }
 
+    public boolean isReadable() {
+        return readable;
+    }
+
+    public boolean isWritable() {
+        return writable;
+    }
+    
     public List<URI> getReadGrantServices() {
         return readGrantServices;
     }

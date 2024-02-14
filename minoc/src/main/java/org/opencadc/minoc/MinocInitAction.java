@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2023.                            (c) 2023.
+*  (c) 2024.                            (c) 2024.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -197,12 +197,8 @@ public class MinocInitAction extends InitAction {
             name = name.substring(1);
         }
 
-        // possibly temporary hack: advertise readable and writable if this service
-        // is configured to accept preauth tokens
-        boolean trustPreauth = !config.getTrustedServices().isEmpty();
-        
-        boolean allowRead = trustPreauth || !config.getReadGrantServices().isEmpty();
-        boolean allowWrite = trustPreauth || !config.getWriteGrantServices().isEmpty();
+        boolean allowRead = config.isReadable();
+        boolean allowWrite = config.isWritable();
             
         StorageSite self = null;
         if (curlist.isEmpty()) {
@@ -214,7 +210,6 @@ public class MinocInitAction extends InitAction {
             self.setName(name);
             self.setAllowRead(allowRead);
             self.setAllowWrite(allowWrite);
-            
         } else {
             throw new IllegalStateException("BUG: found " + curlist.size() + " StorageSite entries; expected 0 or 1");
         }

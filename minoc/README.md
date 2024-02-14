@@ -82,8 +82,8 @@ org.opencadc.minoc.readGrantProvider={resourceID of a permission granting servic
 org.opencadc.minoc.writeGrantProvider={resourceID of a permission granting service}
 
 # override the implied readable and writable state
-org.opencadc.minoc.readable = true | false
-org.opencadc.minoc.writable = true | false
+org.opencadc.minoc.readable = true|false
+org.opencadc.minoc.writable = true|false
 
 # configure StorageAdapter delete behaviour
 org.opencadc.minoc.recoverableNamespace = {namespace}
@@ -108,8 +108,8 @@ result is sufficient to grant permission for an action. Setting these values als
 and _writable_ is _true_ respectively.
 
 The optional _readable_ and _writable_ keys configure minoc explicitly rather than relying on one or more of 
-the above trust or grant provider settings. For example, this allows one to configure a read-only minoc that 
-trusts other services to do the authorization checks.
+the above trust or grant provider settings. For example, this allows one to configure a read-only minoc
+(_writable_ = false) that trusts other services to do the authorization checks.
 
 The optional _recoverableNamespace_ key causes `minoc` to configure the storage adapter so that deletions
 preserve the file content in a recoverable state. This generally means that storage space remains in use
@@ -131,7 +131,6 @@ prefixes will be recoverable. Others (e.g. `test:FOO/bar`) will be permanently d
 Note: Since artifact and stored object deletion can also be performed by the `tantar` file validation tool,
 all instances of `minoc` and `tantar` that use the same inventory and storage adapter should use the same
  _recoverableNamespace_ configuration so that preservation and recovery (from mistakes) is consistent.
-
 ---
 **For developer testing only:** To disable authorization checking (via `readGrantProvider` or `writeGrantProvider`
 services), add the following configuration entry to minoc.properties:
