@@ -153,10 +153,11 @@ public class SQLGenerator {
      */
     public SQLGenerator(String database, String invSchema, String genSchema, String vosSchema) { 
         this.database = database;
-        InventoryUtil.assertNotNull(SQLGenerator.class, "invSchema", invSchema);
+        InventoryUtil.assertNotNull(SQLGenerator.class, "invSchema", invSchema); // required for all uses
         this.invSchema = invSchema;
+        InventoryUtil.assertNotNull(SQLGenerator.class, "genSchema", genSchema); // required for correct init
         this.genSchema = genSchema;
-        this.vosSchema = vosSchema;
+        this.vosSchema = vosSchema; // only required for vospace
         init();
     }
     
