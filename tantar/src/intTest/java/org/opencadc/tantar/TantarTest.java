@@ -142,7 +142,8 @@ abstract class TantarTest {
 
         Map<String,Object> daoConfig = new TreeMap<>();
         daoConfig.put(SQLGenerator.class.getName(), SQLGenerator.class);
-        daoConfig.put("schema", "inventory");
+        daoConfig.put("invSchema", "inventory");
+        daoConfig.put("genSchema", "inventory");
         
         this.validator = new BucketValidator(daoConfig, cc, preservingAdapter, policy, "0-f", false);
         
