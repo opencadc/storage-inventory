@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2022.                            (c) 2022.
+*  (c) 2024.                            (c) 2024.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -84,7 +84,7 @@ import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.opencadc.inventory.db.version.InitDatabase;
+import org.opencadc.inventory.db.version.InitDatabaseSI;
 
 /**
  *
@@ -112,7 +112,8 @@ public class HarvestStateDAOTest {
             config.put(SQLGenerator.class.getName(), SQLGenerator.class);
             config.put("jndiDataSourceName", "jdbc/HarvestStateDAOTest");
             config.put("database", TestUtil.DATABASE);
-            config.put("schema", TestUtil.SCHEMA);
+            config.put("invSchema", TestUtil.SCHEMA);
+            config.put("genSchema", TestUtil.SCHEMA);
             dao.setConfig(config);
         } catch (Exception ex) {
             log.error("setup failed", ex);
@@ -123,7 +124,7 @@ public class HarvestStateDAOTest {
     @Before
     public void setup() throws Exception {
         log.info("init database...");
-        InitDatabase init = new InitDatabase(dao.getDataSource(), TestUtil.DATABASE, TestUtil.SCHEMA);
+        InitDatabaseSI init = new InitDatabaseSI(dao.getDataSource(), TestUtil.DATABASE, TestUtil.SCHEMA);
         init.doInit();
         log.info("init database... OK");
         
@@ -134,6 +135,11 @@ public class HarvestStateDAOTest {
         log.info("pre-test cleanup: " + sql);
         ds.getConnection().createStatement().execute(sql);
         log.info("clearing old content... OK");
+    }
+    
+    @Test
+    public void noop() {
+        log.info("no-op - just setup");
     }
     
     @Test
@@ -172,6 +178,7 @@ public class HarvestStateDAOTest {
             // update
             hs1.curLastModified = new Date();
             hs1.curID = UUID.randomUUID();
+            hs1.instanceID = UUID.randomUUID();
             dao.put(hs1);
             
             //log.warn("SLEEPING for lock diagnostics: 20 sec");
@@ -181,12 +188,25 @@ public class HarvestStateDAOTest {
             HarvestState hs2 = dao.get(hs1.getID());
             log.info("found: " + hs2);
             
-            Assert.assertNotNull("find by uuid", hs1);
+            Assert.assertNotNull("find by uuid", hs2);
             Assert.assertNotEquals(expected.getLastModified(), hs2.getLastModified());
             Assert.assertNotEquals(expected.getMetaChecksum(), hs2.getMetaChecksum());
             Assert.assertEquals("round trip metachecksum", hs1.getMetaChecksum(), hs2.getMetaChecksum());
             Assert.assertEquals("curLastModified", hs1.curLastModified.getTime(), hs2.curLastModified.getTime());
             Assert.assertEquals("curID", hs1.curID, hs2.curID);
+            Assert.assertEquals("instanceID", hs1.instanceID, hs2.instanceID);
+            
+            // force update with no state change
+            final Date prevT = hs2.getLastModified();
+            Thread.sleep(100L);
+            dao.put(hs2, true);
+            
+            HarvestState tup = dao.get(hs2.getID());
+            Assert.assertNotNull(tup);
+            URI tupCS = tup.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+            Assert.assertEquals("meta: no change", tup.getMetaChecksum(), tupCS);
+            Assert.assertTrue("timestamp: update", tup.getLastModified().after(prevT));
+            log.info("force update OK: " + tup);
             
             // clear tracking state
             hs1.curLastModified = null;

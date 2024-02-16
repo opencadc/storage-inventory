@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2023.                            (c) 2023.
+*  (c) 2024.                            (c) 2024.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -123,46 +123,52 @@ public class SQLGenerator {
     private final Map<Class,String[]> columnMap = new TreeMap<>(new ClassComp());
     
     protected final String database; // currently not used in SQL
-    protected final String schema; // may be null
+    protected final String invSchema;
+    protected final String genSchema;
     protected final String vosSchema;
     
     /**
      * Constructor. The database name is currently not used in any generated SQL; code assumes
      * that the DataSource is connected to the right database already and cross-database statements
-     * are not supported. The schema name is used to qualify table names (if set). The optional table
-     * name prefix is pre-pended to the table name (after the optional {schema}.) and is provided as
-     * a work around in shared (usually test) databases where schema name is a username and table 
-     * names may collide with other content. Normal "production" use would specify the schema only.
+     * are not supported.
      * 
-     * @param database database name (may be null)
-     * @param schema schema name (may be null)
+     * @param database database name: not used; future-proof
+     * @param invSchema inventory schema name (required, implies genSchema = invSchema)
+     * @param genSchema generic schema name for internal tables (PreauthKeys, HarvestState) - optional
      */
-    public SQLGenerator(String database, String schema) { 
-        this(database, schema, null);
+    public SQLGenerator(String database, String invSchema, String genSchema) { 
+        this(database, invSchema, genSchema, null);
     }
     
-    public SQLGenerator(String database, String schema, String vosSchema) { 
+    /**
+     * Constructor. The database name is currently not used in any generated SQL; code assumes
+     * that the DataSource is connected to the right database already and cross-database statements
+     * are not supported. The genSchema is optional (required for HarvestState and PreauthKeyPair).
+     * The vosSchema is optional (used for Node and DeletedNodeEvent).
+     * 
+     * @param database database name: not used; future-proof
+     * @param invSchema inventory schema name - required
+     * @param genSchema generic schema name - optional
+     * @param vosSchema vospace schema name - optional
+     */
+    public SQLGenerator(String database, String invSchema, String genSchema, String vosSchema) { 
         this.database = database;
-        this.schema = schema;
+        InventoryUtil.assertNotNull(SQLGenerator.class, "invSchema", invSchema);
+        this.invSchema = invSchema;
+        this.genSchema = genSchema;
         this.vosSchema = vosSchema;
         init();
     }
     
     protected void init() {
-        String pref = "";
-        if (schema != null) {
-            pref = schema + ".";
-        }
         // inventory model
-        this.tableMap.put(Artifact.class, pref + Artifact.class.getSimpleName());
-        this.tableMap.put(StorageSite.class, pref + StorageSite.class.getSimpleName());
-        this.tableMap.put(DeletedArtifactEvent.class, pref + DeletedArtifactEvent.class.getSimpleName());
-        this.tableMap.put(DeletedStorageLocationEvent.class, pref + DeletedStorageLocationEvent.class.getSimpleName());
-        this.tableMap.put(StorageLocationEvent.class, pref + StorageLocationEvent.class.getSimpleName());
+        this.tableMap.put(Artifact.class, invSchema + "." + Artifact.class.getSimpleName());
+        this.tableMap.put(StorageSite.class, invSchema + "." + StorageSite.class.getSimpleName());
+        this.tableMap.put(DeletedArtifactEvent.class, invSchema + "." + DeletedArtifactEvent.class.getSimpleName());
+        this.tableMap.put(DeletedStorageLocationEvent.class, invSchema + "." + DeletedStorageLocationEvent.class.getSimpleName());
+        this.tableMap.put(StorageLocationEvent.class, invSchema + "." + StorageLocationEvent.class.getSimpleName());
         // internal
-        this.tableMap.put(ObsoleteStorageLocation.class, pref + ObsoleteStorageLocation.class.getSimpleName());
-        this.tableMap.put(HarvestState.class, pref + HarvestState.class.getSimpleName());
-        this.tableMap.put(PreauthKeyPair.class, pref + PreauthKeyPair.class.getSimpleName());
+        this.tableMap.put(ObsoleteStorageLocation.class, invSchema + "." + ObsoleteStorageLocation.class.getSimpleName());
         
         String[] cols = new String[] {
             "uri", // first column is logical key
@@ -208,33 +214,39 @@ public class SQLGenerator {
         };
         this.columnMap.put(ObsoleteStorageLocation.class, cols);
         
-        cols = new String[] {
-            "name",
-            "resourceID",
-            "curLastModified",
-            "curID",
-            "lastModified",
-            "metaChecksum",
-            "id" // last column is always PK
-        };
-        this.columnMap.put(HarvestState.class, cols);
+        log.debug("genSchema: " + genSchema);
+        if (genSchema != null) {
+            // generic support
+            this.tableMap.put(HarvestState.class, genSchema + "." + HarvestState.class.getSimpleName());
+            this.tableMap.put(PreauthKeyPair.class, genSchema + "." + PreauthKeyPair.class.getSimpleName());
+            cols = new String[] {
+                "name",
+                "resourceID",
+                "curLastModified",
+                "curID",
+                "instanceID",
+                "lastModified",
+                "metaChecksum",
+                "id" // last column is always PK
+            };
+            this.columnMap.put(HarvestState.class, cols);
         
-        cols = new String[] {
-            "name",
-            "publicKey",
-            "privateKey",
-            "lastModified",
-            "metaChecksum",
-            "id" // last column is always PK
-        };
-        this.columnMap.put(PreauthKeyPair.class, cols);
+            cols = new String[] {
+                "name",
+                "publicKey",
+                "privateKey",
+                "lastModified",
+                "metaChecksum",
+                "id" // last column is always PK
+            };
+            this.columnMap.put(PreauthKeyPair.class, cols);
+        }
         
         // optional vospace
         log.debug("vosSchema: " + vosSchema);
         if (vosSchema != null) {
-            pref = vosSchema + ".";
-            tableMap.put(Node.class, pref + Node.class.getSimpleName());
-            tableMap.put(DeletedNodeEvent.class, pref + DeletedNodeEvent.class.getSimpleName());
+            tableMap.put(Node.class, vosSchema + "." + Node.class.getSimpleName());
+            tableMap.put(DeletedNodeEvent.class, vosSchema + "." + DeletedNodeEvent.class.getSimpleName());
             
             cols = new String[] {
                 "parentID",
@@ -1347,6 +1359,11 @@ public class SQLGenerator {
             } else {
                 prep.setNull(col++, Types.OTHER);
             }
+            if (value.instanceID != null) {
+                prep.setObject(col++, value.instanceID);
+            } else {
+                prep.setNull(col++, Types.OTHER);
+            }
             
             prep.setTimestamp(col++, new Timestamp(value.getLastModified().getTime()), utc);
             prep.setString(col++, value.getMetaChecksum().toASCIIString());
@@ -1964,6 +1981,7 @@ public class SQLGenerator {
             final URI resourecID = Util.getURI(rs, col++);
             final Date curLastModified = Util.getDate(rs, col++, utc);
             final UUID curID = Util.getUUID(rs, col++);
+            final UUID instanceID = Util.getUUID(rs, col++);
             
             final Date lastModified = Util.getDate(rs, col++, utc);
             final URI metaChecksum = Util.getURI(rs, col++);
@@ -1972,6 +1990,7 @@ public class SQLGenerator {
             HarvestState ret = new HarvestState(id, name, resourecID);
             ret.curLastModified = curLastModified;
             ret.curID = curID;
+            ret.instanceID = instanceID;
             InventoryUtil.assignLastModified(ret, lastModified);
             InventoryUtil.assignMetaChecksum(ret, metaChecksum);
             return ret;

@@ -86,7 +86,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.PreauthKeyPair;
-import org.opencadc.inventory.db.version.InitDatabase;
+import org.opencadc.inventory.db.version.InitDatabaseSI;
 
 /**
  *
@@ -111,7 +111,8 @@ public class PreauthKeyPairDAOTest {
         config.put(SQLGenerator.class.getName(), SQLGenerator.class);
         config.put("jndiDataSourceName", "jdbc/PreauthKeyPairDAOTest");
         config.put("database", TestUtil.DATABASE);
-        config.put("schema", TestUtil.SCHEMA);
+        config.put("invSchema", TestUtil.SCHEMA);
+        config.put("genSchema", TestUtil.SCHEMA);
         dao.setConfig(config);
     }
     
@@ -120,7 +121,7 @@ public class PreauthKeyPairDAOTest {
         throws Exception
     {
         log.info("init database...");
-        InitDatabase init = new InitDatabase(dao.getDataSource(), TestUtil.DATABASE, TestUtil.SCHEMA);
+        InitDatabaseSI init = new InitDatabaseSI(dao.getDataSource(), TestUtil.DATABASE, TestUtil.SCHEMA);
         init.doInit();
         log.info("init database... OK");
         

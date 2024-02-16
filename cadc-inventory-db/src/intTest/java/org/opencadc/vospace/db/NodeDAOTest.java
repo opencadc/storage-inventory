@@ -124,7 +124,8 @@ public class NodeDAOTest {
             config.put(SQLGenerator.class.getName(), SQLGenerator.class);
             config.put("jndiDataSourceName", "jdbc/NodeDAOTest");
             config.put("database", TestUtil.DATABASE);
-            config.put("schema", TestUtil.SCHEMA);
+            config.put("invSchema", TestUtil.SCHEMA);
+            config.put("genSchema", TestUtil.VOS_SCHEMA);
             config.put("vosSchema", TestUtil.VOS_SCHEMA);
             
             this.nodeDAO = new NodeDAO();

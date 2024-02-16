@@ -145,7 +145,7 @@ public class Main implements Runnable {
             DataSource ds = DBUtil.getDataSource(cc);
             log.info("target: " + server + " " + database + " " + schema);
             
-            InitDatabase init = new InitDatabase(ds, database, schema);
+            InitDatabaseSI init = new InitDatabaseSI(ds, database, schema);
             boolean result = init.doInit();
             if (result) {
                 log.info("init: complete");
