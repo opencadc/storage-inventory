@@ -63,12 +63,9 @@ See <a href="https://github.com/opencadc/reg/tree/master/cadc-registry">cadc-reg
 
 ### cadc-tap-tmp.properties
 Temporary storage of async results is now handled by the 
-[cadc-tap-tmp](https://github.com/opencadc/tap/tree/master/cadc-tap-tmp) library. This
-library should be configured as follows:
-```
-org.opencadc.tap.tmp.TempStorageManager.baseURL = https://{server name}/{luskan path}/results
-org.opencadc.tap.tmp.TempStorageManager.baseStorageDir = {local directory}
-```
+[cadc-tap-tmp](https://github.com/opencadc/tap/tree/master/cadc-tap-tmp) library. `luskan` is configured
+internally to use the `DelegatingStorageManager` to the config file must also specify the storage manager
+to use.
 
 ### luskan.properties
 ```
