@@ -88,7 +88,7 @@ import org.opencadc.inventory.PreauthKeyPair;
 import org.opencadc.inventory.db.PreauthKeyPairDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
-import org.opencadc.inventory.db.version.InitDatabase;
+import org.opencadc.inventory.db.version.InitDatabaseSI;
 import org.opencadc.inventory.transfer.StorageSiteAvailabilityCheck;
 import org.opencadc.vospace.db.InitDatabaseVOS;
 import org.opencadc.vospace.server.NodePersistence;
@@ -243,8 +243,8 @@ public class VaultInitAction extends InitAction {
         Map<String, Object> ret = new TreeMap<>();
         ret.put(SQLGenerator.class.getName(), SQLGenerator.class); // not configurable right now
         ret.put("jndiDataSourceName", VaultInitAction.JNDI_VOS_DATASOURCE);
-        // unused, but inventory "schema" required by cadc-inventory-db
-        ret.put("schema", props.getFirstPropertyValue(INVENTORY_SCHEMA_KEY));
+        ret.put("invSchema", props.getFirstPropertyValue(INVENTORY_SCHEMA_KEY));
+        ret.put("genSchema", props.getFirstPropertyValue(VOSPACE_SCHEMA_KEY)); // for complete init
         ret.put("vosSchema", props.getFirstPropertyValue(VOSPACE_SCHEMA_KEY));
         return ret;
     }
@@ -257,18 +257,23 @@ public class VaultInitAction extends InitAction {
         Map<String, Object> ret = new TreeMap<>();
         ret.put(SQLGenerator.class.getName(), SQLGenerator.class); // not configurable right now
         ret.put("jndiDataSourceName", JNDI_INV_DATASOURCE);
-        ret.put("schema", props.getFirstPropertyValue(INVENTORY_SCHEMA_KEY));
+        ret.put("invSchema", props.getFirstPropertyValue(INVENTORY_SCHEMA_KEY));
+        ret.put("genSchema", props.getFirstPropertyValue(INVENTORY_SCHEMA_KEY)); // for complete init
         return ret;
     }
     
     static Map<String, Object> getKeyPairConfig(MultiValuedProperties props) {
+        return getDaoConfig(props);
+        /*
         Map<String, Object> ret = new TreeMap<>();
         ret.put(SQLGenerator.class.getName(), SQLGenerator.class); // not configurable right now
         ret.put("jndiDataSourceName", JNDI_VOS_DATASOURCE);
-        ret.put("schema", props.getFirstPropertyValue(VOSPACE_SCHEMA_KEY));
+        ret.put("invSchema", props.getFirstPropertyValue(INVENTORY_SCHEMA_KEY)); // requied but unused
+        ret.put("genSchema", props.getFirstPropertyValue(VOSPACE_SCHEMA_KEY));
         return ret;
+        */
     }
-
+    
     private void initConfig() {
         log.info("initConfig: START");
         this.props = getConfig();
@@ -300,10 +305,10 @@ public class VaultInitAction extends InitAction {
 
         try {
             String dsname = (String) invDaoConfig.get("jndiDataSourceName");
-            String schema = (String) invDaoConfig.get("schema");
+            String schema = (String) invDaoConfig.get("invSchema");
             log.info("initDatabase: " + dsname + " " + schema + " START");
             DataSource ds = DBUtil.findJNDIDataSource(dsname);
-            InitDatabase init = new InitDatabase(ds, null, schema);
+            InitDatabaseSI init = new InitDatabaseSI(ds, null, schema);
             init.doInit();
             log.info("initDatabase: " + dsname + " " + schema + " OK");
         } catch (Exception ex) {
