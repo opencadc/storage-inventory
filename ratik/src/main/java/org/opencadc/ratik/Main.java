@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2024.                            (c) 2024.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -158,7 +158,9 @@ public class Main {
             final String password = props.getFirstPropertyValue(DB_PASSWORD_CONFIG_KEY);
             final String dbUrl = props.getFirstPropertyValue(DB_URL_CONFIG_KEY);
 
-            daoConfig.put("schema", props.getFirstPropertyValue(DB_SCHEMA_CONFIG_KEY));
+            //daoConfig.put("database",...);
+            daoConfig.put("invSchema", props.getFirstPropertyValue(DB_SCHEMA_CONFIG_KEY));
+            daoConfig.put("genSchema", props.getFirstPropertyValue(DB_SCHEMA_CONFIG_KEY));
 
             final ConnectionConfig cc = new ConnectionConfig(null, null, username, password,
                                                              "org.postgresql.Driver", dbUrl);

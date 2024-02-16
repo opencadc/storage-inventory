@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2022.                            (c) 2022.
+*  (c) 2024.                            (c) 2024.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -86,7 +86,7 @@ import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
-import org.opencadc.inventory.db.version.InitDatabase;
+import org.opencadc.inventory.db.version.InitDatabaseSI;
 import org.opencadc.inventory.util.ArtifactSelector;
 
 /**
@@ -155,9 +155,9 @@ public class InventoryHarvester implements Runnable {
             this.artifactDAO = new ArtifactDAO(storageSiteDAO);
             
             String database = (String) dconf.get("database");
-            String schema = (String) dconf.get("schema");
+            String schema = (String) dconf.get("invSchema");
             DataSource ds = DBUtil.findJNDIDataSource(dsname);
-            InitDatabase init = new InitDatabase(ds, database, schema);
+            InitDatabaseSI init = new InitDatabaseSI(ds, database, schema);
             init.doInit();
             log.info("initDatabase: " + schema + " OK");
             

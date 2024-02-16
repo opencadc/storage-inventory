@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2024.                            (c) 2024.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -81,7 +81,7 @@ import org.opencadc.inventory.db.HarvestStateDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageLocationEventDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
-import org.opencadc.inventory.db.version.InitDatabase;
+import org.opencadc.inventory.db.version.InitDatabaseSI;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 public class InventoryEnvironment {
@@ -102,8 +102,9 @@ public class InventoryEnvironment {
         final DBConfig dbrc = new DBConfig();
         connectionConfig = dbrc.getConnectionConfig(TestUtil.INVENTORY_SERVER, TestUtil.INVENTORY_DATABASE);
         daoConfig.put(SQLGenerator.class.getName(), SQLGenerator.class);
-        daoConfig.put("database", TestUtil.INVENTORY_DATABASE);
-        daoConfig.put("schema", TestUtil.INVENTORY_SCHEMA);
+        //daoConfig.put("database", TestUtil.INVENTORY_DATABASE);
+        daoConfig.put("invSchema", TestUtil.INVENTORY_SCHEMA);
+        daoConfig.put("genSchema", TestUtil.INVENTORY_SCHEMA);
         // connectionConfig and daoConfig used by InventoryHarvester to create it's own datasource
         
         Map<String, Object> testConfig = new TreeMap<>();
@@ -113,8 +114,9 @@ public class InventoryEnvironment {
         
         testConfig.put(SQLGenerator.class.getName(), SQLGenerator.class);
         testConfig.put("jndiDataSourceName", jndiPath);
-        testConfig.put("database", TestUtil.INVENTORY_DATABASE);
-        testConfig.put("schema", TestUtil.INVENTORY_SCHEMA);
+        //testConfig.put("database", TestUtil.INVENTORY_DATABASE);
+        testConfig.put("invSchema", TestUtil.INVENTORY_SCHEMA);
+        testConfig.put("genSchema", TestUtil.INVENTORY_SCHEMA);
 
         storageSiteDAO.setConfig(testConfig);
         artifactDAO.setConfig(testConfig);
@@ -123,9 +125,9 @@ public class InventoryEnvironment {
         deletedStorageLocationEventDAO.setConfig(testConfig);
         harvestStateDAO.setConfig(testConfig);
 
-        new InitDatabase(DBUtil.findJNDIDataSource(jndiPath),
+        new InitDatabaseSI(DBUtil.findJNDIDataSource(jndiPath),
                          (String) daoConfig.get("database"),
-                         (String) daoConfig.get("schema")).doInit();
+                         (String) daoConfig.get("invSchema")).doInit();
     }
 
     void cleanTestEnvironment() throws Exception {

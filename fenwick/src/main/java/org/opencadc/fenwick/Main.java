@@ -160,7 +160,8 @@ public class Main {
             final String password = props.getFirstPropertyValue(DB_PASSWORD_CONFIG_KEY);
             final String dbUrl = props.getFirstPropertyValue(DB_URL_CONFIG_KEY);
 
-            daoConfig.put("schema", props.getFirstPropertyValue(DB_SCHEMA_CONFIG_KEY));
+            daoConfig.put("invSchema", props.getFirstPropertyValue(DB_SCHEMA_CONFIG_KEY));
+            daoConfig.put("genSchema", props.getFirstPropertyValue(DB_SCHEMA_CONFIG_KEY));
 
             final ConnectionConfig cc = new ConnectionConfig(null, null, username, password,
                                                              "org.postgresql.Driver", dbUrl);

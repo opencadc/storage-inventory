@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2023.                            (c) 2023.
+ *  (c) 2024.                            (c) 2024.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -79,7 +79,6 @@ import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.util.BucketSelector;
 import ca.nrc.cadc.util.StringUtil;
-
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
@@ -95,18 +94,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
-
 import javax.naming.NamingException;
 import javax.security.auth.Subject;
 import javax.sql.DataSource;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
-import org.opencadc.inventory.db.version.InitDatabase;
+import org.opencadc.inventory.db.version.InitDatabaseSI;
 import org.opencadc.inventory.query.ArtifactRowMapper;
 import org.opencadc.inventory.util.ArtifactSelector;
 import org.opencadc.tap.TapClient;
@@ -185,9 +182,9 @@ public class InventoryValidator implements Runnable {
         try {
             String jndiDataSourceName = (String) daoConfig.get("jndiDataSourceName");
             String database = (String) daoConfig.get("database");
-            String schema = (String) daoConfig.get("schema");
+            String schema = (String) daoConfig.get("invSchema");
             DataSource ds = DBUtil.findJNDIDataSource(jndiDataSourceName);
-            InitDatabase init = new InitDatabase(ds, database, schema);
+            InitDatabaseSI init = new InitDatabaseSI(ds, database, schema);
             init.doInit();
             log.info(String.format("initDatabase: %s %s", jndiDataSourceName, schema));
         } catch (Exception ex) {
