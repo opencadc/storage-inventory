@@ -100,7 +100,7 @@ import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
-import org.opencadc.inventory.db.version.InitDatabase;
+import org.opencadc.inventory.db.version.InitDatabaseSI;
 import org.opencadc.inventory.transfer.ProtocolsGenerator;
 import org.opencadc.vospace.VOS;
 import org.opencadc.vospace.transfer.Direction;
@@ -133,7 +133,7 @@ public class FilesTest extends RavenTest {
         artifactDAO.setConfig(config);
         this.siteDAO = new StorageSiteDAO(artifactDAO);
         
-        InitDatabase init = new InitDatabase(artifactDAO.getDataSource(), DATABASE, SCHEMA);
+        InitDatabaseSI init = new InitDatabaseSI(artifactDAO.getDataSource(), DATABASE, SCHEMA);
         init.doInit();
     }
     
@@ -414,7 +414,7 @@ public class FilesTest extends RavenTest {
         Assert.assertEquals("HEAD response code", 200, request.getResponseCode());
         Assert.assertEquals("File length", size, Long.valueOf(request.getResponseHeader("Content-Length")).longValue());
         Assert.assertNotNull("File last-modified", request.getResponseHeader("Last-Modified"));
-        Assert.assertEquals("File name", "attachment; filename=\"" + InventoryUtil.computeArtifactFilename(artifactURI) + "\"",
+        Assert.assertEquals("File name", "inline; filename=\"" + InventoryUtil.computeArtifactFilename(artifactURI) + "\"",
                 request.getResponseHeader("Content-Disposition"));
         Assert.assertEquals("File digest", checksum, request.getDigest());
         Assert.assertEquals("File type", contentType, request.getResponseHeader("Content-Type"));

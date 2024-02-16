@@ -168,7 +168,7 @@ public class HeadFilesAction extends FilesAction {
         syncOutput.setLastModified(artifact.getContentLastModified());
         syncOutput.setHeader("Content-Length", artifact.getContentLength());
         String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
-        syncOutput.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+        syncOutput.setHeader("Content-Disposition", "inline; filename=\"" + filename + "\"");
         if (artifact.contentEncoding != null) {
             syncOutput.setHeader("Content-Encoding", artifact.contentEncoding);
         }

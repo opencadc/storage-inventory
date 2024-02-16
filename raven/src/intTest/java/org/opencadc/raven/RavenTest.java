@@ -143,7 +143,8 @@ public abstract class RavenTest {
             config = new TreeMap<String,Object>();
             config.put(SQLGenerator.class.getName(), SQLGenerator.class);
             config.put("jndiDataSourceName", "jdbc/inventory");
-            config.put("schema", SCHEMA);
+            config.put("invSchema", SCHEMA);
+            //config.put("genSchema", SCHEMA);
 
         } catch (Exception ex) {
             log.error("setup failed", ex);
