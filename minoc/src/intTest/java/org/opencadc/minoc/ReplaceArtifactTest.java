@@ -120,7 +120,7 @@ public class ReplaceArtifactTest extends MinocTest {
         Map<String,Object> config = new TreeMap<>();
         config.put("jndiDataSourceName", "jdbc/minoc");
         config.put(SQLGenerator.class.getName(), SQLGenerator.class);
-        config.put("schema", "inventory");
+        config.put("invSchema", "inventory");
         
         this.dao = new ArtifactDAO();
         dao.setConfig(config);

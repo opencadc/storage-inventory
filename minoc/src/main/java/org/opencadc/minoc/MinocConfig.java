@@ -433,7 +433,9 @@ public class MinocConfig {
             Class clz = Class.forName(cname);
             ret.put(SQLGenerator.class.getName(), clz);
             ret.put("jndiDataSourceName", JNDI_DATASOURCE);
-            ret.put("schema", configProperties.getFirstPropertyValue(SCHEMA_KEY));
+            ret.put("invSchema", configProperties.getFirstPropertyValue(SCHEMA_KEY));
+            ret.put("genSchema", configProperties.getFirstPropertyValue(SCHEMA_KEY));
+            //config.put("vosSchema", null);
             //config.put("database", null);
             return ret;
         } catch (ClassNotFoundException ex) {

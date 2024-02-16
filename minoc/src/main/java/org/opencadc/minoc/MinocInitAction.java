@@ -89,7 +89,7 @@ import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
-import org.opencadc.inventory.db.version.InitDatabase;
+import org.opencadc.inventory.db.version.InitDatabaseSI;
 import org.opencadc.inventory.storage.StorageAdapter;
 
 /**
@@ -173,8 +173,8 @@ public class MinocInitAction extends InitAction {
             Map<String,Object> daoConfig = config.getDaoConfig();
             DataSource ds = DBUtil.findJNDIDataSource(MinocConfig.JNDI_DATASOURCE);
             String database = (String) daoConfig.get("database");
-            String schema = (String) daoConfig.get("schema");
-            InitDatabase init = new InitDatabase(ds, database, schema);
+            String schema = (String) daoConfig.get("invSchema");
+            InitDatabaseSI init = new InitDatabaseSI(ds, database, schema);
             init.doInit();
             log.info("initDatabase: " + MinocConfig.JNDI_DATASOURCE + " " + schema + " OK");
         } catch (Exception ex) {
