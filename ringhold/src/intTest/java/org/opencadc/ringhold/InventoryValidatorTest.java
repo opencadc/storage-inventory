@@ -72,6 +72,7 @@ package org.opencadc.ringhold;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.db.version.InitDatabase;
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
@@ -101,7 +102,7 @@ import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
 import org.opencadc.inventory.db.SQLGenerator;
-import org.opencadc.inventory.db.version.InitDatabase;
+import org.opencadc.inventory.db.version.InitDatabaseSI;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
@@ -168,7 +169,7 @@ public class InventoryValidatorTest {
 
         try {
             DataSource dataSource = DBUtil.findJNDIDataSource(jndiPath);
-            InitDatabase init = new InitDatabase(dataSource, INVENTORY_DATABASE, INVENTORY_SCHEMA);
+            InitDatabase init = new InitDatabaseSI(dataSource, INVENTORY_DATABASE, INVENTORY_SCHEMA);
             init.doInit();
             log.debug("initDatabase: " + jndiPath + " " + INVENTORY_SCHEMA + " OK");
         } catch (Exception ex) {
@@ -178,7 +179,8 @@ public class InventoryValidatorTest {
         daoConfig.put(SQLGenerator.class.getName(), SQLGenerator.class);
         daoConfig.put("jndiDataSourceName", jndiPath);
         daoConfig.put("database", INVENTORY_DATABASE);
-        daoConfig.put("schema", INVENTORY_SCHEMA);
+        daoConfig.put("invSchema", INVENTORY_SCHEMA);
+        daoConfig.put("genSchema", INVENTORY_SCHEMA);
 
         artifactDAO.setConfig(daoConfig);
         deletedStorageLocationEventDAO.setConfig(daoConfig);

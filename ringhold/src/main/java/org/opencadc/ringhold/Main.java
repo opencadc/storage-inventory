@@ -151,13 +151,15 @@ public class Main {
             }
             
             final Map<String, Object> daoConfig = new TreeMap<>();
-            daoConfig.put("schema", props.getFirstPropertyValue(DB_SCHEMA_CONFIG_KEY));
+            daoConfig.put("invSchema", props.getFirstPropertyValue(DB_SCHEMA_CONFIG_KEY));
+            daoConfig.put("genSchema", props.getFirstPropertyValue(DB_SCHEMA_CONFIG_KEY));
             daoConfig.put("jndiDataSourceName", "jdbc/inventory-txn");
             final String configuredSQLGenerator = props.getFirstPropertyValue(SQLGENERATOR_CONFIG_KEY);
             daoConfig.put(SQLGENERATOR_CONFIG_KEY, Class.forName(configuredSQLGenerator));
             
             final Map<String, Object> iterConfig = new TreeMap<>();
-            iterConfig.put("schema", daoConfig.get("schema"));
+            iterConfig.put("invSchema", daoConfig.get("schema"));
+            iterConfig.put("genSchema", daoConfig.get("schema"));
             iterConfig.put("jndiDataSourceName", "jdbc/inventory-iter");
             iterConfig.put(SQLGENERATOR_CONFIG_KEY, Class.forName(configuredSQLGenerator));
 
