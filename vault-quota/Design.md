@@ -23,9 +23,9 @@ for each new Artifact:
   query for DataNode (storageID = artifact.uri)
   if Artifact.contentLength != Node.size:
     start txn
+    lock parent
     lock datanode
     compute delta
-    lock parent
     apply delta to parent.delta
     set dataNode.size
     update HarvestState
@@ -41,73 +41,112 @@ ContainerNode.delta since DataNode(s) never have a delta.
 query for ContainerNode with non-zero delta
 for each ContainerNode:
   start txn
+  lock parent
   lock containernode
   re-check delta
-  lock parent
   apply delta to parent.delta
   apply delta containernode.size, set containernode.delta=0
   commit txn
 ```
-The above sequence finds candidate propagations, locks (order: child-then-parent as above), 
+The above sequence finds candidate propagations, locks (order: parent-child), 
 and applies the propagation. This moves the outstanding delta up the tree one level. If the
 sequence acts on multiple child containers before the parent, the delta(s) naturally
-_merge_ and there are fewer larger delta propagations in the upper part of the tree. It would
-be optimal to do propagations depth-first but it doesn't seem practical to forcibly accomplish 
-that ordering.
+_merge_ and there are fewer larger delta propagations in the upper part of the tree.
 
-Container size propagation will be implemented as a single sequence (thread). We could add
-something to the vospace.Node table to support subdividing work and enable multiple threads, 
-but there is nothing there right now.
+The most generic implementation is to iterate over container nodes:
+```
+Iterator<ContainerNode> iter = nodeDAO.containerIterator(boolean nonZeroDelta);
+```
+It would be optimal to do propagations from the bottom upwards in order to "merge" them,
+but it doesn't seem practical to forcibly accomplish that ordering. Container size propagation 
+will be implemented as a single sequence (thread). We could add something to the vospace.Node 
+table to support subdividing work and enable multiple threads, but there is nothing there right 
+now and it might not be necessary.
 
 ## validation
 
-### ContainerNode vs child nodes discrepancies
-TODO: figure out how to validate ContainerNode sizes vs sum(child sizes) in a live system
-
 ### DataNode vs Artifact discrepancies
-These can be validated in parallel by multiple threads, subdivide work by bucket.
+These can be validated in parallel by multiple threads, subdivide work by bucket if we add
+DataNode.storageBucket (== Artifact.uriBucket).
 
 ```
-discrepancy 1: Artifact exists but DataNode does not
+discrepancy: Artifact exists but DataNode does not
 explanation: DataNode created, transfer negotiated, DataNode removed, transfer executed
-evidence: check for DeletedNodeEvent
+evidence: DeletedNodeEvent exists
 action: remove artifact, create DeletedArtifactEvent
-else: ??
 
-discrepancy 2: DataNode exists but Artifact does not
-explanation: DataNode created, Artifact never (successfully) put
-evidence: 
-action: set nodeSize = 0
+discrepancy: Artifact exists but DataNode does not
+explanation: DataNode created, Artifact put, DataNode deleted, Artifact delete failed
+evidence: only possible with singlePool==false
+action: remove artifact, create DeletedArtifactEvent
 
-discrepancy 3: DataNode exists but Artifact does not
+discrepancy: DataNode exists but Artifact does not 
+explanation: DataNode created, Artifact never (successfully) put (normal)
+evidence: DataNode.nodeSize == 0 or null
+action: none
+
+discrepancy: DataNode exists but Artifact does not
 explanation: deleted or lost Artifact
-evidence: DataNode.size != 0 (deleted vs lost: DeletedArtifactEvent exists)
-action: fix nodeSize
+evidence: DataNode.nodeSize != 0 (deleted vs lost: DeletedArtifactEvent exists)
+action: lock nodes, fix dataNode and propagate delta to parent
 
-discrepancy 4: nodeSize != Artifact.contentLength
-explanation: pending/missed Artifact event
-action: fix DataNode and propagate delta to parent ContainerNode (same as incremental)
+discrepancy: DataNode.nodeSize != Artifact.contentLength
+explanation: artifact written (if DataNode.size > 0: replaced)
+action: lock nodes, fix DataNode and propagate delta to parent
 ```
+Required lock order: child-parent or parent-child OK.
 
 The most generic implementation is a merge join of two iterators (see ratik, tantar):
 ```
-Iterator<Artifact> aiter = artifactDAO.iterator(vaultNamespace, bucket);  // artifact.uri order
-Iterator<DataNode> niter = nodeDAO.iterator(vaultNamespace, bucket);      // storageID order 
+Iterator<Artifact> aiter = artifactDAO.iterator(vaultNamespace, bucket);  // uriBucket,uri order
+Iterator<DataNode> niter = nodeDAO.iterator(bucket);      // storageBucket,storageID order 
+```
+
+### ContainerNode vs child nodes discrepancies
+These can be validated in 
+```
+discrepancy 1: container size > sum(child sizes)
+explanation: un-propagated delete
+evidence: sum(child delta) < 0
+action: none
+
+discrepancy 1: container size > sum(child sizes)
+explanation: bug
+evidence: sum(child delta) == 0
+action: fix container size, set container.delta
+
+discrepancy 1: container size < sum(child sizes)
+explanation: un-propagated delta
+evidence: sum(child delta) > 0
+action: none
+
+discrepancy 1: container size < sum(child sizes)
+explanation: bug
+evidence: sum(child delta) == 0
+action: fix container size, set container.delta
+```
+Required lock order: locks the parent of a parent-children relationship.
+
+The most generic implementation is to iterate over container nodes:
+```
+Iterator<ContainerNode> iter = nodeDAO.containerIterator(false); // order not relevant
 ```
 
 ## database changes required
 note: all field and column names TBD
 note: fields in Node classes probably not transient but TBD
-* add `nodeSize` and `delta` fields to ContainerNode
-* add `nodeSize` field to DataNode (no size props in LinkNode!)
-* add `nodeSize` to the `vospace.Node` table
+* add `nbytes` and `delta` fields to ContainerNode
+* add `nbytes` field to DataNode (no size props in LinkNode!)
+* add `nbytes` to the `vospace.Node` table
 * add `delta` to the `vospace.Node` table
 * add `storageBucket` to DataNode
-* add `storageBucket` to `vospace.Node` table (validation)
+* add `storageBucket` to `vospace.Node` table
+
 ## cadc-inventory-db API required
 * incremental sync query/iterator: ArtifactDAO.iterator(Namespace ns, String uriBucketPrefix, Date minLastModified)?
 * lookup DataNode by storageID: NodeDAO.getDataNode(URI storageID)?
 * validate-by-bucket: use ArtifactDAO.iterator(String uriBucketPrefix, boolean ordered, Namespace ns)
 * validate-by-bucket: NodeDAO.dataNodeIterator(String storageBucketPrefix, boolean ordered)
+* incremental and validate containers: NodeDAO.containerIterator(boolean nonZeroDelta)
 * indices to support new queries
 
