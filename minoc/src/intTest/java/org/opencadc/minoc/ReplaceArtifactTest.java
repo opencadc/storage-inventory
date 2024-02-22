@@ -121,6 +121,7 @@ public class ReplaceArtifactTest extends MinocTest {
         config.put("jndiDataSourceName", "jdbc/minoc");
         config.put(SQLGenerator.class.getName(), SQLGenerator.class);
         config.put("invSchema", "inventory");
+        config.put("genSchema", "inventory");
         
         this.dao = new ArtifactDAO();
         dao.setConfig(config);
