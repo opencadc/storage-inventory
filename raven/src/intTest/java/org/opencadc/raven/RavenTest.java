@@ -144,7 +144,7 @@ public abstract class RavenTest {
             config.put(SQLGenerator.class.getName(), SQLGenerator.class);
             config.put("jndiDataSourceName", "jdbc/inventory");
             config.put("invSchema", SCHEMA);
-            //config.put("genSchema", SCHEMA);
+            config.put("genSchema", SCHEMA);
 
         } catch (Exception ex) {
             log.error("setup failed", ex);
