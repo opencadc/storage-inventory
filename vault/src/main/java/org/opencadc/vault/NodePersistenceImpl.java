@@ -323,7 +323,8 @@ public class NodePersistenceImpl implements NodePersistence {
                 if (cd != null) {
                     ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTDATE, df.format(cd)));
                 }
-                
+                // TODO: a.getContentLength() is correct, but might differ from dn.bytesUsed?? eg eventual consistency
+                // child listing iterator can only report dn.bytesUsed
                 ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, a.getContentLength().toString()));
                 // assume MD5
                 ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTMD5, a.getContentChecksum().getSchemeSpecificPart()));
@@ -334,9 +335,17 @@ public class NodePersistenceImpl implements NodePersistence {
                 if (a.contentType != null) {
                     ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_TYPE, a.contentType));
                 }
+            } else if (dn.bytesUsed != null) {
+                ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, dn.bytesUsed.toString()));
             } else {
                 // default size to 0
                 ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "0"));
+            }
+        } else if (ret instanceof ContainerNode) {
+            ContainerNode cn = (ContainerNode) ret;
+            if (cn.bytesUsed != null) {
+                // TBD: long num = bytesUsed + cn.delta; // include unpropagated delta in output??
+                ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, cn.bytesUsed.toString()));
             }
         }
         return ret;
@@ -360,18 +369,19 @@ public class NodePersistenceImpl implements NodePersistence {
         }
         NodeDAO dao = getDAO();
         ResourceIterator<Node> ret = dao.iterator(parent, limit, start);
-        return new IdentWrapper(parent, ret);
+        return new ChildNodeWrapper(parent, ret);
     }
     
-    private class IdentWrapper implements ResourceIterator<Node> {
+    // wrapper to add parent, owner, and props to child nodes
+    private class ChildNodeWrapper implements ResourceIterator<Node> {
 
         private final ContainerNode parent;
         private final ResourceIterator<Node> childIter;
         
-        private IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
-        private Map<Object, Subject> identCache = new TreeMap<>();
+        private final IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
+        private final Map<Object, Subject> identCache = new TreeMap<>();
         
-        IdentWrapper(ContainerNode parent, ResourceIterator<Node> childIter) {
+        ChildNodeWrapper(ContainerNode parent, ResourceIterator<Node> childIter) {
             this.parent = parent;
             this.childIter = childIter;
             // prime cache with caller
@@ -395,6 +405,8 @@ public class NodePersistenceImpl implements NodePersistence {
         public Node next() {
             Node ret = childIter.next();
             ret.parent = parent;
+
+            // owner
             Subject s = identCache.get(ret.ownerID);
             if (s == null) {
                 s = identityManager.toSubject(ret.ownerID);
@@ -402,6 +414,21 @@ public class NodePersistenceImpl implements NodePersistence {
             }
             ret.owner = s;
             ret.ownerDisplay = identityManager.toDisplayString(ret.owner);
+
+            // props
+            if (ret instanceof DataNode) {
+                DataNode dn = (DataNode) ret;
+                if (dn.bytesUsed != null) {
+                    ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, dn.bytesUsed.toString()));
+                } // TBD: default to 0?
+            } else if (ret instanceof ContainerNode) {
+                ContainerNode cn = (ContainerNode) ret;
+                if (cn.bytesUsed != null) {
+                    // TBD: long num = bytesUsed + cn.delta; // include unpropagated delta in output??
+                    ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, cn.bytesUsed.toString()));
+                } // TBD: default to 0?
+            } // no size for LinkNode
+            
             return ret;
         }
 

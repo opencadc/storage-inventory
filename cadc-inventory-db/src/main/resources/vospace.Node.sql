@@ -6,20 +6,23 @@ create table <schema>.Node (
     nodeType char(1) not null,
 
     ownerID varchar(256) not null,
+    bytesUsed bigint,
     isPublic boolean,
     isLocked boolean,
     readOnlyGroups text,
     readWriteGroups text,
-    
+
     -- store all props in a 2D array
     properties text[][],
 
     -- ContainerNode
     inheritPermissions boolean,
+    delta bigint;
     
     -- DataNode
     busy boolean,
     storageID varchar(512),
+    storageBucket varchar(5),
 
     -- LinkNode
     target text,
@@ -32,3 +35,5 @@ create table <schema>.Node (
 create unique index node_parent_child on <schema>.Node(parentID,name);
 
 create index node_lastmodified on <schema>.Node(lastModified);
+
+create unique index node_storageID on <schema>.Node(storageID);

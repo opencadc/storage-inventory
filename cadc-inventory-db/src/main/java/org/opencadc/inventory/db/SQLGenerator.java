@@ -94,6 +94,7 @@ import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.ObsoleteStorageLocation;
 import org.opencadc.inventory.PreauthKeyPair;
 import org.opencadc.inventory.SiteLocation;
@@ -260,8 +261,11 @@ public class SQLGenerator {
                 "readWriteGroups",
                 "properties",
                 "inheritPermissions",
+                "delta",
+                "bytesUsed",
                 "busy",
                 "storageID",
+                "storageBucket",
                 "target",
                 "lastModified",
                 "metaChecksum",
@@ -675,10 +679,15 @@ public class SQLGenerator {
     class ArtifactIteratorQuery implements EntityIteratorQuery<Artifact> {
 
         private Boolean storageLocationRequired;
-        private String prefix;
+        private String storageBucket;
+        
         private UUID siteID;
-        private String whereClause;
+        private String uriBucket;
+        private Namespace namespace;
+        private Date minLastModified;
         private boolean ordered;
+        
+        private final Calendar utc = Calendar.getInstance(DateUtil.UTC);
 
         public ArtifactIteratorQuery() {
         }
@@ -694,20 +703,28 @@ public class SQLGenerator {
             this.storageLocationRequired = slr;
         }
         
-        public void setPrefix(String prefix) {
+        public void setStorageBucket(String prefix) {
             if (StringUtil.hasText(prefix)) {
-                this.prefix = prefix.trim();
+                this.storageBucket = prefix.trim();
             } else {
-                this.prefix = null;
+                this.storageBucket = null;
             }
         }
 
-        public void setCriteria(String whereClause) {
-            if (StringUtil.hasText(whereClause)) {
-                this.whereClause = whereClause.trim();
+        public void setUriBucket(String uriBucket) {
+            if (StringUtil.hasText(uriBucket)) {
+                this.uriBucket = uriBucket.trim();
             } else {
-                this.whereClause = null;
+                uriBucket = null;
             }
+        }
+
+        public void setNamespace(Namespace namespace) {
+            this.namespace = namespace;
+        }
+
+        public void setMinLastModified(Date minLastModified) {
+            this.minLastModified = minLastModified;
         }
 
         public void setOrderedOutput(boolean ordered) {
@@ -720,13 +737,13 @@ public class SQLGenerator {
         
         @Override
         public ResourceIterator<Artifact> query(DataSource ds) {
-            
-            StringBuilder sb = getSelectFromSQL(Artifact.class, false);
-            sb.append(" WHERE");
+            StringBuilder select = getSelectFromSQL(Artifact.class, false);
+            StringBuilder sb = new StringBuilder(" WHERE");
+            int whereLen = sb.length();
             
             if (storageLocationRequired != null && storageLocationRequired) {
                 // ArtifactDAO.storedIterator
-                if (StringUtil.hasText(prefix)) {
+                if (storageBucket != null) {
                     sb.append(" storageLocation_storageBucket LIKE ? AND");
                 }
                 sb.append(" storageLocation_storageID IS NOT NULL");
@@ -739,45 +756,54 @@ public class SQLGenerator {
                     sb.append(" ORDER BY storageLocation_storageBucket, storageLocation_storageID");
                 }
             } else if (storageLocationRequired != null && !storageLocationRequired) {
-                // ArtifactDAO.unstoredIterator
-                if (StringUtil.hasText(prefix)) {
-                    sb.append(" uriBucket LIKE ? AND");
-                }
                 sb.append(" storageLocation_storageID IS NULL");
-                if (ordered) {
-                    sb.append(" ORDER BY uri");
-                }
-            } else if (siteID != null) {
-                if (prefix != null && siteID != null) {
-                    sb.append(" uriBucket LIKE ? AND ").append("siteLocations @> ARRAY[?]");
-                } else {
-                    sb.append(" siteLocations @> ARRAY[?]");
-                }
-                if (ordered) {
-                    sb.append(" ORDER BY uri");
-                }
-            } else if (whereClause != null) {
-                if (prefix != null && whereClause != null) {
-                    sb.append(" uriBucket LIKE ? AND ( ").append(whereClause).append(" )");
-                } else {
-                    sb.append(" (").append(whereClause).append(" )");
-                }
-                if (ordered) {
-                    sb.append(" ORDER BY uri");
-                }
-            } else if (prefix != null) {
-                sb.append(" uriBucket LIKE ?");
-                if (ordered) {
-                    sb.append(" ORDER BY uri");
-                }
-            } else {
-                // trim off " WHERE"
-                sb.delete(sb.length() - 6, sb.length());
             }
             
-            String sql = sb.toString();
-            log.debug("sql: " + sql);
+            if (uriBucket != null) {
+                // ArtifactDAO.iterator(null, ...)
+                if (sb.length() > whereLen) {
+                    sb.append(" AND");
+                }
+                sb.append(" uriBucket LIKE ?");
+            }
+            if (siteID != null) {
+                // ArtifactDAO.iterator(UUID, ...)
+                if (sb.length() > whereLen) {
+                    sb.append(" AND");
+                }
+                sb.append(" siteLocations @> ARRAY[?]");
+            } 
+            if (namespace != null) {
+                // ArtifactDAO.iterator(Namespace, ...)
+                if (sb.length() > whereLen) {
+                    sb.append(" AND");
+                }
+                sb.append(" uri LIKE ?");
+            }
+            if (minLastModified != null) {
+                if (sb.length() > whereLen) {
+                    sb.append(" AND");
+                }
+                sb.append(" lastModified >= ?");
+            }
+            if (ordered && !(storageLocationRequired != null && storageLocationRequired)) {
+                if (minLastModified != null) {
+                    sb.append(" ORDER BY lastModified ASC");
+                } else {
+                    sb.append(" ORDER BY uri");
+                }
+            }
             
+            if (sb.length() > whereLen) {
+                select.append(sb.toString());
+            }
+            String sql = select.toString();
+            log.warn("sql: " + sql);
+            
+            // params:
+            // storageBucket OR uriBucket
+            // siteID
+            // namespace
             try {
                 Connection con = ds.getConnection();
                 log.debug("ArtifactIterator: setAutoCommit(false)");
@@ -787,15 +813,29 @@ public class SQLGenerator {
                 ps.setFetchSize(1000);
                 ps.setFetchDirection(ResultSet.FETCH_FORWARD);
                 int col = 1;
-                if (prefix != null) {
-                    String val = prefix + "%";
+                if (storageBucket != null) {
+                    String val = storageBucket + "%";
+                    log.debug("bucket prefix: " + val);
+                    ps.setString(col++, val);
+                } else if (uriBucket != null) {
+                    String val = uriBucket + "%";
                     log.debug("bucket prefix: " + val);
                     ps.setString(col++, val);
                 }
                 if (siteID != null) {
                     log.debug("siteID: " + siteID);
                     ps.setObject(col++, siteID);
+                } 
+                if (namespace != null) {
+                    String val = namespace.getNamespace() + "%";
+                    log.debug("namespace prefix: " + val);
+                    ps.setString(col++, val);
                 }
+                if (minLastModified != null) {
+                    log.debug("min lastModified: " + minLastModified);
+                    ps.setTimestamp(col++, new Timestamp(minLastModified.getTime()), utc);
+                }
+                
                 ResultSet rs = ps.executeQuery();
                 
                 return new ArtifactResultSetIterator(con, rs);
@@ -939,6 +979,7 @@ public class SQLGenerator {
         private UUID id;
         private ContainerNode parent;
         private String name;
+        private URI storageID;
         private final boolean forUpdate;
 
         public NodeGet(boolean forUpdate) {
@@ -954,6 +995,10 @@ public class SQLGenerator {
             this.parent = parent;
             this.name = name;
         }
+
+        public void setStorageID(URI storageID) {
+            this.storageID = storageID;
+        }
         
         @Override
         public Node execute(JdbcTemplate jdbc) {
@@ -967,10 +1012,12 @@ public class SQLGenerator {
             if (id != null) {
                 String col = getKeyColumn(Node.class, true);
                 sb.append(col).append(" = ?");
+            } else if (storageID != null) {
+                String col = "storageID";
+                sb.append(col).append(" = ?");
             } else if (parent != null && name != null) {
                 String pidCol = "parentID";
                 String nameCol = "name";
-                // TODO: better way to get column names?
                 sb.append(pidCol).append(" = ? and ").append(nameCol).append(" = ?");
             } else {
                 throw new IllegalStateException("primary key is null");
@@ -983,6 +1030,8 @@ public class SQLGenerator {
             PreparedStatement prep = conn.prepareStatement(sql);
             if (id != null) {
                 prep.setObject(1, id);
+            } else if (storageID != null) {
+                prep.setObject(1, storageID.toASCIIString());
             } else {
                 prep.setObject(1, parent.getID());
                 prep.setObject(2, name);
@@ -1466,12 +1515,29 @@ public class SQLGenerator {
             safeSetArray(prep, col++, value.getReadOnlyGroup());
             safeSetArray(prep, col++, value.getReadWriteGroup());
             safeSetProps(prep, col++, value.getProperties());
+
+            // ContainerNode-specific fields
             if (value instanceof ContainerNode) {
                 ContainerNode cn = (ContainerNode) value;
                 safeSetBoolean(prep, col++, cn.inheritPermissions);
+                safeSetLong(prep, col++, cn.delta);
             } else {
                 safeSetBoolean(prep, col++, null);
+                safeSetLong(prep, col++, null);
+            } 
+            
+            // bytesUsed is in between CN and DN specific columns
+            if (value instanceof ContainerNode) {
+                ContainerNode cn = (ContainerNode) value;
+                safeSetLong(prep, col++, cn.bytesUsed);
+            } else if (value instanceof DataNode) {
+                DataNode dn = (DataNode) value;
+                safeSetLong(prep, col++, dn.bytesUsed);
+            } else {
+                safeSetLong(prep, col++, null);
             }
+            
+            // DataNode specific fields
             if (value instanceof DataNode) {
                 DataNode dn = (DataNode) value;
                 if (dn.storageID == null) {
@@ -1479,10 +1545,14 @@ public class SQLGenerator {
                 }
                 safeSetBoolean(prep, col++, dn.busy);
                 safeSetString(prep, col++, dn.storageID);
+                safeSetString(prep, col++, InventoryUtil.computeBucket(dn.storageID, 5)); // same as Artifact
             } else {
                 safeSetBoolean(prep, col++, null);
                 safeSetString(prep, col++, (URI) null);
+                safeSetString(prep, col++, (URI) null);
             }
+
+            // LinkNode-specific fields
             if (value instanceof LinkNode) {
                 LinkNode ln = (LinkNode) value;
                 prep.setString(col++, ln.getTarget().toASCIIString());
@@ -1490,6 +1560,7 @@ public class SQLGenerator {
                 safeSetString(prep, col++, (URI) null);
             }
             
+            // Entity fields
             prep.setTimestamp(col++, new Timestamp(value.getLastModified().getTime()), utc);
             prep.setString(col++, value.getMetaChecksum().toASCIIString());
             prep.setObject(col++, value.getID());
@@ -1904,8 +1975,12 @@ public class SQLGenerator {
         final String rawRWG = rs.getString(col++);
         final String rawProps = rs.getString(col++);
         final Boolean inheritPermissions = Util.getBoolean(rs, col++);
+        final Long delta = Util.getLong(rs, col++);
+        final Long bytesUsed = Util.getLong(rs, col++);
         final Boolean busy = Util.getBoolean(rs, col++);
         final URI storageID = Util.getURI(rs, col++);
+        final String storageBucket = rs.getString(col++);
+        // TODO: return this somehow or just use in DataNode iterator?
         final URI linkTarget = Util.getURI(rs, col++);
         final Date lastModified = Util.getDate(rs, col++, utc);
         final URI metaChecksum = Util.getURI(rs, col++);
@@ -1915,9 +1990,13 @@ public class SQLGenerator {
         if (nodeType.equals("C")) {
             ContainerNode cn = new ContainerNode(id, name);
             cn.inheritPermissions = inheritPermissions;
+            cn.bytesUsed = bytesUsed;
+            cn.delta = (delta == null ? 0 : delta);
             ret = cn;
         } else if (nodeType.equals("D")) {
-            ret = new DataNode(id, name, storageID);
+            DataNode dn = new DataNode(id, name, storageID);
+            dn.bytesUsed = bytesUsed;
+            ret = dn;
         } else if (nodeType.equals("L")) {
             ret = new LinkNode(id, name, linkTarget);
         } else {
@@ -2148,7 +2227,5 @@ public class SQLGenerator {
             
             return mapRowToNode(rs, utc, parent);
         }
-        
-        
     }
 }

@@ -69,9 +69,11 @@ package org.opencadc.inventory.db;
 
 import ca.nrc.cadc.io.ResourceIterator;
 import java.net.URI;
+import java.util.Date;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
 import org.springframework.jdbc.BadSqlGrammarException;
@@ -190,8 +192,8 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
         try {
             SQLGenerator.ArtifactIteratorQuery iter = (SQLGenerator.ArtifactIteratorQuery) gen.getEntityIteratorQuery(Artifact.class);
             iter.setStorageLocationRequired(true);
+            iter.setStorageBucket(storageBucketPrefix);
             iter.setOrderedOutput(true);
-            iter.setPrefix(storageBucketPrefix);
             return iter.query(dataSource);
         } catch (BadSqlGrammarException ex) {
             handleInternalFail(ex);
@@ -218,8 +220,8 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
         try {
             SQLGenerator.ArtifactIteratorQuery iter = (SQLGenerator.ArtifactIteratorQuery) gen.getEntityIteratorQuery(Artifact.class);
             iter.setStorageLocationRequired(false);
+            iter.setUriBucket(uriBucketPrefix);
             iter.setOrderedOutput(true);
-            iter.setPrefix(uriBucketPrefix);
             return iter.query(dataSource);
         } catch (BadSqlGrammarException ex) {
             handleInternalFail(ex);
@@ -240,7 +242,7 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
      * @return iterator over artifacts
      */
     public ResourceIterator<Artifact> iterator(String uriBucketPrefix, boolean ordered) {
-        return iterator((String) null, uriBucketPrefix, ordered);
+        return iterator((Namespace) null, uriBucketPrefix, ordered);
     }
     
     /**
@@ -250,19 +252,37 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
      * 
      * <p>Use case: local cleanup by arbitrary criteria
      * 
-     * @param criteria conditions for selecting artifacts
+     * @param ns namespace for selecting artifacts
      * @param uriBucketPrefix null, prefix, or complete Artifact.uriBucket string
      * @param ordered order by Artifact.uri (true) or not ordered (false)
      * @return iterator over artifacts matching criteria
      */
-    public ResourceIterator<Artifact> iterator(String criteria, String uriBucketPrefix, boolean ordered) {
+    public ResourceIterator<Artifact> iterator(Namespace ns, String uriBucketPrefix, boolean ordered) {
+        return iterator(ns, uriBucketPrefix, null, ordered);
+    }
+    
+    /**
+     * Iterate over artifacts that match criteria. This method adds an optional Date argument to
+     * support incremental processing. In this case, ordered will be in timestamp order rather than
+     * uri order.
+     * 
+     * <p>Use case: process artifact events directly in the database
+     * 
+     * @param ns namespace for selecting artifacts
+     * @param uriBucketPrefix null, prefix, or complete Artifact.uriBucket string
+     * @param minLastModified minimum Artifact.lastModified to consider (incremental mode)
+     * @param ordered order by Artifact.uri (true) or not ordered (false)
+     * @return iterator over artifacts matching criteria
+     */
+    public ResourceIterator<Artifact> iterator(Namespace ns, String uriBucketPrefix, Date minLastModified, boolean ordered) {
         checkInit();
         long t = System.currentTimeMillis();
 
         try {
             SQLGenerator.ArtifactIteratorQuery iter = (SQLGenerator.ArtifactIteratorQuery) gen.getEntityIteratorQuery(Artifact.class);
-            iter.setPrefix(uriBucketPrefix);
-            iter.setCriteria(criteria);
+            iter.setUriBucket(uriBucketPrefix);
+            iter.setNamespace(ns);
+            iter.setMinLastModified(minLastModified);
             iter.setOrderedOutput(ordered);
             return iter.query(dataSource);
         } catch (BadSqlGrammarException ex) {
@@ -273,7 +293,7 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
         }
         throw new RuntimeException("BUG: should be unreachable");
     }
-    
+
     /**
      * Iterate over Artifacts from a specific site. If a siteID is specified, only artifacts where 
      * artifact.siteLocations includes that siteID are returned; this is only applicable in a global
@@ -292,7 +312,7 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
 
         try {
             SQLGenerator.ArtifactIteratorQuery iter = (SQLGenerator.ArtifactIteratorQuery) gen.getEntityIteratorQuery(Artifact.class);
-            iter.setPrefix(uriBucketPrefix);
+            iter.setUriBucket(uriBucketPrefix);
             iter.setSiteID(siteID);
             iter.setOrderedOutput(ordered);
             return iter.query(dataSource);
