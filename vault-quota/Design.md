@@ -134,17 +134,20 @@ Iterator<ContainerNode> iter = nodeDAO.containerIterator(false); // order not re
 
 ## database changes required
 note: all field and column names TBD
-note: fields in Node classes probably not transient but TBD
-* add `nbytes` and `delta` fields to ContainerNode
-* add `nbytes` field to DataNode (no size props in LinkNode!)
-* add `nbytes` to the `vospace.Node` table
+* add `transient Long bytesUsed` to ContainerNode and DataNode
+* add `transient long delta` field to ContainerNode
+* add `bytesUsed` to the `vospace.Node` table
 * add `delta` to the `vospace.Node` table
-* add `storageBucket` to DataNode
+* add `storageBucket` to DataNode?? TBD
 * add `storageBucket` to `vospace.Node` table
 
-## cadc-inventory-db API required
-* incremental sync query/iterator: ArtifactDAO.iterator(Namespace ns, String uriBucketPrefix, Date minLastModified)?
-* lookup DataNode by storageID: NodeDAO.getDataNode(URI storageID)?
+## cadc-inventory-db API required immediately
+* incremental sync query/iterator: ArtifactDAO.iterator(Namespace ns, String uriBucketPrefix, Date minLastModified, boolean ordered)
+  order by lastModified if set
+* lookup DataNode by storageID: NodeDAO.getDataNode(URI storageID)
+* indices to support new queries
+
+## cadc-inventory-db API required later
 * validate-by-bucket: use ArtifactDAO.iterator(String uriBucketPrefix, boolean ordered, Namespace ns)
 * validate-by-bucket: NodeDAO.dataNodeIterator(String storageBucketPrefix, boolean ordered)
 * incremental and validate containers: NodeDAO.containerIterator(boolean nonZeroDelta)
