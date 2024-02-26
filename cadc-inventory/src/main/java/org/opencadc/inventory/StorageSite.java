@@ -69,8 +69,6 @@ package org.opencadc.inventory;
 
 import java.net.URI;
 import java.util.Objects;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 
@@ -86,14 +84,9 @@ public class StorageSite extends Entity implements Comparable<StorageSite> {
     private static final Logger log = Logger.getLogger(StorageSite.class);
 
     private URI resourceID;
-    private String name; // deprecate?
+    private String name;
     private boolean allowRead;
     private boolean allowWrite;
-    
-    // TODO: resourceID of trusted services - intended from config
-    private SortedSet<URI> trustedSigners = new TreeSet<>();
-    // TODO: checksum of the pubkey of trusted services - actual from pub key retrieval
-    private SortedSet<URI> trustedPubKeyChecksums = new TreeSet<>();
     
     /**
      * Create a new StorageSite.
