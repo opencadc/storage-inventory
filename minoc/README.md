@@ -81,10 +81,14 @@ org.opencadc.minoc.trust.preauth = {resourceID}
 org.opencadc.minoc.readGrantProvider={resourceID of a permission granting service}
 org.opencadc.minoc.writeGrantProvider={resourceID of a permission granting service}
 
+# override the implied readable and writable state
+org.opencadc.minoc.readable = true|false
+org.opencadc.minoc.writable = true|false
+
 # configure StorageAdapter delete behaviour
 org.opencadc.minoc.recoverableNamespace = {namespace}
 ```
-The optional _trust.preauth_ key(s) configure `minoc` to trust an external service to have performed
+The optional _trust.preauth_ key(s) configure `minoc` to trust external service(s) to have performed
 authorization checks. Such services may include a signed token in the URL and `minoc` will validate 
 the request using a public key retrieved from the service instead of performing authorization checks
 itself. Example:
@@ -95,11 +99,17 @@ org.opencadc.minoc.trust.preauth = ivo://example.net/raven
 # trust a SI VOSpace service
 org.opencadc.minoc.trust.preauth = ivo://example.net/vault
 ```
+Setting _trust.preauth_ one or more times also implies _readable_ and _writable_ are _true_.
 
-The optional _readGrantProvider_ and _writeGrantProvider_ keys configure minoc to call other services to get grants (permissions) for 
-operations. Multiple values of the granting service resourceID(s) may be provided by including multiple property 
-settings (one per line). All services will be consulted but a single positive result is sufficient to grant permission for an 
-action.
+The optional _readGrantProvider_ and _writeGrantProvider_ keys configure minoc to call other services to 
+get grants (permissions) for operations. Multiple values of the granting service resourceID(s) may be provided 
+by including multiple property settings (one per line). All services will be consulted but a single positive 
+result is sufficient to grant permission for an action. Setting these values also sets the implied _readable_
+and _writable_ is _true_ respectively.
+
+The optional _readable_ and _writable_ keys configure minoc explicitly rather than relying on one or more of 
+the above trust or grant provider settings. For example, this allows one to configure a read-only minoc
+(_writable_ = false) that trusts other services to do the authorization checks.
 
 The optional _recoverableNamespace_ key causes `minoc` to configure the storage adapter so that deletions
 preserve the file content in a recoverable state. This generally means that storage space remains in use
@@ -121,7 +131,6 @@ prefixes will be recoverable. Others (e.g. `test:FOO/bar`) will be permanently d
 Note: Since artifact and stored object deletion can also be performed by the `tantar` file validation tool,
 all instances of `minoc` and `tantar` that use the same inventory and storage adapter should use the same
  _recoverableNamespace_ configuration so that preservation and recovery (from mistakes) is consistent.
-
 ---
 **For developer testing only:** To disable authorization checking (via `readGrantProvider` or `writeGrantProvider`
 services), add the following configuration entry to minoc.properties:
@@ -131,7 +140,13 @@ org.opencadc.minoc.authenticateOnly=true
 With `authenticateOnly=true`, any authenticated user will be able to read/write/delete files and anonymous users
 will be able to read files.
 
+### cadc-log.properties (optional)
+See <a href="https://github.com/opencadc/core/tree/master/cadc-log">cadc-log</a> for common 
+dynamic logging control.
+
 ### minoc-availability.properties (optional)
+WARN: This config file name is going to change to a common one for consistency across multiple services.
+
 The minoc-availability.properties file specifies which users have the authority to change the availability state of the minoc service. Each entry consists of a key=value pair. The key is always "users". The value is the x500 canonical user name.
 
 Example:

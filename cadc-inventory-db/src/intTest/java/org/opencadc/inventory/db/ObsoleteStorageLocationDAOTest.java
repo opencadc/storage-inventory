@@ -67,7 +67,6 @@
 
 package org.opencadc.inventory.db;
 
-import org.opencadc.inventory.ObsoleteStorageLocation;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
@@ -83,8 +82,9 @@ import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.opencadc.inventory.ObsoleteStorageLocation;
 import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.db.version.InitDatabase;
+import org.opencadc.inventory.db.version.InitDatabaseSI;
 
 /**
  *
@@ -110,7 +110,8 @@ public class ObsoleteStorageLocationDAOTest {
             config.put(SQLGenerator.class.getName(), SQLGenerator.class);
             config.put("jndiDataSourceName", "jdbc/ArtifactDAOTest");
             config.put("database", TestUtil.DATABASE);
-            config.put("schema", TestUtil.SCHEMA);
+            config.put("invSchema", TestUtil.SCHEMA);
+            config.put("genSchema", TestUtil.SCHEMA);
             dao.setConfig(config);
         } catch (Exception ex) {
             log.error("setup failed", ex);
@@ -123,7 +124,7 @@ public class ObsoleteStorageLocationDAOTest {
         throws Exception
     {
         log.info("init database...");
-        InitDatabase init = new InitDatabase(dao.getDataSource(), TestUtil.DATABASE, TestUtil.SCHEMA);
+        InitDatabaseSI init = new InitDatabaseSI(dao.getDataSource(), TestUtil.DATABASE, TestUtil.SCHEMA);
         init.doInit();
         log.info("init database... OK");
         

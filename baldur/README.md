@@ -112,6 +112,9 @@ When more than one entry matches an artifact URI, the grants are combined as fol
 * the members of any of the groups in all matching readOnlyGroup lists are allowed to read
 * the members of any of the groups in all matching readWriteGroup lists are allowed to read and write
 
+### cadc-log.properties (optional)
+See <a href="https://github.com/opencadc/core/tree/master/cadc-log">cadc-log</a> for common 
+dynamic logging control.
 
 ## integration testing
 

@@ -122,7 +122,8 @@ public class TransferTest extends org.opencadc.conformance.vos.TransferTest {
             Map<String,Object> config = new TreeMap<String,Object>();
             config.put(SQLGenerator.class.getName(), SQLGenerator.class);
             config.put("jndiDataSourceName", "jdbc/inventory");
-            config.put("schema", SCHEMA);
+            config.put("invSchema", SCHEMA);
+            config.put("genSchema", SCHEMA);
             
             StorageSiteDAO dao = new StorageSiteDAO(false);
             dao.setConfig(config);

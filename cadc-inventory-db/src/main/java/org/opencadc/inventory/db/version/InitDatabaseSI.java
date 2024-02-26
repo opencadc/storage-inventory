@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2023.                            (c) 2023.
+*  (c) 2024.                            (c) 2024.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,6 +67,7 @@
 
 package org.opencadc.inventory.db.version;
 
+import ca.nrc.cadc.db.version.InitDatabase;
 import java.net.URL;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
@@ -75,8 +76,8 @@ import org.apache.log4j.Logger;
  *
  * @author pdowler
  */
-public class InitDatabase extends ca.nrc.cadc.db.version.InitDatabase {
-    private static final Logger log = Logger.getLogger(InitDatabase.class);
+public class InitDatabaseSI extends InitDatabase {
+    private static final Logger log = Logger.getLogger(InitDatabaseSI.class);
     
     public static final String MODEL_NAME = "storage-inventory";
     public static final String MODEL_VERSION = "0.15";
@@ -84,24 +85,25 @@ public class InitDatabase extends ca.nrc.cadc.db.version.InitDatabase {
     //public static final String PREV_MODEL_VERSION = "DO-NOT_UPGRADE-BY-ACCIDENT";
 
     static String[] CREATE_SQL = new String[] {
-        "inventory.ModelVersion.sql",
+        "generic.ModelVersion.sql",
         "inventory.Artifact.sql",
         "inventory.StorageSite.sql",
         "inventory.ObsoleteStorageLocation.sql",
         "inventory.DeletedArtifactEvent.sql",
         "inventory.DeletedStorageLocationEvent.sql",
         "inventory.StorageLocationEvent.sql",
-        "inventory.HarvestState.sql",
+        "generic.HarvestState.sql",
         "generic.PreauthKeyPair.sql",
         "generic.permissions.sql"
     };
     
     static String[] UPGRADE_SQL = new String[] {
+        "inventory.upgrade-0.15.sql",
         "generic.PreauthKeyPair.sql",
         "generic.permissions.sql"
     };
     
-    public InitDatabase(DataSource ds, String database, String schema) { 
+    public InitDatabaseSI(DataSource ds, String database, String schema) { 
         super(ds, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
         for (String s : CREATE_SQL) {
             createSQL.add(s);
@@ -114,6 +116,6 @@ public class InitDatabase extends ca.nrc.cadc.db.version.InitDatabase {
     @Override
     protected URL findSQL(String fname) {
         // SQL files are stored inside the jar file
-        return InitDatabase.class.getClassLoader().getResource(fname);
+        return InitDatabaseSI.class.getClassLoader().getResource(fname);
     }
 }

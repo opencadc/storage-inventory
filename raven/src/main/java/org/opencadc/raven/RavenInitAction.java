@@ -92,7 +92,7 @@ import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.PreauthKeyPairDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
-import org.opencadc.inventory.db.version.InitDatabase;
+import org.opencadc.inventory.db.version.InitDatabaseSI;
 import org.opencadc.inventory.transfer.StorageSiteAvailabilityCheck;
 import org.opencadc.inventory.transfer.StorageSiteRule;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -168,9 +168,9 @@ public class RavenInitAction extends InitAction {
             Map<String,Object> daoConfig = getDaoConfig(props, JNDI_ADMIN_DATASOURCE);
             String jndiDataSourceName = (String) daoConfig.get("jndiDataSourceName");
             String database = (String) daoConfig.get("database");
-            String schema = (String) daoConfig.get("schema");
+            String schema = (String) daoConfig.get("invSchema");
             DataSource ds = DBUtil.findJNDIDataSource(jndiDataSourceName);
-            InitDatabase init = new InitDatabase(ds, database, schema);
+            InitDatabaseSI init = new InitDatabaseSI(ds, database, schema);
             init.doInit();
             log.info("initDatabase: " + jndiDataSourceName + " " + schema + " OK");
         } catch (Exception ex) {
@@ -344,7 +344,8 @@ public class RavenInitAction extends InitAction {
             Class clz = Class.forName(cname);
             ret.put(SQLGenerator.class.getName(), clz);
             ret.put("jndiDataSourceName", pool);
-            ret.put("schema", props.getFirstPropertyValue(RavenInitAction.SCHEMA_KEY));
+            ret.put("invSchema", props.getFirstPropertyValue(RavenInitAction.SCHEMA_KEY));
+            ret.put("genSchema", props.getFirstPropertyValue(RavenInitAction.SCHEMA_KEY));
             //config.put("database", null);
             return ret;
         } catch (ClassNotFoundException ex) {

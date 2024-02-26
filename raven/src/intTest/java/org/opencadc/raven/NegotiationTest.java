@@ -99,7 +99,7 @@ import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
-import org.opencadc.inventory.db.version.InitDatabase;
+import org.opencadc.inventory.db.version.InitDatabaseSI;
 import org.opencadc.inventory.transfer.ProtocolsGenerator;
 import org.opencadc.permissions.TokenTool;
 import org.opencadc.permissions.WriteGrant;
@@ -131,7 +131,7 @@ public class NegotiationTest extends RavenTest {
         artifactDAO.setConfig(config);
         this.siteDAO = new StorageSiteDAO(artifactDAO);
         
-        InitDatabase init = new InitDatabase(artifactDAO.getDataSource(), DATABASE, SCHEMA);
+        InitDatabaseSI init = new InitDatabaseSI(artifactDAO.getDataSource(), DATABASE, SCHEMA);
         init.doInit();
     }
     

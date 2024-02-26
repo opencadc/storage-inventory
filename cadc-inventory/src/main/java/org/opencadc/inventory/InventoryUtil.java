@@ -68,6 +68,7 @@
 package org.opencadc.inventory;
 
 import ca.nrc.cadc.util.HexUtil;
+import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -129,28 +130,18 @@ public abstract class InventoryUtil {
     public static String computeBucket(URI uri, int length) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-1");
-            byte[] bytes = new DummyEntity().primitiveValueToBytes(uri, "Artifact.uri", md.getAlgorithm());
+            byte[] bytes = uri.toASCIIString().trim().getBytes("UTF-8");
             md.update(bytes);
             byte[] sha = md.digest();
             String hex = HexUtil.toHex(sha);
             return hex.substring(0, length);
         } catch (NoSuchAlgorithmException ex) {
             throw new RuntimeException("BUG: failed to get instance of SHA-1", ex);
+        } catch (UnsupportedEncodingException ex) {
+            throw new RuntimeException("BUG: failed to encode String in UTF-8", ex);
         }
     }
     
-    // make primitiveValueToBytes usable in computeBucket above
-    private static class DummyEntity extends org.opencadc.inventory.Entity {
-        DummyEntity() {
-            super();
-        }
-
-        @Override
-        protected byte[] primitiveValueToBytes(Object o, String name, String digestAlg) {
-            return super.primitiveValueToBytes(o, name, digestAlg);
-        }
-    }
-
     /**
      * Compute the filename of an artifact URI.
      * @param uri The uri to parse

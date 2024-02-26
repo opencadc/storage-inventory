@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2023.                            (c) 2023.
+*  (c) 2024.                            (c) 2024.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -70,7 +70,7 @@ package org.opencadc.vospace.db;
 import java.net.URL;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.db.version.InitDatabase;
+import org.opencadc.inventory.db.version.InitDatabaseSI;
 
 /**
  *
@@ -80,20 +80,20 @@ public class InitDatabaseVOS extends ca.nrc.cadc.db.version.InitDatabase {
     private static final Logger log = Logger.getLogger(InitDatabaseVOS.class);
 
     public static final String MODEL_NAME = "vospace-inventory";
-    public static final String MODEL_VERSION = "0.2";
-    public static final String PREV_MODEL_VERSION = "0.1";
-    //public static final String PREV_MODEL_VERSION = "DO-NOT_UPGRADE-BY-ACCIDENT";
+    public static final String MODEL_VERSION = "0.3";
+    public static final String PREV_MODEL_VERSION = "0.2";
     
     static String[] CREATE_SQL = new String[] {
-        "vos.ModelVersion.sql",
-        "vos.Node.sql",
-        "vos.DeletedNodeEvent.sql",
+        "generic.ModelVersion.sql",
+        "vospace.Node.sql",
+        "vospace.DeletedNodeEvent.sql",
+        "generic.HarvestState.sql",
         "generic.PreauthKeyPair.sql",
         "generic.permissions.sql"
     };
     
     static String[] UPGRADE_SQL = new String[] {
-        "generic.PreauthKeyPair.sql",
+        "generic.HarvestState.sql",
         "generic.permissions.sql"
     };
     
@@ -110,6 +110,6 @@ public class InitDatabaseVOS extends ca.nrc.cadc.db.version.InitDatabase {
     @Override
     protected URL findSQL(String fname) {
         // SQL files are stored inside the jar file
-        return InitDatabase.class.getClassLoader().getResource(fname);
+        return InitDatabaseSI.class.getClassLoader().getResource(fname);
     }
 }

@@ -565,6 +565,15 @@ public class NodePersistenceImpl implements NodePersistence {
         if (node.parent == null || dest.parent == null) {
             throw new IllegalArgumentException("args must both be peristent nodes before move");
         }
+        // try to detect attempt to dsconnect from path to root: node is a parent of dest
+        ContainerNode cur = dest;
+        while (!cur.getID().equals(root.getID())) {
+            cur = cur.parent;
+            if (cur.getID().equals(node.getID())) {
+                throw new IllegalArgumentException("invalid destination for move: " + node.getID() + " -> " + dest.getID());
+            }
+            
+        }
 
         Subject caller = AuthenticationUtil.getCurrentSubject();
         node.owner = caller;

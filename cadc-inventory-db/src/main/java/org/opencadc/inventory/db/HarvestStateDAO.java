@@ -176,12 +176,16 @@ public class HarvestStateDAO extends AbstractDAO<HarvestState> {
 
     @Override
     public void put(HarvestState val) {
-        if (curBufferCount < updateBufferCount) {
+        put(val, false);
+    }
+
+    public void put(HarvestState val, boolean forceTimestampUpdate) {
+        if (curBufferCount < updateBufferCount && !forceTimestampUpdate) {
             log.debug("buffering: " + curBufferCount + " < " + updateBufferCount + " " + val);
             curBufferCount++;
             bufferedState = val;
         } else {
-            super.put(val);
+            super.put(val, false, forceTimestampUpdate);
             curBufferCount = 0;
             bufferedState = null;
             

@@ -63,12 +63,9 @@ See <a href="https://github.com/opencadc/reg/tree/master/cadc-registry">cadc-reg
 
 ### cadc-tap-tmp.properties
 Temporary storage of async results is now handled by the 
-[cadc-tap-tmp](https://github.com/opencadc/tap/tree/master/cadc-tap-tmp) library. This
-library should be configured as follows:
-```
-org.opencadc.tap.tmp.TempStorageManager.baseURL = https://{server name}/{luskan path}/results
-org.opencadc.tap.tmp.TempStorageManager.baseStorageDir = {local directory}
-```
+[cadc-tap-tmp](https://github.com/opencadc/tap/tree/master/cadc-tap-tmp) library. `luskan` is configured
+internally to use the `DelegatingStorageManager` to the config file must also specify the storage manager
+to use.
 
 ### luskan.properties
 ```
@@ -102,6 +99,10 @@ worth improving/fixing in the future. Example:
 org.opencadc.luskan.uwsRollover = 180
 ```
 Assuming instances are restarted regularly, this would cause rollover approximatelty once every 6 months.
+
+### cadc-log.properties (optional)
+See <a href="https://github.com/opencadc/core/tree/master/cadc-log">cadc-log</a> for common 
+dynamic logging control.
 
 ### cadcproxy.pem (optional)
 This client certificate is used to make authenticated server-to-server calls for system-level A&A purposes.

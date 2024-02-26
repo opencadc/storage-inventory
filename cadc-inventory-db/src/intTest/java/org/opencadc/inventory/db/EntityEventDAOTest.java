@@ -87,7 +87,7 @@ import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocationEvent;
-import org.opencadc.inventory.db.version.InitDatabase;
+import org.opencadc.inventory.db.version.InitDatabaseSI;
 
 /**
  *
@@ -106,25 +106,31 @@ public class EntityEventDAOTest {
     StorageLocationEventDAO slDAO = new StorageLocationEventDAO();
     
     public EntityEventDAOTest() throws Exception {
-        DBConfig dbrc = new DBConfig();
-        ConnectionConfig cc = dbrc.getConnectionConfig(TestUtil.SERVER, TestUtil.DATABASE);
-        DBUtil.createJNDIDataSource("jdbc/EntityEventDAOTest", cc);
-        
-        Map<String,Object> config = new TreeMap<String,Object>();
-        config.put(SQLGenerator.class.getName(), SQLGenerator.class);
-        config.put("jndiDataSourceName", "jdbc/EntityEventDAOTest");
-        config.put("database", TestUtil.DATABASE);
-        config.put("schema", TestUtil.SCHEMA);
-        daeDAO.setConfig(config);
-        dslDAO.setConfig(config);
-        slDAO.setConfig(config);
+        try {
+            DBConfig dbrc = new DBConfig();
+            ConnectionConfig cc = dbrc.getConnectionConfig(TestUtil.SERVER, TestUtil.DATABASE);
+            DBUtil.createJNDIDataSource("jdbc/EntityEventDAOTest", cc);
+
+            Map<String,Object> config = new TreeMap<String,Object>();
+            config.put(SQLGenerator.class.getName(), SQLGenerator.class);
+            config.put("jndiDataSourceName", "jdbc/EntityEventDAOTest");
+            config.put("database", TestUtil.DATABASE);
+            config.put("invSchema", TestUtil.SCHEMA);
+            config.put("genSchema", TestUtil.SCHEMA);
+            daeDAO.setConfig(config);
+            dslDAO.setConfig(config);
+            slDAO.setConfig(config);
+        } catch (Exception ex) {
+            log.error("setup failed", ex);
+            throw ex;
+        }
     }
     
     @Before
     public void setup()
         throws Exception {
         log.info("init database...");
-        InitDatabase init = new InitDatabase(daeDAO.getDataSource(), TestUtil.DATABASE, TestUtil.SCHEMA);
+        InitDatabaseSI init = new InitDatabaseSI(daeDAO.getDataSource(), TestUtil.DATABASE, TestUtil.SCHEMA);
         init.doInit();
         log.info("init database... OK");
         

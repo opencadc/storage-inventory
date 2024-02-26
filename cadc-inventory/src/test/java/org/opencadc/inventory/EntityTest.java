@@ -68,7 +68,12 @@
 package org.opencadc.inventory;
 
 import ca.nrc.cadc.date.DateUtil;
+import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
+import java.io.File;
+import java.io.FileReader;
+import java.io.LineNumberReader;
+import java.io.PrintWriter;
 import java.net.URI;
 import java.security.MessageDigest;
 import java.text.DateFormat;
@@ -215,6 +220,85 @@ public class EntityTest {
             log.error("unexpected exception", ex);
             Assert.fail("unexpected exception: " + ex);
         }
+    }
+    
+    @Test
+    public void testStableArtifactChecksum() {
+        URI uri = URI.create("cadc:FOO/bar");
+        URI contentChecksum = URI.create("md5:d41d8cd98f00b204e9800998ecf8427e");
+        Date contentLastModified = new Date();
+        Long contentLength = 1024L;
+        
+        try {
+            
+            if (false) {
+                // generate a sample artifact from current code
+                Artifact cur = new Artifact(uri, contentChecksum, contentLastModified, contentLength);
+                cur.contentEncoding = "gzip";
+                cur.contentType = "text/plain";
+                log.info("created: " + cur);
+                final URI mcs1 = cur.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+
+                StringBuilder sb = new StringBuilder();
+                sb.append("uri\tcontentChecksum\tcontentLastModified\tcontentLength\tcontentEncoding\tcontentType\tid\tmetaChecksum\n");
+                sb.append(toTSV(cur, mcs1));
+
+                File out = new File("build/tmp/sample-artifact.tsv");
+                PrintWriter w = new PrintWriter(out);
+                w.println(sb.toString());
+                w.close();
+                log.info("new sample artifact: " + out.getPath());
+            }
+            
+            // check that meta checksum of previous samples is stable
+            final DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+            for (String fname : new String[] {"sample-artifact.tsv", "sample-iris.tsv" }) {
+                File in = FileUtil.getFileFromResource(fname, EntityTest.class);
+                log.info("checking: " + in.getPath());
+
+                LineNumberReader r = new LineNumberReader(new FileReader(in));
+                String line = r.readLine();
+                log.info("header: " + line);
+                line = r.readLine();
+                String[] ss = line.split("[\t]");
+                log.info("IN:\n" + line);
+
+                URI suri = URI.create(ss[0]);
+                URI ccs = URI.create(ss[1]);
+                Date clm = df.parse(ss[2]);
+                Long clen = Long.parseLong(ss[3]);
+                String cenc = ss[4];
+                String ctype = ss[5];
+                UUID id = UUID.fromString(ss[6]);
+                Artifact actual = new Artifact(id, suri, ccs, clm, clen);
+                actual.contentEncoding = cenc;
+                actual.contentType = ctype;
+                URI metaChecksum = URI.create(ss[7]);
+
+                URI recomp = actual.computeMetaChecksum(MessageDigest.getInstance("MD5"));
+                log.info("RE:\n" + toTSV(actual, recomp));
+
+                Assert.assertEquals(in.getName(), metaChecksum, recomp);
+            }
+            
+        } catch (Exception ex) {
+            log.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
+        }
+    }
+    
+    private String toTSV(Artifact cur, URI mcs) {
+        DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+        StringBuilder sb = new StringBuilder();
+        sb.append(cur.getURI().toASCIIString()).append("\t");
+        sb.append(cur.getContentChecksum().toASCIIString()).append("\t");
+        sb.append(df.format(cur.getContentLastModified())).append("\t");
+        sb.append(cur.getContentLength()).append("\t");
+        sb.append(cur.contentEncoding).append("\t");
+        sb.append(cur.contentType).append("\t");
+        sb.append(cur.getID().toString()).append("\t");
+        sb.append(mcs.toASCIIString());
+        return sb.toString();
     }
     
     @Test

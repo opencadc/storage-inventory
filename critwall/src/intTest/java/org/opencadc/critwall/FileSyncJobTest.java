@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2021.                            (c) 2021.
+ *  (c) 2024.                            (c) 2024.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -133,8 +133,9 @@ public class FileSyncJobTest {
             Map<String,Object> config = new TreeMap<String,Object>();
             config.put(SQLGenerator.class.getName(), SQLGenerator.class);
             config.put("jndiDataSourceName", "jdbc/FileSyncJobTest");
-            config.put("database", TestUtil.DATABASE);
-            config.put("schema", TestUtil.SCHEMA);
+            //config.put("database", TestUtil.DATABASE);
+            config.put("invSchema", TestUtil.SCHEMA);
+            config.put("genSchema", TestUtil.SCHEMA);
             dao.setConfig(config);
 
             String testDir = TEST_ROOT + File.separator + "testValidJob";

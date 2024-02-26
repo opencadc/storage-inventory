@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2023.                            (c) 2023.
+*  (c) 2024.                            (c) 2024.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -75,12 +75,18 @@ import java.util.UUID;
  * @author pdowler
  */
 public abstract class Entity extends org.opencadc.persist.Entity {
-
+    // Entity metaChecksum algorithm setup: DO NOT CHANGE
+    private static final boolean ENTITY_TRUNCATE_DATES = false;
+    // this was the default behaviour when SI was deployed 
+    // operationally and the model is not currently vulnerable
+    // to "value shifting" bugs so it is still OK
+    private static final boolean ENTITY_DIGEST_FIELD_NAMES = false;
+    
     public Entity() {
-        super(false);
+        super(ENTITY_TRUNCATE_DATES, ENTITY_DIGEST_FIELD_NAMES);
     }
 
     public Entity(UUID id) {
-        super(id, false);
+        super(id, ENTITY_TRUNCATE_DATES, ENTITY_DIGEST_FIELD_NAMES);
     }
 }

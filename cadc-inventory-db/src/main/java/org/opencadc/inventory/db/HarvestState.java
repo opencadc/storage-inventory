@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2024.                            (c) 2024.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -70,7 +70,6 @@ package org.opencadc.inventory.db;
 import java.net.URI;
 import java.util.Date;
 import java.util.UUID;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Entity;
 import org.opencadc.inventory.InventoryUtil;
@@ -95,6 +94,12 @@ public class HarvestState extends Entity {
      */
     public UUID curID;
     
+    /**
+     * The ID of the current running instance. This is optional and only used by applications 
+     * that share workload between instances.
+     */
+    public UUID instanceID;
+    
     public HarvestState(String name, URI resourceID) { 
         super();
         InventoryUtil.assertNotNull(HarvestState.class, "name", name);
@@ -117,6 +122,7 @@ public class HarvestState extends Entity {
     }
 
     public void setName(String name) {
+        InventoryUtil.assertNotNull(HarvestState.class, "name", name);
         this.name = name;
     }
     

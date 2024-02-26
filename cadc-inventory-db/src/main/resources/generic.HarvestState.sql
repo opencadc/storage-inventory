@@ -3,6 +3,7 @@ create table <schema>.HarvestState (
     resourceID varchar(128),
     curLastModified timestamp,
     curID uuid,
+    instanceID uuid,
 
     lastModified timestamp not null,
     metaChecksum varchar(136) not null,

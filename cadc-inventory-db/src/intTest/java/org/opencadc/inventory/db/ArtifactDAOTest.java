@@ -97,7 +97,7 @@ import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.StoredArtifactComparator;
-import org.opencadc.inventory.db.version.InitDatabase;
+import org.opencadc.inventory.db.version.InitDatabaseSI;
 
 /**
  *
@@ -126,22 +126,23 @@ public class ArtifactDAOTest {
             config.put(SQLGenerator.class.getName(), SQLGenerator.class);
             config.put("jndiDataSourceName", "jdbc/ArtifactDAOTest");
             config.put("database", TestUtil.DATABASE);
-            config.put("schema", TestUtil.SCHEMA);
-            
+            config.put("invSchema", TestUtil.SCHEMA);
+            config.put("genSchema", TestUtil.SCHEMA);
+
             originDAO = new ArtifactDAO();
             originDAO.setConfig(config);
-            
+
             nonOriginDAO = new ArtifactDAO(false);
             nonOriginDAO.setConfig(config);
-            
+
             DBUtil.createJNDIDataSource("jdbc/ArtifactDAOTest-alt", cc);
             Map<String,Object> altConfig = new TreeMap<String,Object>();
             altConfig.put(SQLGenerator.class.getName(), SQLGenerator.class);
             altConfig.put("jndiDataSourceName", "jdbc/ArtifactDAOTest-alt");
             altConfig.put("database", TestUtil.DATABASE);
-            altConfig.put("schema", TestUtil.SCHEMA);
+            altConfig.put("invSchema", TestUtil.SCHEMA);
+            altConfig.put("genSchema", TestUtil.SCHEMA);
             altDAO.setConfig(altConfig);
-            
         } catch (Exception ex) {
             log.error("setup failed", ex);
             throw ex;
@@ -151,7 +152,7 @@ public class ArtifactDAOTest {
     @Before
     public void init_cleanup() throws Exception {
         log.info("init database...");
-        InitDatabase init = new InitDatabase(originDAO.getDataSource(), TestUtil.DATABASE, TestUtil.SCHEMA);
+        InitDatabaseSI init = new InitDatabaseSI(originDAO.getDataSource(), TestUtil.DATABASE, TestUtil.SCHEMA);
         init.doInit();
         log.info("init database... OK");
         

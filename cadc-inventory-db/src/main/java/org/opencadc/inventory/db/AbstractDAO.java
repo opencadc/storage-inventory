@@ -190,8 +190,9 @@ public abstract class AbstractDAO<T extends Entity> {
         Map<String, Class> ret = new TreeMap<String, Class>();
         ret.put("jndiDataSourceName", String.class);
         ret.put("database", String.class);
-        ret.put("schema", String.class);
-        ret.put("vosSchema", String.class); // optional
+        ret.put("invSchema", String.class);
+        ret.put("genSchema", String.class);
+        ret.put("vosSchema", String.class);
         ret.put(SQLGenerator.class.getName(), Class.class);
         return ret;
     }
@@ -224,11 +225,12 @@ public abstract class AbstractDAO<T extends Entity> {
         }
 
         String database = (String) config.get("database");
-        String schema = (String) config.get("schema");
+        String invSchema = (String) config.get("invSchema");
+        String genSchema = (String) config.get("genSchema");
         String vosSchema = (String) config.get("vosSchema");
         try {
-            Constructor<?> ctor = genClass.getConstructor(String.class, String.class, String.class);
-            this.gen = (SQLGenerator) ctor.newInstance(database, schema, vosSchema);
+            Constructor<?> ctor = genClass.getConstructor(String.class, String.class, String.class, String.class);
+            this.gen = (SQLGenerator) ctor.newInstance(database, invSchema, genSchema, vosSchema);
         } catch (Exception ex) {
             throw new RuntimeException("failed to instantiate SQLGenerator: " + genClass.getName(), ex);
         }

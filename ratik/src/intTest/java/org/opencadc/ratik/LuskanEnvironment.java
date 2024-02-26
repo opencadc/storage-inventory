@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2024.                            (c) 2024.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -71,19 +71,17 @@ package org.opencadc.ratik;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
-
 import java.net.URI;
 import java.util.Map;
 import java.util.TreeMap;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.StorageSite;
+import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
-import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
-import org.opencadc.inventory.db.version.InitDatabase;
+import org.opencadc.inventory.db.version.InitDatabaseSI;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 public class LuskanEnvironment {
@@ -109,7 +107,8 @@ public class LuskanEnvironment {
         daoConfig.put(SQLGenerator.class.getName(), SQLGenerator.class);
         daoConfig.put("jndiDataSourceName", jndiPath);
         daoConfig.put("database", TestUtil.LUSKAN_DATABASE);
-        daoConfig.put("schema", TestUtil.LUSKAN_SCHEMA);
+        daoConfig.put("invSchema", TestUtil.LUSKAN_SCHEMA);
+        daoConfig.put("genSchema", TestUtil.LUSKAN_SCHEMA);
 
         storageSiteDAO.setConfig(daoConfig);
         artifactDAO.setConfig(daoConfig);
@@ -118,9 +117,9 @@ public class LuskanEnvironment {
         
         globalArtifactDAO.setConfig(daoConfig);
 
-        new InitDatabase(DBUtil.findJNDIDataSource(jndiPath),
+        new InitDatabaseSI(DBUtil.findJNDIDataSource(jndiPath),
                          (String) daoConfig.get("database"),
-                         (String) daoConfig.get("schema")).doInit();
+                         (String) daoConfig.get("invSchema")).doInit();
     }
 
     void cleanTestEnvironment() throws Exception {

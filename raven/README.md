@@ -108,6 +108,9 @@ org.opencadc.raven.authenticateOnly=true
 When _authenticateOnly_ is `true`, any authenticated user will be able to read/write/delete files and anonymous users
 will be able to read files.
 
+### cadc-log.properties (optional)
+See <a href="https://github.com/opencadc/core/tree/master/cadc-log">cadc-log</a> for common 
+dynamic logging control.
 
 ### cadcproxy.pem (optional)
 This client certificate is used to make authenticated server-to-server calls for system-level A&A purposes.
