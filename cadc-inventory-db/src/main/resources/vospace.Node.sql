@@ -17,12 +17,12 @@ create table <schema>.Node (
 
     -- ContainerNode
     inheritPermissions boolean,
-    delta bigint;
     
     -- DataNode
     busy boolean,
-    storageID varchar(512),
-    storageBucket varchar(5),
+    bytesUsed bigint,
+    storageID varchar(512),   -- Artifact.uri
+    storageBucket varchar(5), -- Artifact.storageBucket
 
     -- LinkNode
     target text,
@@ -32,8 +32,12 @@ create table <schema>.Node (
     id uuid not null primary key
 );
 
+-- usage: vault path navigation
 create unique index node_parent_child on <schema>.Node(parentID,name);
 
+-- usage: Node metadata-sync
 create index node_lastmodified on <schema>.Node(lastModified);
 
+-- usage: vault incremental Artifact to Node for bytesUsed
+-- usage: vault Node vs Artifact validation
 create unique index node_storageID on <schema>.Node(storageID);

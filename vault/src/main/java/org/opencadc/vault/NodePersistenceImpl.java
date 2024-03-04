@@ -266,6 +266,11 @@ public class NodePersistenceImpl implements NodePersistence {
     }
 
     @Override
+    public Set<ContainerNode> getAllocationHolders() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public Set<URI> getAdminProps() {
         return Collections.unmodifiableSet(ADMIN_PROPS);
     }
@@ -323,9 +328,7 @@ public class NodePersistenceImpl implements NodePersistence {
                 if (cd != null) {
                     ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTDATE, df.format(cd)));
                 }
-                // TODO: a.getContentLength() is correct, but might differ from dn.bytesUsed?? eg eventual consistency
-                // child listing iterator can only report dn.bytesUsed
-                ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, a.getContentLength().toString()));
+                
                 // assume MD5
                 ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTMD5, a.getContentChecksum().getSchemeSpecificPart()));
                 
@@ -335,17 +338,17 @@ public class NodePersistenceImpl implements NodePersistence {
                 if (a.contentType != null) {
                     ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_TYPE, a.contentType));
                 }
-            } else if (dn.bytesUsed != null) {
-                ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, dn.bytesUsed.toString()));
-            } else {
-                // default size to 0
-                ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "0"));
+                // TODO: a.getContentLength() is correct, but might differ from dn.bytesUsed due to eventual consistency
+                // child listing iterator can only report dn.bytesUsed
+                // correct or consistency with listing??
+                
+                // currently needed for consistency-requiring FilesTest
+                log.warn("DataNode.bytesUsed: " + dn.bytesUsed + " -> " + a.getContentLength());
+                dn.bytesUsed = a.getContentLength();
             }
-        } else if (ret instanceof ContainerNode) {
-            ContainerNode cn = (ContainerNode) ret;
-            if (cn.bytesUsed != null) {
-                // TBD: long num = bytesUsed + cn.delta; // include unpropagated delta in output??
-                ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, cn.bytesUsed.toString()));
+            if (dn.bytesUsed == null) {
+                log.warn("DataNode.bytesUsed: 0 (no artifact)");
+                dn.bytesUsed = 0L; // no data stored
             }
         }
         return ret;
@@ -415,20 +418,12 @@ public class NodePersistenceImpl implements NodePersistence {
             ret.owner = s;
             ret.ownerDisplay = identityManager.toDisplayString(ret.owner);
 
-            // props
             if (ret instanceof DataNode) {
                 DataNode dn = (DataNode) ret;
-                if (dn.bytesUsed != null) {
-                    ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, dn.bytesUsed.toString()));
-                } // TBD: default to 0?
-            } else if (ret instanceof ContainerNode) {
-                ContainerNode cn = (ContainerNode) ret;
-                if (cn.bytesUsed != null) {
-                    // TBD: long num = bytesUsed + cn.delta; // include unpropagated delta in output??
-                    ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, cn.bytesUsed.toString()));
-                } // TBD: default to 0?
-            } // no size for LinkNode
-            
+                if (dn.bytesUsed == null) {
+                    dn.bytesUsed = 0L;
+                }
+            }
             return ret;
         }
 
@@ -734,5 +729,10 @@ public class NodePersistenceImpl implements NodePersistence {
                 log.error("rollback artifact txn: OK");
             }
         }
+    }
+    
+    // needed by vault-migrate to configure a HarvestStateDAO for delete processing
+    public Map<String, Object> getNodeDaoConfig() {
+        return nodeDaoConfig;
     }
 }

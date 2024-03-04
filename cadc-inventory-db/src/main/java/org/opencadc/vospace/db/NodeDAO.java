@@ -99,21 +99,6 @@ public class NodeDAO extends AbstractDAO<Node> {
         super.put(val);
     }
 
-    /**
-     * Update that optionally includes extended content. Extended content is computed 
-     * or transient fields that do not trigger a metaChecksum change so would normally 
-     * be skipped.
-     * 
-     * @param val the Node to update
-     * @param extendedUpdate true to force db update
-     * @param timestampUpdate true to force lastModified update
-     */
-    @Override
-    protected void put(Node val, boolean extendedUpdate, boolean timestampUpdate) {
-        super.put(val, extendedUpdate, timestampUpdate);
-    }
-    
-    
     @Override
     public Node lock(Node n) {
         if (n == null) {

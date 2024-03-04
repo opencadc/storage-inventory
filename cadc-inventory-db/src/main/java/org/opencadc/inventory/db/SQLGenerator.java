@@ -261,7 +261,6 @@ public class SQLGenerator {
                 "readWriteGroups",
                 "properties",
                 "inheritPermissions",
-                "delta",
                 "bytesUsed",
                 "busy",
                 "storageID",
@@ -1520,10 +1519,8 @@ public class SQLGenerator {
             if (value instanceof ContainerNode) {
                 ContainerNode cn = (ContainerNode) value;
                 safeSetBoolean(prep, col++, cn.inheritPermissions);
-                safeSetLong(prep, col++, cn.delta);
             } else {
                 safeSetBoolean(prep, col++, null);
-                safeSetLong(prep, col++, null);
             } 
             
             // bytesUsed is in between CN and DN specific columns
@@ -1975,7 +1972,6 @@ public class SQLGenerator {
         final String rawRWG = rs.getString(col++);
         final String rawProps = rs.getString(col++);
         final Boolean inheritPermissions = Util.getBoolean(rs, col++);
-        final Long delta = Util.getLong(rs, col++);
         final Long bytesUsed = Util.getLong(rs, col++);
         final Boolean busy = Util.getBoolean(rs, col++);
         final URI storageID = Util.getURI(rs, col++);
@@ -1991,7 +1987,6 @@ public class SQLGenerator {
             ContainerNode cn = new ContainerNode(id, name);
             cn.inheritPermissions = inheritPermissions;
             cn.bytesUsed = bytesUsed;
-            cn.delta = (delta == null ? 0 : delta);
             ret = cn;
         } else if (nodeType.equals("D")) {
             DataNode dn = new DataNode(id, name, storageID);

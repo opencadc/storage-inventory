@@ -217,7 +217,6 @@ public class NodeDAOTest {
         ContainerNode c = (ContainerNode) a;
         Assert.assertEquals(orig.inheritPermissions, c.inheritPermissions);
         Assert.assertEquals(orig.bytesUsed, c.bytesUsed);
-        Assert.assertEquals(orig.delta, c.delta);
         
         // these are set in put
         Assert.assertEquals(orig.getMetaChecksum(), a.getMetaChecksum());
@@ -253,8 +252,6 @@ public class NodeDAOTest {
         ContainerNode uc = (ContainerNode) updated;
         Assert.assertEquals(orig.inheritPermissions, uc.inheritPermissions);
         Assert.assertEquals(orig.bytesUsed, uc.bytesUsed);
-        Assert.assertEquals(orig.delta, uc.delta);
-        
         
         nodeDAO.delete(orig.getID());
         Node gone = nodeDAO.get(orig.getID());
@@ -318,7 +315,6 @@ public class NodeDAOTest {
         ContainerNode c = (ContainerNode) a;
         Assert.assertEquals(orig.inheritPermissions, c.inheritPermissions);
         Assert.assertEquals(orig.bytesUsed, c.bytesUsed);
-        Assert.assertEquals(orig.delta, c.delta);
         
         // these are set in put
         Assert.assertEquals(orig.getMetaChecksum(), a.getMetaChecksum());
@@ -358,7 +354,6 @@ public class NodeDAOTest {
         ContainerNode uc = (ContainerNode) updated;
         Assert.assertEquals(orig.inheritPermissions, uc.inheritPermissions);
         Assert.assertEquals(orig.bytesUsed, uc.bytesUsed);
-        Assert.assertEquals(orig.delta, uc.delta);
         
         nodeDAO.delete(orig.getID());
         Node gone = nodeDAO.get(orig.getID());
@@ -622,7 +617,6 @@ public class NodeDAOTest {
         Assert.assertEquals(cnode.getName(), c1.getName());
         Assert.assertEquals(root.getID(), c1.parentID);
         Assert.assertNull(c1.bytesUsed);
-        Assert.assertEquals(0L, c1.delta);
         
         final DataNode d1 = (DataNode) nodeDAO.get(dnode.getID());
         Assert.assertNotNull(d1);
@@ -637,37 +631,19 @@ public class NodeDAOTest {
         
         log.info("update DataNode");
         d1.bytesUsed = 123L;
-        nodeDAO.put(d1, true, false);
+        nodeDAO.put(d1);
         final DataNode d2 = (DataNode) nodeDAO.get(dnode.getID());
         Assert.assertNotNull(d2);
         Assert.assertNotNull(d2.bytesUsed);
         Assert.assertEquals(d1.bytesUsed, d2.bytesUsed);
-        URI dcs2 = d2.computeMetaChecksum(MessageDigest.getInstance("MD5"));
-        Assert.assertEquals(dnode.getMetaChecksum(), dcs2); // no update
-        Assert.assertEquals(dnode.getLastModified(), d2.getLastModified()); // no update
-        
-        log.info("update ContainerNode.delta");
-        c1.delta = 123L;
-        nodeDAO.put(c1, true, false);
-        final ContainerNode c2 = (ContainerNode) nodeDAO.get(cnode.getID());
-        Assert.assertNotNull(c2);
-        Assert.assertEquals(123L, c2.delta);
-        URI ccs2 = c2.computeMetaChecksum(MessageDigest.getInstance("MD5"));
-        Assert.assertEquals(cnode.getMetaChecksum(), ccs2); // no update
-        Assert.assertEquals(cnode.getLastModified(), c2.getLastModified()); // no update
         
         log.info("update ContainerNode.bytesUsed");
-        c2.bytesUsed = c2.delta;
-        c2.delta = 0L;
-        nodeDAO.put(c2, true, false);
-        final ContainerNode c3 = (ContainerNode) nodeDAO.get(cnode.getID());
-        Assert.assertNotNull(c3);
-        Assert.assertEquals(0L, c3.delta);
-        Assert.assertNotNull(c3.bytesUsed);
-        Assert.assertEquals(123L, c3.bytesUsed.longValue());
-        URI ccs3 = c3.computeMetaChecksum(MessageDigest.getInstance("MD5"));
-        Assert.assertEquals(cnode.getMetaChecksum(), ccs3); // no update
-        Assert.assertEquals(cnode.getLastModified(), c3.getLastModified()); // no update
+        c1.bytesUsed = 123L;
+        nodeDAO.put(c1);
+        final ContainerNode c2 = (ContainerNode) nodeDAO.get(cnode.getID());
+        Assert.assertNotNull(c2);
+        Assert.assertNotNull(c2.bytesUsed);
+        Assert.assertEquals(123L, c2.bytesUsed.longValue());
 
         nodeDAO.delete(dnode.getID());
         nodeDAO.delete(cnode.getID());

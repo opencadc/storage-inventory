@@ -96,12 +96,10 @@ public class GetAction extends HeadAction {
     public void doAction() throws Exception {
         DataNode node = resolveAndSetMetadata();
 
-        for (NodeProperty prop : node.getProperties()) {
-            if (prop.getKey().equals(VOS.PROPERTY_URI_CONTENTLENGTH) && prop.getValue().equals("0")) {
-                // empty file
-                syncOutput.setCode(HttpURLConnection.HTTP_NO_CONTENT);
-                return;
-            }
+        if (node.bytesUsed == null || node.bytesUsed == 0L) {
+            // empty file
+            syncOutput.setCode(HttpURLConnection.HTTP_NO_CONTENT);
+            return;
         }
 
         VOSURI targetURI = localServiceURI.getURI(node);
