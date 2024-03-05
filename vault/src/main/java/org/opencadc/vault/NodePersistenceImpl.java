@@ -80,10 +80,12 @@ import ca.nrc.cadc.util.MultiValuedProperties;
 import java.io.IOException;
 import java.net.URI;
 import java.text.DateFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
@@ -160,6 +162,7 @@ public class NodePersistenceImpl implements NodePersistence {
     private final boolean singlePool;
     
     private final ContainerNode root;
+    private final List<ContainerNode> allocationParents = new ArrayList<>();
     private final Namespace storageNamespace;
     
     private final boolean localGroupsOnly;
@@ -191,6 +194,35 @@ public class NodePersistenceImpl implements NodePersistence {
         root.ownerID = identityManager.toOwner(root.owner);
         root.isPublic = true;
         root.inheritPermissions = false;
+        
+        // allocations
+        for (String ap : VaultInitAction.getAllocationParents(config)) {
+            if (ap.isEmpty()) {
+                // allocations are in root
+                allocationParents.add(root);
+                log.info("allocationParent: /");
+            } else {
+                try {
+
+                    // simple top-level names only
+                    ContainerNode cn = (ContainerNode) get(root, ap);
+                    String str = "";
+                    if (cn == null) {
+                        cn = new ContainerNode(ap);
+                        cn.parent = root;
+                        str = "created/";
+                    }
+                    cn.isPublic = true;
+                    cn.owner = root.owner;
+                    cn.inheritPermissions = false;
+                    put(cn);
+                    allocationParents.add(cn);
+                    log.info(str + "loaded allocationParent: /" + cn.getName());
+                } catch (NodeNotSupportedException bug) {
+                    throw new RuntimeException("BUG: failed to update isPublic=true on allocationParent " + ap, bug);
+                }
+            }
+        }
 
         String ns = config.getFirstPropertyValue(VaultInitAction.STORAGE_NAMESPACE_KEY);
         this.storageNamespace = new Namespace(ns);
@@ -266,8 +298,34 @@ public class NodePersistenceImpl implements NodePersistence {
     }
 
     @Override
-    public Set<ContainerNode> getAllocationHolders() {
-        throw new UnsupportedOperationException();
+    public boolean isAllocation(ContainerNode cn) {
+        if (cn.parent == null) {
+            return false; // root is never an allocation
+        }
+        ContainerNode p = cn.parent;
+        for (ContainerNode ap : allocationParents) {
+            if (absoluteEquals(p.parent, ap)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    private boolean absoluteEquals(ContainerNode c1, ContainerNode c2) {
+        // note: cavern does not use/preserve Node.id except for root
+        if (!c1.getName().equals(c2.getName())) {
+            return false;
+        }
+        // same name, check parents
+        if (c1.parent == null && c2.parent == null) {
+            // both root
+            return true;
+        }
+        if (c1.parent == null || c2.parent == null) {
+            // one is root
+            return false;
+        }
+        return absoluteEquals(c1.parent, c2.parent);
     }
 
     @Override
