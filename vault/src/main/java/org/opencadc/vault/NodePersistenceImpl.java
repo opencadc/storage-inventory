@@ -112,6 +112,7 @@ import org.opencadc.vospace.db.NodeDAO;
 import org.opencadc.vospace.io.NodeWriter;
 import org.opencadc.vospace.server.LocalServiceURI;
 import org.opencadc.vospace.server.NodePersistence;
+import org.opencadc.vospace.server.Utils;
 import org.opencadc.vospace.server.Views;
 import org.opencadc.vospace.server.transfers.TransferGenerator;
 
@@ -160,6 +161,7 @@ public class NodePersistenceImpl implements NodePersistence {
     private final boolean singlePool;
     
     private final ContainerNode root;
+    private final Set<ContainerNode> allocationParents = new TreeSet<>();
     private final Namespace storageNamespace;
     
     private final boolean localGroupsOnly;
@@ -203,6 +205,33 @@ public class NodePersistenceImpl implements NodePersistence {
             log.debug("Using consistency strategy: " + this.preventNotFound);
         } else {
             throw new IllegalStateException("invalid config: missing/invalid preventNotFound configuration");
+        }
+        for (String ap : VaultInitAction.getAllocParentsConfig(config)) {
+            if (ap.isEmpty()) {
+                // allocations are in root
+                allocationParents.add(root);
+                log.info("allocationParent: /");
+            } else {
+                try {
+
+                    // simple top-level names only
+                    ContainerNode cn = (ContainerNode) get(root, ap);
+                    String str = "";
+                    if (cn == null) {
+                        cn = new ContainerNode(ap);
+                        cn.parent = root;
+                        str = "created/";
+                    }
+                    cn.isPublic = true;
+                    cn.owner = root.owner;
+                    cn.inheritPermissions = false;
+                    put(cn);
+                    allocationParents.add(cn);
+                    log.info(str + "loaded allocationParent: /" + cn.getName());
+                } catch (NodeNotSupportedException bug) {
+                    throw new RuntimeException("BUG: failed to update isPublic=true on allocationParent " + ap, bug);
+                }
+            }
         }
     }
     
@@ -263,6 +292,20 @@ public class NodePersistenceImpl implements NodePersistence {
     @Override
     public ContainerNode getRootNode() {
         return root;
+    }
+
+    @Override
+    public boolean isAllocation(ContainerNode cn) {
+        if (cn.parent == null) {
+            return false; // root is never an allocation
+        }
+        for (ContainerNode ap : allocationParents) {
+            if (Utils.getPath(ap).equals(Utils.getPath(cn.parent))) {
+                // same node
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override

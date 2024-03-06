@@ -1,7 +1,7 @@
 # Storage Inventory VOSpace-2.1 service (vault)
 
-The `vault` servcie is an implementation of the <a href="https://www.ivoa.net/documents/VOSpace/">IVOA VOSpace</a>
-specification designed to co-exist with other storage-inventory components. It provides a heirarchical data
+The `vault` service is an implementation of the <a href="https://www.ivoa.net/documents/VOSpace/">IVOA VOSpace</a>
+specification designed to co-exist with other storage-inventory components. It provides a hierarchical data
 organization laye on top of the storage management of storage-inventory.
 
 The simplest configuration would be to deploy `vault` with `minoc` with a single metadata database and single
@@ -80,6 +80,9 @@ A vault.properties file in /config is required to run this service.  The followi
 # service identity
 org.opencadc.vault.resourceID = ivo://{authority}/{name}
 
+# (optional) identify which container nodes are allocations
+org.opencadc.vault.allocationParent = {top level node}
+
 # consistency settings
 org.opencadc.vault.consistency.preventNotFound=true|false
 
@@ -95,6 +98,15 @@ org.opencadc.vault.root.owner = {owner of root node}
 org.opencadc.vault.storage.namespace = {a storage inventory namespace to use}
 ```
 The vault _resourceID_ is the resourceID of _this_ vault service.
+
+The _allocationParent_ is a path to a container node (directory) which contains space allocations. An allocation
+is owned by a user (usually different from the _rootOwner_ admin user) who is responsible for the allocation
+and all content therein. The owner of an allocation is granted additional permissions within their
+allocation (they can read/write/delete anything) so the owner cannot be blocked from access to any content
+within their allocation. This probably only matters for multi-user projects. Multiple _allocationParent_(s) may
+be configured to organise the top level of the content (e.g. /home and /projects). Paths configured to be
+_allocationParent_(s) will be automatically created (if necessary), owned by the _rootOwner_, and will be
+anonymously readable (public). Limitation: only top-level container nodes can be configured as _allocationParent_(s
 
 The _preventNotFound_ key can be used to configure `vault` to prevent artifact-not-found errors that might 
 result due to the eventual consistency nature of the storage system by directly checking for the artifact at 
