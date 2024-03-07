@@ -81,6 +81,7 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Before;
 import org.junit.Ignore;
+import org.opencadc.gms.GroupURI;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
@@ -103,11 +104,24 @@ public class TransferTest extends org.opencadc.conformance.vos.TransferTest {
     static String SERVER = "VAULT_TEST";
     static String DATABASE = "cadctest";
     static String SCHEMA = "inventory";
-    
-    private static File ADMIN_CERT = FileUtil.getFileFromResource("vault-test.pem", NodesTest.class);
+
+    static final URI RESOURCE_ID;
+    private static File TEST_CERT;
+    static final File AUTH_TEST_CERT;
+    static final GroupURI AUTH_TEST_GROUP;
+
+    static {
+        RESOURCE_ID = URI.create("ivo://opencadc.org/vault");
+        TEST_CERT = FileUtil.getFileFromResource("vault-test.pem", TransferTest.class);
+        AUTH_TEST_CERT = FileUtil.getFileFromResource("cavern-auth-test.pem", TransferTest.class);
+        AUTH_TEST_GROUP = new GroupURI(URI.create("ivo://cadc.nrc.ca/gms?opencadc-vospace-test"));
+    }
     
     public TransferTest() {
-        super(URI.create("ivo://opencadc.org/vault"), ADMIN_CERT);
+        super(URI.create("ivo://opencadc.org/vault"), TEST_CERT);
+
+        // enables testDataNodePermission, AUTH_TEST_CERT user is a member of AUTH_TEST_GROUP.
+        super.enableTestDataNodePermission(AUTH_TEST_GROUP, AUTH_TEST_CERT);
     }
     
     @Before
