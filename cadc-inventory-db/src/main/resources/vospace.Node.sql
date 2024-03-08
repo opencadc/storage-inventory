@@ -6,7 +6,6 @@ create table <schema>.Node (
     nodeType char(1) not null,
 
     ownerID varchar(256) not null,
-    bytesUsed bigint,
     isPublic boolean,
     isLocked boolean,
     readOnlyGroups text,
@@ -21,8 +20,9 @@ create table <schema>.Node (
     -- DataNode
     busy boolean,
     bytesUsed bigint,
-    storageID varchar(512),   -- Artifact.uri
-    storageBucket varchar(5), -- Artifact.storageBucket
+    -- Artifact.uri and Artifact.uriBucket
+    storageID varchar(512),
+    storageBucket varchar(5),
 
     -- LinkNode
     target text,
