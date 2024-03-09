@@ -94,7 +94,6 @@ import org.opencadc.inventory.db.TestUtil;
 import org.opencadc.inventory.db.version.InitDatabaseSI;
 import org.opencadc.vospace.ContainerNode;
 import org.opencadc.vospace.DataNode;
-import org.opencadc.vospace.Node;
 import org.opencadc.vospace.db.InitDatabaseVOS;
 import org.opencadc.vospace.db.NodeDAO;
 
@@ -181,39 +180,38 @@ public class ArtifactSyncWorkerTest {
     }
     
     @Test
-    public void testSyncArtifact() {
+    public void testSyncArtifact() throws Exception {
         UUID rootID = new UUID(0L, 0L);
         ContainerNode root = new ContainerNode(rootID, "root");
 
         // create the data node
-        DataNode orig = new DataNode(UUID.randomUUID(), "data-test", URI.create("cadc:vault/" + UUID.randomUUID()));
-        orig.parent = root;
+        Namespace siNamespace = new Namespace("myorg:VOS/");
+        URI artifactURI = URI.create(siNamespace.getNamespace() + UUID.randomUUID());
+        DataNode orig = new DataNode(UUID.randomUUID(), "data-test", artifactURI);
+        orig.parentID = root.getID();
         orig.ownerID = "the-owner";
         orig.isPublic = true;
         orig.isLocked = false;
         nodeDAO.put(orig);
 
         // get-by-id
-        Node a = nodeDAO.get(orig.getID());
-        Assert.assertNotNull(a);
-        log.info("found: "  + a.getID() + " aka " + a);
+        DataNode actual = (DataNode)nodeDAO.get(orig.getID());
+        Assert.assertNotNull(actual);
+        log.info("found: "  + actual.getID() + " aka " + actual);
         Assert.assertNull(orig.bytesUsed);
 
         // create the corresponding artifact
-        Long length = 666L;
-        Namespace siNamespace = new Namespace("cadc:VOS/");
-        String artifactURI = siNamespace.getNamespace() + "root/filename";
         Artifact expected = new Artifact(
-                URI.create(artifactURI),
+                artifactURI,
                 URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                 new Date(),
-                length);
+                666L);
         log.info("expected: " + expected);
 
         artifactDAO.put(expected);
-        Artifact actual = artifactDAO.get(expected.getID());
+        Artifact actualArtifact = artifactDAO.get(expected.getID());
         Assert.assertNotNull(actual);
-        Assert.assertEquals(length, actual.getContentLength());
+        Assert.assertEquals(expected.getContentLength(), actualArtifact.getContentLength());
 
         String hsName = "ArtifactSize";
         URI resourceID = URI.create("ivo://myorg.org/vospace");
@@ -224,11 +222,22 @@ public class ArtifactSyncWorkerTest {
         ArtifactSyncWorker asWorker = new ArtifactSyncWorker(harvestStateDAO, hs, artifactDAO, siNamespace);
         asWorker.run();
 
-        a = nodeDAO.get(orig.getID());
-        Assert.assertNotNull(a);
-        log.info("found: "  + a.getID() + " aka " + a);
-        Assert.assertEquals(length, orig.bytesUsed);
+        actual = (DataNode)nodeDAO.get(orig.getID());
+        Assert.assertNotNull(actual);
+        log.info("found: "  + actual.getID() + " aka " + actual);
+        Assert.assertEquals(expected.getContentLength(), actual.bytesUsed);
 
+        // update
+        Thread.sleep(20L);
+        expected = new Artifact(expected.getURI(), expected.getMetaChecksum(), new Date(), 333L);
+        artifactDAO.put(expected);
+        actual = (DataNode)nodeDAO.get(orig.getID());
+        Assert.assertNotEquals(expected.getContentLength(), actual.bytesUsed);
+
+        // do the update
+        asWorker.run();
+        actual = (DataNode)nodeDAO.get(orig.getID());
+        Assert.assertEquals(expected.getContentLength(), actual.bytesUsed);
 
     }
 

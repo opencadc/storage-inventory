@@ -67,7 +67,9 @@
 
 package org.opencadc.inventory;
 
+import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
+import java.io.IOException;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.HarvestState;
@@ -84,7 +86,7 @@ public class ArtifactSyncWorker implements Runnable {
     private static final Logger log = Logger.getLogger(ArtifactSyncWorker.class);
 
     private final HarvestState harvestState;
-    private final NodeDAO nodeDAO = null;
+    private final NodeDAO nodeDAO;
     private final ArtifactDAO artifactDAO;
     private final HarvestStateDAO harvestStateDAO;
     private final Namespace storageNamespace;
@@ -92,7 +94,7 @@ public class ArtifactSyncWorker implements Runnable {
     public ArtifactSyncWorker(HarvestStateDAO harvestStateDAO, HarvestState harvestState, ArtifactDAO artifactDAO, Namespace namespace) {
         this.harvestState = harvestState;
         this.harvestStateDAO = harvestStateDAO;
-        //this.nodeDAO = new NodeDAO(harvestStateDAO);
+        this.nodeDAO = new NodeDAO(harvestStateDAO);
         this.artifactDAO = artifactDAO;
         this.storageNamespace = namespace;
     }
@@ -101,29 +103,33 @@ public class ArtifactSyncWorker implements Runnable {
     public void run() {
         log.debug("Start harvesting " + harvestState.toString() + " at " + harvestState.curLastModified);
 
-        //ResourceIterator<Artifact> iter = artifactDAO.iterator(storageNamespace, null, harvestState.curLastModified, true);
-        ResourceIterator<Artifact> iter = null;
-        while (iter.hasNext()) {
-            Artifact artifact = iter.next();
-            DataNode node = null; //nodeDAO.getDataNode(artifact.getURI());
-            if (!node.bytesUsed.equals(artifact.getContentLength())) {
-                node.bytesUsed = artifact.getContentLength();
-                nodeDAO.getTransactionManager().startTransaction();
-                try {
-                    nodeDAO.put(node);
-                    harvestState.curLastModified = artifact.getLastModified();
-                    harvestState.curID = node.getID();
-                    harvestStateDAO.put(harvestState, true);
-                    nodeDAO.getTransactionManager().commitTransaction();
-                    log.debug("Updated size of data node " + node.getName());
-                } catch (Exception ex) {
-                    log.debug("Failed to update data node size for " + node.getName(), ex);
-                    nodeDAO.getTransactionManager().rollbackTransaction();
-                    throw ex;
+        try (final ResourceIterator<Artifact> iter = artifactDAO.iterator(storageNamespace, null,
+                harvestState.curLastModified, true)) {
+            while (iter.hasNext()) {
+                Artifact artifact = iter.next();
+                DataNode node = nodeDAO.getDataNode(artifact.getURI());
+                if ((node != null) && !artifact.getContentLength().equals(node.bytesUsed)) {
+                    node.bytesUsed = artifact.getContentLength();
+                    TransactionManager tm = nodeDAO.getTransactionManager();
+                    tm.startTransaction();
+                    try {
+                        nodeDAO.put(node);
+                        harvestState.curLastModified = artifact.getLastModified();
+                        harvestState.curID = node.getID();
+                        harvestStateDAO.put(harvestState, true);
+                        tm.commitTransaction();
+                        log.debug("Updated size of data node " + node.getName());
+                    } catch (Exception ex) {
+                        log.debug("Failed to update data node size for " + node.getName(), ex);
+                        tm.rollbackTransaction();
+                        throw ex;
+                    }
                 }
             }
+        } catch (IOException ex) {
+            //log.error("Error closing iterator", ex);
+            throw new RuntimeException("error while closing ResourceIterator", ex);
         }
-
         log.debug("End harvesting " + harvestState.toString() + " at " + harvestState.curLastModified);
 
     }
