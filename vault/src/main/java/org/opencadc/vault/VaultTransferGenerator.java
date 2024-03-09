@@ -193,8 +193,8 @@ public class VaultTransferGenerator implements TransferGenerator {
             log.debug("requested protocol: " + p);
             if (!protoURIs.contains(p.getUri())) {
                 Protocol anonProto = new Protocol(p.getUri());
-                anonProto.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
-                artifactTrans.getProtocols().add(p);
+                //anonProto.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
+                artifactTrans.getProtocols().add(anonProto);
                 protoURIs.add(p.getUri());
                 log.debug("Added anon protocol for " + p.getUri());
             }

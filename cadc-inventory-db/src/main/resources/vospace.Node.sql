@@ -10,7 +10,7 @@ create table <schema>.Node (
     isLocked boolean,
     readOnlyGroups text,
     readWriteGroups text,
-    
+
     -- store all props in a 2D array
     properties text[][],
 
@@ -19,7 +19,10 @@ create table <schema>.Node (
     
     -- DataNode
     busy boolean,
+    bytesUsed bigint,
+    -- Artifact.uri and Artifact.uriBucket
     storageID varchar(512),
+    storageBucket varchar(5),
 
     -- LinkNode
     target text,
@@ -29,6 +32,12 @@ create table <schema>.Node (
     id uuid not null primary key
 );
 
+-- usage: vault path navigation
 create unique index node_parent_child on <schema>.Node(parentID,name);
 
+-- usage: Node metadata-sync
 create index node_lastmodified on <schema>.Node(lastModified);
+
+-- usage: vault incremental Artifact to Node for bytesUsed
+-- usage: vault Node vs Artifact validation
+create unique index node_storageID on <schema>.Node(storageID);

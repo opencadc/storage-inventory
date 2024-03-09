@@ -69,6 +69,7 @@ package org.opencadc.vault;
 
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.rest.InitAction;
+import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.util.RsaSignatureGenerator;
@@ -76,6 +77,8 @@ import ca.nrc.cadc.uws.server.impl.InitDatabaseUWS;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.KeyPair;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import javax.naming.Context;
@@ -115,9 +118,8 @@ public class VaultInitAction extends InitAction {
     static final String INVENTORY_SCHEMA_KEY = VAULT_KEY + ".inventory.schema";
     static final String VOSPACE_SCHEMA_KEY = VAULT_KEY + ".vospace.schema";
     static final String SINGLE_POOL_KEY = VAULT_KEY + ".singlePool";
-
-    static final String ROOT_OWNER = VAULT_KEY + ".root.owner"; // numeric?
-
+    static final String ALLOCATION_PARENT = VAULT_KEY + ".allocationParent";
+    static final String ROOT_OWNER = VAULT_KEY + ".root.owner";
     static final String STORAGE_NAMESPACE_KEY = VAULT_KEY + ".storage.namespace";
 
     MultiValuedProperties props;
@@ -125,6 +127,7 @@ public class VaultInitAction extends InitAction {
     private Namespace storageNamespace;
     private Map<String, Object> vosDaoConfig;
     private Map<String, Object> invDaoConfig;
+    private List<String> allocationParents = new ArrayList<>();
 
     private String jndiNodePersistence;
     private String jndiPreauthKeys;
@@ -237,6 +240,26 @@ public class VaultInitAction extends InitAction {
         }
 
         return mvp;
+    }
+
+    static List<String> getAllocationParents(MultiValuedProperties props) {
+        List<String> ret = new ArrayList<>();
+        for (String sap : props.getProperty(ALLOCATION_PARENT)) {
+            String ap = sap;
+            if (ap.charAt(0) == '/') {
+                ap = ap.substring(1);
+            }
+            if (ap.length() > 0 && ap.charAt(ap.length() - 1) == '/') {
+                ap = ap.substring(0, ap.length() - 1);
+            }
+            if (ap.indexOf('/') >= 0) {
+                throw new InvalidConfigException("invalid " + ALLOCATION_PARENT + ": " + sap
+                    + " reason: must be a top-level container node name");
+            }
+            // empty string means root, otherwise child of root
+            ret.add(ap);
+        }
+        return ret;
     }
 
     static Map<String, Object> getDaoConfig(MultiValuedProperties props) {

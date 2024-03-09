@@ -139,15 +139,14 @@ public class HeadAction extends RestAction {
         if (!(node instanceof DataNode)) {
             throw new IllegalArgumentException("Resolved target is not a data node: " + Utils.getPath(node));
         }
+        
+        log.debug("node path resolved: " + node.getName() + " type: " + node.getClass().getName());
 
-        VOSURI nodeURI = localServiceURI.getURI(node);
-
-        log.debug("node path resolved: " + node.getName());
-        log.debug("node type: " + node.getClass().getCanonicalName());
-        syncOutput.setHeader("Content-Disposition", "inline; filename=\"" + nodeURI.getName() + "\"");
+        DataNode dn = (DataNode) node;
+        syncOutput.setHeader("Content-Length", dn.bytesUsed);
+        syncOutput.setHeader("Content-Disposition", "inline; filename=\"" + node.getName() + "\"");
         syncOutput.setHeader("Content-Type", node.getPropertyValue(VOS.PROPERTY_URI_TYPE));
         syncOutput.setHeader("Content-Encoding", node.getPropertyValue(VOS.PROPERTY_URI_CONTENTENCODING));
-        syncOutput.setHeader("Content-Length", node.getPropertyValue(VOS.PROPERTY_URI_CONTENTLENGTH));
         if (node.getPropertyValue(VOS.PROPERTY_URI_DATE) != null) {
             Date lastMod = NodeWriter.getDateFormat().parse(node.getPropertyValue(VOS.PROPERTY_URI_DATE));
             syncOutput.setLastModified(lastMod);

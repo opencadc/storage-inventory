@@ -80,10 +80,12 @@ import ca.nrc.cadc.util.MultiValuedProperties;
 import java.io.IOException;
 import java.net.URI;
 import java.text.DateFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
@@ -160,6 +162,7 @@ public class NodePersistenceImpl implements NodePersistence {
     private final boolean singlePool;
     
     private final ContainerNode root;
+    private final List<ContainerNode> allocationParents = new ArrayList<>();
     private final Namespace storageNamespace;
     
     private final boolean localGroupsOnly;
@@ -191,6 +194,35 @@ public class NodePersistenceImpl implements NodePersistence {
         root.ownerID = identityManager.toOwner(root.owner);
         root.isPublic = true;
         root.inheritPermissions = false;
+        
+        // allocations
+        for (String ap : VaultInitAction.getAllocationParents(config)) {
+            if (ap.isEmpty()) {
+                // allocations are in root
+                allocationParents.add(root);
+                log.info("allocationParent: /");
+            } else {
+                try {
+
+                    // simple top-level names only
+                    ContainerNode cn = (ContainerNode) get(root, ap);
+                    String str = "";
+                    if (cn == null) {
+                        cn = new ContainerNode(ap);
+                        cn.parent = root;
+                        str = "created/";
+                    }
+                    cn.isPublic = true;
+                    cn.owner = root.owner;
+                    cn.inheritPermissions = false;
+                    put(cn);
+                    allocationParents.add(cn);
+                    log.info(str + "loaded allocationParent: /" + cn.getName());
+                } catch (NodeNotSupportedException bug) {
+                    throw new RuntimeException("BUG: failed to update isPublic=true on allocationParent " + ap, bug);
+                }
+            }
+        }
 
         String ns = config.getFirstPropertyValue(VaultInitAction.STORAGE_NAMESPACE_KEY);
         this.storageNamespace = new Namespace(ns);
@@ -266,6 +298,37 @@ public class NodePersistenceImpl implements NodePersistence {
     }
 
     @Override
+    public boolean isAllocation(ContainerNode cn) {
+        if (cn.parent == null) {
+            return false; // root is never an allocation
+        }
+        ContainerNode p = cn.parent;
+        for (ContainerNode ap : allocationParents) {
+            if (absoluteEquals(p.parent, ap)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    private boolean absoluteEquals(ContainerNode c1, ContainerNode c2) {
+        // note: cavern does not use/preserve Node.id except for root
+        if (!c1.getName().equals(c2.getName())) {
+            return false;
+        }
+        // same name, check parents
+        if (c1.parent == null && c2.parent == null) {
+            // both root
+            return true;
+        }
+        if (c1.parent == null || c2.parent == null) {
+            // one is root
+            return false;
+        }
+        return absoluteEquals(c1.parent, c2.parent);
+    }
+
+    @Override
     public Set<URI> getAdminProps() {
         return Collections.unmodifiableSet(ADMIN_PROPS);
     }
@@ -324,7 +387,6 @@ public class NodePersistenceImpl implements NodePersistence {
                     ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTDATE, df.format(cd)));
                 }
                 
-                ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, a.getContentLength().toString()));
                 // assume MD5
                 ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTMD5, a.getContentChecksum().getSchemeSpecificPart()));
                 
@@ -334,9 +396,17 @@ public class NodePersistenceImpl implements NodePersistence {
                 if (a.contentType != null) {
                     ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_TYPE, a.contentType));
                 }
-            } else {
-                // default size to 0
-                ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "0"));
+                // TODO: a.getContentLength() is correct, but might differ from dn.bytesUsed due to eventual consistency
+                // child listing iterator can only report dn.bytesUsed
+                // correct or consistency with listing??
+                
+                // currently needed for consistency-requiring FilesTest
+                log.warn("DataNode.bytesUsed: " + dn.bytesUsed + " -> " + a.getContentLength());
+                dn.bytesUsed = a.getContentLength();
+            }
+            if (dn.bytesUsed == null) {
+                log.warn("DataNode.bytesUsed: 0 (no artifact)");
+                dn.bytesUsed = 0L; // no data stored
             }
         }
         return ret;
@@ -360,18 +430,19 @@ public class NodePersistenceImpl implements NodePersistence {
         }
         NodeDAO dao = getDAO();
         ResourceIterator<Node> ret = dao.iterator(parent, limit, start);
-        return new IdentWrapper(parent, ret);
+        return new ChildNodeWrapper(parent, ret);
     }
     
-    private class IdentWrapper implements ResourceIterator<Node> {
+    // wrapper to add parent, owner, and props to child nodes
+    private class ChildNodeWrapper implements ResourceIterator<Node> {
 
         private final ContainerNode parent;
         private final ResourceIterator<Node> childIter;
         
-        private IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
-        private Map<Object, Subject> identCache = new TreeMap<>();
+        private final IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
+        private final Map<Object, Subject> identCache = new TreeMap<>();
         
-        IdentWrapper(ContainerNode parent, ResourceIterator<Node> childIter) {
+        ChildNodeWrapper(ContainerNode parent, ResourceIterator<Node> childIter) {
             this.parent = parent;
             this.childIter = childIter;
             // prime cache with caller
@@ -395,6 +466,8 @@ public class NodePersistenceImpl implements NodePersistence {
         public Node next() {
             Node ret = childIter.next();
             ret.parent = parent;
+
+            // owner
             Subject s = identCache.get(ret.ownerID);
             if (s == null) {
                 s = identityManager.toSubject(ret.ownerID);
@@ -402,6 +475,13 @@ public class NodePersistenceImpl implements NodePersistence {
             }
             ret.owner = s;
             ret.ownerDisplay = identityManager.toDisplayString(ret.owner);
+
+            if (ret instanceof DataNode) {
+                DataNode dn = (DataNode) ret;
+                if (dn.bytesUsed == null) {
+                    dn.bytesUsed = 0L;
+                }
+            }
             return ret;
         }
 
@@ -707,5 +787,10 @@ public class NodePersistenceImpl implements NodePersistence {
                 log.error("rollback artifact txn: OK");
             }
         }
+    }
+    
+    // needed by vault-migrate to configure a HarvestStateDAO for delete processing
+    public Map<String, Object> getNodeDaoConfig() {
+        return nodeDaoConfig;
     }
 }
