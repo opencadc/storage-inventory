@@ -162,7 +162,7 @@ public class HeadAction extends RestAction {
             }
         }
         syncOutput.setCode(200);
-        return (DataNode)node;
+        return dn;
     }
 
 }

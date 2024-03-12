@@ -304,7 +304,7 @@ public class NodePersistenceImpl implements NodePersistence {
         }
         ContainerNode p = cn.parent;
         for (ContainerNode ap : allocationParents) {
-            if (absoluteEquals(p.parent, ap)) {
+            if (absoluteEquals(p, ap)) {
                 return true;
             }
         }

@@ -87,9 +87,9 @@ public class FilesTest extends org.opencadc.conformance.vos.FilesTest {
         Log4jInit.setLevel("org.opencadc.vospace", Level.DEBUG);
     }
 
-    private static File ADMIN_CERT = FileUtil.getFileFromResource("vault-test.pem", FilesTest.class);
-
     public FilesTest() {
-        super(URI.create("ivo://opencadc.org/vault"), ADMIN_CERT);
+        super(Constants.RESOURCE_ID, Constants.ADMIN_CERT);
+        
+        enableTestDataNodePermission(Constants.ALT_CERT);
     }
 }

@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2023.                            (c) 2023.
+*  (c) 2024.                            (c) 2024.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,93 +65,93 @@
 ************************************************************************
 */
 
-package org.opencadc.vault;
+package org.opencadc.vault.metadata;
 
-import ca.nrc.cadc.db.ConnectionConfig;
-import ca.nrc.cadc.db.DBConfig;
-import ca.nrc.cadc.db.DBUtil;
-import ca.nrc.cadc.util.FileUtil;
-import ca.nrc.cadc.util.Log4jInit;
-import java.io.File;
 import java.net.URI;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
-import org.apache.log4j.Level;
+import java.util.Date;
+import java.util.UUID;
 import org.apache.log4j.Logger;
-import org.junit.Before;
-import org.junit.Ignore;
-import org.opencadc.inventory.StorageSite;
-import org.opencadc.inventory.db.SQLGenerator;
-import org.opencadc.inventory.db.StorageSiteDAO;
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.db.HarvestState;
+import org.opencadc.inventory.db.HarvestStateDAO;
 
 /**
- *
+ * Main artifact-sync agent that enables incremental sync of Artifact
+ * metadata to Node.
+ * 
  * @author pdowler
  */
-public class TransferTest extends org.opencadc.conformance.vos.TransferTest {
-    private static final Logger log = Logger.getLogger(TransferTest.class);
+public class ArtifactSync implements Runnable {
+    private static final Logger log = Logger.getLogger(ArtifactSync.class);
 
-    static {
-        Log4jInit.setLevel("org.opencadc.vault", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.conformance.vos", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.vospace", Level.INFO);
-        Log4jInit.setLevel("ca.nrc.cadc.net", Level.INFO);
-    }
+    private static final long SHORT_SLEEP = 12000L;
+    private static final long LONG_SLEEP = 2 * SHORT_SLEEP;
+    private static final long EVICT_AGE = 3 * LONG_SLEEP;
     
-    // these are the same as raven intTest
-    static String SERVER = "VAULT_TEST";
-    static String DATABASE = "cadctest";
-    static String SCHEMA = "inventory";
+    private final UUID instanceID = UUID.randomUUID();
+    private final HarvestStateDAO dao;
+    private String name = Artifact.class.getSimpleName();
+    private URI resourceID = URI.create("jdbc/inventory");
     
-    public TransferTest() {
-        super(Constants.RESOURCE_ID, Constants.ADMIN_CERT);
-        enableTestDataNodePermission(Constants.ALT_GROUP, Constants.ALT_CERT);
-    }
-    
-    @Before
-    public void checkGlobal() throws Exception {
-        // make sure inventory.StorageSite has a readable/writable ivo://opencadc.org/minoc
+    public ArtifactSync(HarvestStateDAO dao) { 
+        this.dao = dao;
         
-        try {
-            DBConfig dbrc = new DBConfig();
-            ConnectionConfig cc = dbrc.getConnectionConfig(SERVER, DATABASE);
-            DBUtil.createJNDIDataSource("jdbc/inventory", cc);
+        // fenwick setup for production workload:
+        //dao.setUpdateBufferCount(99); // buffer 99 updates, do every 100
+        //dao.setMaintCount(999); // buffer 999 so every 1000 real updates aka every 1e5 events
+        
+        // here, we need timestamp updates to retain leader status, so
+        // dao.setMaintCount(9999); // every 1e4
+    }
 
-            Map<String,Object> config = new TreeMap<String,Object>();
-            config.put(SQLGenerator.class.getName(), SQLGenerator.class);
-            config.put("jndiDataSourceName", "jdbc/inventory");
-            config.put("invSchema", SCHEMA);
-            config.put("genSchema", SCHEMA);
+    @Override
+    public void run() {
+        try {
+            Thread.sleep(SHORT_SLEEP);
             
-            StorageSiteDAO dao = new StorageSiteDAO(false);
-            dao.setConfig(config);
-            Set<StorageSite> sites = dao.list();
-            if (sites.isEmpty()) {
-                StorageSite ss = new StorageSite(URI.create("ivo://opencadc.org/minoc"), "vault-test-minoc", true, true);
-                dao.put(ss);
-                log.info("created record in local db: " + ss);
+            while (true) {
+                boolean leader = false;
+                log.debug("check leader " + instanceID);
+                HarvestState state = dao.get(name, resourceID);
+                log.debug("check leader " + instanceID + " found: " + state);
+                if (state.instanceID == null) {
+                    state.instanceID = instanceID;
+                    dao.put(state);
+                    state = dao.get(state.getID());
+                    log.debug("created: " + state);
+                }
+                if (instanceID.equals(state.instanceID)) {
+                    log.debug("still the leader...");
+                    dao.put(state, true);
+                    leader = true;
+                } else {
+                    // see if we should perform a coup...
+                    Date now = new Date();
+                    long age = now.getTime() - state.getLastModified().getTime();
+                    if (age > EVICT_AGE) {
+                        
+                        state.instanceID = instanceID;
+                        dao.put(state);
+                        state = dao.get(state.getID());
+                        leader = true;
+                        log.debug("EVICTED " + state.instanceID + " because age " + age + " > " + EVICT_AGE);
+                    }
+                }
+
+                if (leader) {
+                    log.debug("leader " + state.instanceID + " starting worker...");
+                    // TODO
+                    dao.flushBufferedState();
+                    Thread.sleep(SHORT_SLEEP / 2L); // for testing
+                    log.debug("idle leader " + state.instanceID + " sleep=" + SHORT_SLEEP);
+                    Thread.sleep(SHORT_SLEEP);
+                } else {
+                    log.debug("not leader: sleep=" + LONG_SLEEP);
+                    Thread.sleep(LONG_SLEEP);
+                }
             }
-            sites = dao.list();
-            for (StorageSite ss : sites) {
-                log.info("storage sites in local db: " + ss);
-            }
-        } catch (Exception ex) {
-            log.error("setup failed", ex);
-            throw ex;
+        } catch (InterruptedException ex) {
+            log.debug("interrupted - assuming shutdown", ex);
         }
     }
-
-    @Override
-    public void asyncMoveTest() {
-        super.asyncMoveTest();
-    }
-
-    @Ignore
-    @Override
-    public void syncPushPullTest() {
-        super.syncPushPullTest();
-    }
-    
-    
 }
