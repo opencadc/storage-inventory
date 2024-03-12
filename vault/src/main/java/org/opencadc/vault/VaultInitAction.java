@@ -419,7 +419,7 @@ public class VaultInitAction extends InitAction {
     
     private void initAvailabilityCheck() {
         StorageSiteDAO storageSiteDAO = new StorageSiteDAO();
-        storageSiteDAO.setConfig(getDaoConfig(props));
+        storageSiteDAO.setConfig(getInvConfig(props));
 
         this.jndiSiteAvailabilities = appName + "-" + StorageSiteAvailabilityCheck.class.getName();
         terminateAvailabilityCheck();
