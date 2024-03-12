@@ -736,13 +736,14 @@ public class SQLGenerator {
         
         @Override
         public ResourceIterator<Artifact> query(DataSource ds) {
-            StringBuilder select = getSelectFromSQL(Artifact.class, false);
-            StringBuilder sb = new StringBuilder(" WHERE");
-            int whereLen = sb.length();
-            
+            StringBuilder sb = new StringBuilder();
+            boolean where = false;
             if (storageLocationRequired != null && storageLocationRequired) {
                 // ArtifactDAO.storedIterator
+                sb.append(" WHERE");
+                where = true;
                 if (storageBucket != null) {
+                    
                     sb.append(" storageLocation_storageBucket LIKE ? AND");
                 }
                 sb.append(" storageLocation_storageID IS NOT NULL");
@@ -755,33 +756,51 @@ public class SQLGenerator {
                     sb.append(" ORDER BY storageLocation_storageBucket, storageLocation_storageID");
                 }
             } else if (storageLocationRequired != null && !storageLocationRequired) {
+                // ArtifactDAO.unstoredIterator
+                sb.append(" WHERE");
+                where = true;
                 sb.append(" storageLocation_storageID IS NULL");
             }
             
+            // optional params:
+            // uriBucket
+            // siteID
+            // namespace
+            // minLastModified
             if (uriBucket != null) {
-                // ArtifactDAO.iterator(null, ...)
-                if (sb.length() > whereLen) {
+                if (where) {
                     sb.append(" AND");
+                } else {
+                    sb.append(" WHERE");
+                    where = true;
                 }
                 sb.append(" uriBucket LIKE ?");
             }
             if (siteID != null) {
                 // ArtifactDAO.iterator(UUID, ...)
-                if (sb.length() > whereLen) {
+                if (where) {
                     sb.append(" AND");
+                } else {
+                    sb.append(" WHERE");
+                    where = true;
                 }
                 sb.append(" siteLocations @> ARRAY[?]");
             } 
             if (namespace != null) {
-                // ArtifactDAO.iterator(Namespace, ...)
-                if (sb.length() > whereLen) {
+                if (where) {
                     sb.append(" AND");
+                } else {
+                    sb.append(" WHERE");
+                    where = true;
                 }
                 sb.append(" uri LIKE ?");
             }
             if (minLastModified != null) {
-                if (sb.length() > whereLen) {
+                if (where) {
                     sb.append(" AND");
+                } else {
+                    sb.append(" WHERE");
+                    where = true;
                 }
                 sb.append(" lastModified >= ?");
             }
@@ -793,16 +812,11 @@ public class SQLGenerator {
                 }
             }
             
-            if (sb.length() > whereLen) {
-                select.append(sb.toString());
-            }
+            StringBuilder select = getSelectFromSQL(Artifact.class, false);
+            select.append(sb.toString());
             String sql = select.toString();
-            log.warn("sql: " + sql);
+            log.debug("sql: " + sql);
             
-            // params:
-            // storageBucket OR uriBucket
-            // siteID
-            // namespace
             try {
                 Connection con = ds.getConnection();
                 log.debug("ArtifactIterator: setAutoCommit(false)");
@@ -1774,7 +1788,7 @@ public class SQLGenerator {
         private final Connection con;
         private final ResultSet rs;
         boolean hasRow;
-        boolean closeWhenDone = false; // not a pooled connection
+        boolean closeWhenDone = true; // return to pool | assume close suppressed for static connections
         
         ArtifactResultSetIterator(Connection con, ResultSet rs) throws SQLException {
             this.con = con;
