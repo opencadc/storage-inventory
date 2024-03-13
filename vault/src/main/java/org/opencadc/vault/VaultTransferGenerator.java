@@ -70,7 +70,6 @@ package org.opencadc.vault;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.IdentityManager;
 import ca.nrc.cadc.net.ResourceNotFoundException;
-import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.uws.Parameter;
 import ca.nrc.cadc.vosi.Availability;
 import java.io.IOException;
@@ -193,7 +192,6 @@ public class VaultTransferGenerator implements TransferGenerator {
             log.debug("requested protocol: " + p);
             if (!protoURIs.contains(p.getUri())) {
                 Protocol anonProto = new Protocol(p.getUri());
-                //anonProto.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
                 artifactTrans.getProtocols().add(anonProto);
                 protoURIs.add(p.getUri());
                 log.debug("Added anon protocol for " + p.getUri());

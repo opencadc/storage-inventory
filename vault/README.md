@@ -106,7 +106,7 @@ _all known_ sites. It only makes sense to enable this when `vault` is running in
 genuine not-found cases: transfer negotiation to GET the file that was never PUT.
 
 The _allocationParent_ is a path to a container node (directory) which contains space allocations. An allocation
-is owned by a user (uisually different from the _rootOwner_ admin user) who is responsible for the allocation
+is owned by a user (usually different from the _rootOwner_ admin user) who is responsible for the allocation
 and all conntent therein. The owner of an allocation is granted additional permissions within their 
 allocation (they can read/write/delete anything) so the owner cannot be blocked from access to any content
 within their allocation. This probably only matters for multi-user projects. Multiple _allocationParent_(s) may
