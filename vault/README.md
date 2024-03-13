@@ -83,6 +83,9 @@ org.opencadc.vault.resourceID = ivo://{authority}/{name}
 # consistency settings
 org.opencadc.vault.consistency.preventNotFound=true|false
 
+# (optional) identify which container nodes are allocations
+org.opencadc.vault.allocationParent = {top level node}
+
 # vault database settings
 org.opencadc.vault.inventory.schema = {inventory schema name}
 org.opencadc.vault.vospace.schema = {vospace schema name}
@@ -101,6 +104,15 @@ result due to the eventual consistency nature of the storage system by directly 
 _all known_ sites. It only makes sense to enable this when `vault` is running in a global inventory (along with
 `raven` and/or `fenwick` instances syncing artifact metadata. This feature introduces an overhead for the 
 genuine not-found cases: transfer negotiation to GET the file that was never PUT.
+
+The _allocationParent_ is a path to a container node (directory) which contains space allocations. An allocation
+is owned by a user (usually different from the _rootOwner_ admin user) who is responsible for the allocation
+and all conntent therein. The owner of an allocation is granted additional permissions within their 
+allocation (they can read/write/delete anything) so the owner cannot be blocked from access to any content
+within their allocation. This probably only matters for multi-user projects. Multiple _allocationParent_(s) may
+be configured to organise the top level of the content (e.g. /home and /projects). Paths configured to be 
+_allocationParent_(s) will be automatically created (if necessary), owned by the _rootOwner_, and will be
+anonymously readable (public). Limitation: only a single level of top-level _allocationParent_(s) are supported.
 
 The _inventory.schema_ name is the name of the database schema used for all inventory database objects. This 
 currently must be "inventory" due to configuration limitations in <a href="../luskan">luskan</a>.

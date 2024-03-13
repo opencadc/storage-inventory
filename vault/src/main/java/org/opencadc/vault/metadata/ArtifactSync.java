@@ -65,51 +65,93 @@
 ************************************************************************
 */
 
-package org.opencadc.vospace.db;
+package org.opencadc.vault.metadata;
 
-import java.net.URL;
-import javax.sql.DataSource;
+import java.net.URI;
+import java.util.Date;
+import java.util.UUID;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.db.version.InitDatabaseSI;
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.db.HarvestState;
+import org.opencadc.inventory.db.HarvestStateDAO;
 
 /**
- *
+ * Main artifact-sync agent that enables incremental sync of Artifact
+ * metadata to Node.
+ * 
  * @author pdowler
  */
-public class InitDatabaseVOS extends ca.nrc.cadc.db.version.InitDatabase {
-    private static final Logger log = Logger.getLogger(InitDatabaseVOS.class);
+public class ArtifactSync implements Runnable {
+    private static final Logger log = Logger.getLogger(ArtifactSync.class);
 
-    public static final String MODEL_NAME = "vospace-inventory";
-    public static final String MODEL_VERSION = "0.15";
-    public static final String PREV_MODEL_VERSION = "0.3";
+    private static final long SHORT_SLEEP = 12000L;
+    private static final long LONG_SLEEP = 2 * SHORT_SLEEP;
+    private static final long EVICT_AGE = 3 * LONG_SLEEP;
     
-    static String[] CREATE_SQL = new String[] {
-        "generic.ModelVersion.sql",
-        "vospace.Node.sql",
-        "vospace.DeletedNodeEvent.sql",
-        "generic.HarvestState.sql",
-        "generic.PreauthKeyPair.sql",
-        "generic.permissions.sql"
-    };
+    private final UUID instanceID = UUID.randomUUID();
+    private final HarvestStateDAO dao;
+    private String name = Artifact.class.getSimpleName();
+    private URI resourceID = URI.create("jdbc/inventory");
     
-    static String[] UPGRADE_SQL = new String[] {
-        "vospace.upgrade-0.15.sql",
-        "generic.permissions.sql"
-    };
-    
-    public InitDatabaseVOS(DataSource ds, String database, String schema) { 
-        super(ds, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
-        for (String s : CREATE_SQL) {
-            createSQL.add(s);
-        }
-        for (String s : UPGRADE_SQL) {
-            upgradeSQL.add(s);
-        }
+    public ArtifactSync(HarvestStateDAO dao) { 
+        this.dao = dao;
+        
+        // fenwick setup for production workload:
+        //dao.setUpdateBufferCount(99); // buffer 99 updates, do every 100
+        //dao.setMaintCount(999); // buffer 999 so every 1000 real updates aka every 1e5 events
+        
+        // here, we need timestamp updates to retain leader status, so
+        // dao.setMaintCount(9999); // every 1e4
     }
 
     @Override
-    protected URL findSQL(String fname) {
-        // SQL files are stored inside the jar file
-        return InitDatabaseSI.class.getClassLoader().getResource(fname);
+    public void run() {
+        try {
+            Thread.sleep(SHORT_SLEEP);
+            
+            while (true) {
+                boolean leader = false;
+                log.debug("check leader " + instanceID);
+                HarvestState state = dao.get(name, resourceID);
+                log.debug("check leader " + instanceID + " found: " + state);
+                if (state.instanceID == null) {
+                    state.instanceID = instanceID;
+                    dao.put(state);
+                    state = dao.get(state.getID());
+                    log.debug("created: " + state);
+                }
+                if (instanceID.equals(state.instanceID)) {
+                    log.debug("still the leader...");
+                    dao.put(state, true);
+                    leader = true;
+                } else {
+                    // see if we should perform a coup...
+                    Date now = new Date();
+                    long age = now.getTime() - state.getLastModified().getTime();
+                    if (age > EVICT_AGE) {
+                        
+                        state.instanceID = instanceID;
+                        dao.put(state);
+                        state = dao.get(state.getID());
+                        leader = true;
+                        log.debug("EVICTED " + state.instanceID + " because age " + age + " > " + EVICT_AGE);
+                    }
+                }
+
+                if (leader) {
+                    log.debug("leader " + state.instanceID + " starting worker...");
+                    // TODO
+                    dao.flushBufferedState();
+                    Thread.sleep(SHORT_SLEEP / 2L); // for testing
+                    log.debug("idle leader " + state.instanceID + " sleep=" + SHORT_SLEEP);
+                    Thread.sleep(SHORT_SLEEP);
+                } else {
+                    log.debug("not leader: sleep=" + LONG_SLEEP);
+                    Thread.sleep(LONG_SLEEP);
+                }
+            }
+        } catch (InterruptedException ex) {
+            log.debug("interrupted - assuming shutdown", ex);
+        }
     }
 }

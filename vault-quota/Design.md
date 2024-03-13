@@ -1,17 +1,44 @@
 # vault quota design/algorithms
 
 The definitive source of content-length (file size) of a DataNode comes from the
-`inventory.Artifact` table and it not known until a PUT to storage is completed.
+`inventory.Artifact` table and is not known until a PUT to storage is completed.
 In the case of a `vault` service co-located with a single storage site (`minoc`),
 the new Artifact is visible in the database as soon as the PUT to `minoc` is
 completed. In the case of a `vault` service co-located with a global SI, the new 
 Artifact is visible in the database once it is synced from the site of the PUT to 
 the global database by `fenwick` (or worst case: `ratik`).
 
+## NOTE
+This design was for supporting propagation of space used up the tree so that
+allocation space used was dynamically updated as content was modified. While the
+algorithm for doing that is nominally viable, the algorithm to validate and repair
+incorrect container node sizes in a live system is excessively complex and probably
+impossible to implement in practice (deadlocks, excessive database load and query
+processing, etc).
+
+**This design will not be completed and implemented** and is retained here for future 
+reference.
+
 ## TODO
 The design below only takes into account incremental propagation of space used 
 by stored files. It is not complete/verified until we also come up with a validation
 algorithm that can detect and fix discrepancies in a live `vault`.
+
+## operations that effect node size
+The following operations effect node size:
+* delete node removed the node and applies a negative delta to parent
+* recursive delete will need to update twice as many nodes in small transactions
+* move node will applies a negative delta to previous parent and positive delta to new parent
+* copy applies a positive delta to new parent
+* transfer negotiation needs to check allocationNode quota vs size to allow a put to proceed
+
+This has to be done entirely inside the NodePersistence implementation; that should be feasible
+since the argument of NodePersistence methods is the previously retrieved node with the full parent
+tree intact. It's not clear which of these will require changes in cadc-vos-server, but if they do 
+it will need to be possible for them to be optional and/or gracefully not do anything.
+
+In any case, any solution with container node delta(s) is inherently multi-threaded because 
+user requests can modify them.
 
 ## DataNode size algorithm:
 This is an event watcher that gets Artifact events (after a PUT) and intiates the
@@ -51,7 +78,7 @@ for each ContainerNode:
 The above sequence finds candidate propagations, locks (order: parent-child), 
 and applies the propagation. This moves the outstanding delta up the tree one level. If the
 sequence acts on multiple child containers before the parent, the delta(s) naturally
-_merge_ and there are fewer larger delta propagations in the upper part of the tree.
+_merge_ and fewer delta propagations occur in the upper part of the tree.
 
 The most generic implementation is to iterate over container nodes:
 ```
@@ -105,27 +132,24 @@ Iterator<DataNode> niter = nodeDAO.iterator(bucket);      // storageBucket,stora
 ### ContainerNode vs child nodes discrepancies
 These can be validated in 
 ```
-discrepancy 1: container size > sum(child sizes)
-explanation: un-propagated delete
-evidence: sum(child delta) < 0
+discrepancy 1: container size != sum(child size)
+explanation: un-propagated delta from put or delete
+evidence: sum(child delta) != 0
 action: none
 
-discrepancy 1: container size > sum(child sizes)
+discrepancy 1: container size != sum(child size)
 explanation: bug
 evidence: sum(child delta) == 0
-action: fix container size, set container.delta
-
-discrepancy 1: container size < sum(child sizes)
-explanation: un-propagated delta
-evidence: sum(child delta) > 0
-action: none
-
-discrepancy 1: container size < sum(child sizes)
-explanation: bug
-evidence: sum(child delta) == 0
-action: fix container size, set container.delta
+action: fix?? container size, set container.delta
 ```
-Required lock order: locks the parent of a parent-children relationship.
+Required lock order: locks the parent of a parent-children relationship so propagations are blocked,
+then do the aggregate query (select sum(child size), sum(child delta) where parentID=?)
+but child state is still not stable (delete child node, move child out, copy/move node in, 
+sync child nodes from remote) so all of these would have to lock in the same order to avoid deadlock.
+I don't see any way to avoid deadlocks when user requests can lock multiple nodes.
+
+Recursive delete, container size propagation, datanode validation, and container validation can will 
+all potentially modify child delta(s).
 
 The most generic implementation is to iterate over container nodes:
 ```

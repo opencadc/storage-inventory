@@ -88,13 +88,10 @@ public class NodesTest extends org.opencadc.conformance.vos.NodesTest {
         Log4jInit.setLevel("org.opencadc.vospace", Level.DEBUG);
     }
     
-    private static File ADMIN_CERT = FileUtil.getFileFromResource("vault-test.pem", NodesTest.class);
-    
     public NodesTest() {
-        super(URI.create("ivo://opencadc.org/vault"), ADMIN_CERT);
+        super(Constants.RESOURCE_ID, Constants.ADMIN_CERT);
         
-        File altCert = FileUtil.getFileFromResource("vault-auth-test.pem", NodesTest.class);
-        enablePermissionTests(new GroupURI(URI.create("ivo://cadc.nrc.ca/gms?opencadc-vospace-test")), altCert);
+        enablePermissionTests(Constants.ALT_GROUP, Constants.ALT_CERT);
         
         // vault does not check the actual groups in the permission props tests, hence they can be made up.
         enablePermissionPropsTest(new GroupURI(URI.create("ivo://myauth/gms?gr1")), new GroupURI(URI.create("ivo://myauth/gms?gr2")));

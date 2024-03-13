@@ -96,7 +96,7 @@ paths:
             $ref: '#/definitions/Node'
     delete:
       description: |
-        Delete a node. When the target is a ContainerNode, all its children (the contents of the container) SHALL also be deleted.
+        Delete a node. To delete a non-empty ContainerNode, see async-delete below.
       tags:
         - Nodes
       responses:
@@ -315,7 +315,7 @@ paths:
           schema:
             $ref: '#/definitions/Error'
       parameters:
-        - name: nodeURI
+        - name: target
           in: query
           description: The base node (typically a container) to recursively delete
           required: true

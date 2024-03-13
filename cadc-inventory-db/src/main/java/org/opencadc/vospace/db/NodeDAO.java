@@ -68,11 +68,13 @@
 package org.opencadc.vospace.db;
 
 import ca.nrc.cadc.io.ResourceIterator;
+import java.net.URI;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.db.AbstractDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.vospace.ContainerNode;
+import org.opencadc.vospace.DataNode;
 import org.opencadc.vospace.Node;
 import org.springframework.jdbc.BadSqlGrammarException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -88,21 +90,15 @@ public class NodeDAO extends AbstractDAO<Node> {
         super(true);
     }
     
-    // needed by vault migration tool: untested
     public NodeDAO(boolean origin) {
         super(origin);
     }
 
     @Override
     public void put(Node val) {
-        // TBD: caller can assign parent or parentID before put, but here we need 
-        // parentID and it must be assigned before metaChecksum compute in super.put()
-        if (val.parentID == null && val.parent != null) {
-            val.parentID = val.parent.getID();
-        }
         super.put(val);
     }
-    
+
     @Override
     public Node lock(Node n) {
         if (n == null) {
@@ -113,6 +109,7 @@ public class NodeDAO extends AbstractDAO<Node> {
     }
     
     public Node get(UUID id) {
+        checkInit();
         return super.get(Node.class, id);
     }
     
@@ -131,6 +128,25 @@ public class NodeDAO extends AbstractDAO<Node> {
         } finally {
             long dt = System.currentTimeMillis() - t;
             log.debug("GET: " + parent.getID() + " + " + name + " " + dt + "ms");
+        }
+        throw new RuntimeException("BUG: handleInternalFail did not throw");
+    }
+    
+    public DataNode getDataNode(URI storageID) {
+        checkInit();
+        log.debug("GET: " + storageID);
+        long t = System.currentTimeMillis();
+
+        try {
+            JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+            SQLGenerator.NodeGet get = (SQLGenerator.NodeGet) gen.getEntityGet(Node.class);
+            get.setStorageID(storageID);
+            return (DataNode) get.execute(jdbc);
+        } catch (BadSqlGrammarException ex) {
+            handleInternalFail(ex);
+        } finally {
+            long dt = System.currentTimeMillis() - t;
+            log.debug("GET: " + storageID + " " + dt + "ms");
         }
         throw new RuntimeException("BUG: handleInternalFail did not throw");
     }
@@ -159,6 +175,14 @@ public class NodeDAO extends AbstractDAO<Node> {
         super.delete(Node.class, id);
     }
     
+    /**
+     * Get iterator of child nodes.
+     * 
+     * @param parent the container node to list
+     * @param limit max number of nodes to return, or null
+     * @param start list starting point, or null
+     * @return iterator of child nodes matching the arguments
+     */
     public ResourceIterator<Node> iterator(ContainerNode parent, Integer limit, String start) {
         if (parent == null) {
             throw new IllegalArgumentException("childIterator: parent cannot be null");

@@ -94,6 +94,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.StoredArtifactComparator;
@@ -955,6 +956,9 @@ public class ArtifactDAOTest {
     public void testArtifactIterator() {
         int num = 10;
         try {
+            final Date startDate = new Date();
+            Thread.sleep(10L);
+            
             int numArtifacts = 0;
             int numStuffExpected = 0;
             // artifacts with storageLocation
@@ -977,6 +981,7 @@ public class ArtifactDAOTest {
                     numStuffExpected++;
                 }
             }
+            
             // some artifacts with no storageLocation
             collection = "STUFF";
             for (int i = num; i < 2 * num; i++) {
@@ -996,6 +1001,12 @@ public class ArtifactDAOTest {
                     numStuffExpected++;
                 }
             }
+            
+            Thread.sleep(10L);
+            final Date midDate = new Date();
+            Thread.sleep(10L);
+            final int midNumStuff = numStuffExpected;
+            
             // some artifacts with siteLocations
             UUID siteID = UUID.randomUUID();
             int numSiteExpected = 0;
@@ -1018,6 +1029,8 @@ public class ArtifactDAOTest {
                     numStuffExpected++;
                 }
             }
+            Thread.sleep(10L);
+            final Date endDate = new Date();
             log.info("added: " + numArtifacts);
             
             log.info("count all...");
@@ -1032,13 +1045,14 @@ public class ArtifactDAOTest {
             Assert.assertEquals("count", numArtifacts, count);
             
             log.info("count with criteria...");
+            final Namespace ns = new Namespace("cadc:STUFF/");
             count = 0;
-            try (ResourceIterator<Artifact> iter = originDAO.iterator("uri like 'cadc:STUFF/%'", null, false)) {
+            try (ResourceIterator<Artifact> iter = originDAO.iterator(ns, null, false)) {
                 while (iter.hasNext()) {
                     Artifact actual = iter.next();
                     count++;
                     log.info("found: " + actual.getURI());
-                    Assert.assertTrue("STUFF", actual.getURI().toASCIIString().startsWith("cadc:STUFF/"));
+                    Assert.assertTrue("STUFF", actual.getURI().toASCIIString().startsWith(ns.getNamespace()));
                 }
             }
             Assert.assertEquals("count", numStuffExpected, count);
@@ -1065,7 +1079,8 @@ public class ArtifactDAOTest {
                     while (iter.hasNext()) {
                         Artifact actual = iter.next();
                         count++;
-                        log.info("found: " + actual.getURI());
+                        log.info("found: " + actual.getBucket() + " " + actual.getURI());
+                        Assert.assertTrue(actual.getBucket().startsWith(bpre));
                     }
                 }
             }
@@ -1075,17 +1090,55 @@ public class ArtifactDAOTest {
             count = 0;
             for (byte b = 0; b < 16; b++) {
                 String bpre = HexUtil.toHex(b).substring(1);
-                log.debug("bucket prefix: " + bpre);
-                try (ResourceIterator<Artifact> iter = originDAO.iterator("uri like 'cadc:STUFF/%'", bpre, false)) {
+                log.info("bucket prefix: " + bpre);
+                try (ResourceIterator<Artifact> iter = originDAO.iterator(ns, bpre, false)) {
                     while (iter.hasNext()) {
                         Artifact actual = iter.next();
                         count++;
-                        log.info("found: " + actual.getURI());
-                        Assert.assertTrue("STUFF", actual.getURI().toASCIIString().startsWith("cadc:STUFF/"));
+                        log.info("found: " + actual.getBucket() + " " + actual.getURI());
+                        Assert.assertTrue(actual.getBucket().startsWith(bpre));
+                        Assert.assertTrue("STUFF", actual.getURI().toASCIIString().startsWith(ns.getNamespace()));
                     }
                 }
             }
             Assert.assertEquals("count", numStuffExpected, count);
+            
+            log.info("count vs Namespace incremental from start...");
+            DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+            count = 0;
+            try (ResourceIterator<Artifact> iter = originDAO.iterator(ns, null, startDate, true)) {
+                while (iter.hasNext()) {
+                    Artifact actual = iter.next();
+                    count++;
+                    log.info("found: " + actual.getBucket() + " " + actual.getURI() + " " + df.format(actual.getContentLastModified()));
+                    Assert.assertTrue("STUFF", actual.getURI().toASCIIString().startsWith(ns.getNamespace()));
+                }
+            }
+            Assert.assertEquals("count", numStuffExpected, count);
+            
+            log.info("count vs Namespace incremental from mid...");
+            count = 0;
+            try (ResourceIterator<Artifact> iter = originDAO.iterator(ns, null, midDate, true)) {
+                while (iter.hasNext()) {
+                    Artifact actual = iter.next();
+                    count++;
+                    log.info("found: " + actual.getBucket() + " " + actual.getURI() + " " + df.format(actual.getContentLastModified()));
+                    Assert.assertTrue("STUFF", actual.getURI().toASCIIString().startsWith(ns.getNamespace()));
+                }
+            }
+            Assert.assertEquals("count", midNumStuff, count);
+            
+            log.info("count vs Namespace incremental from end...");
+            count = 0;
+            try (ResourceIterator<Artifact> iter = originDAO.iterator(ns, null, endDate, true)) {
+                while (iter.hasNext()) {
+                    Artifact actual = iter.next();
+                    count++;
+                    log.info("found: " + actual.getBucket() + " " + actual.getURI() + " " + df.format(actual.getContentLastModified()));
+                    Assert.assertTrue("STUFF", actual.getURI().toASCIIString().startsWith(ns.getNamespace()));
+                }
+            }
+            Assert.assertEquals("count", 0, count);
             
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);

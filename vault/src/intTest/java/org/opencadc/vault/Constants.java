@@ -65,51 +65,28 @@
 ************************************************************************
 */
 
-package org.opencadc.vospace.db;
+package org.opencadc.vault;
 
-import java.net.URL;
-import javax.sql.DataSource;
+import ca.nrc.cadc.util.FileUtil;
+import java.io.File;
+import java.net.URI;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.db.version.InitDatabaseSI;
+import org.opencadc.gms.GroupURI;
 
 /**
  *
  * @author pdowler
  */
-public class InitDatabaseVOS extends ca.nrc.cadc.db.version.InitDatabase {
-    private static final Logger log = Logger.getLogger(InitDatabaseVOS.class);
+public class Constants {
+    private static final Logger log = Logger.getLogger(Constants.class);
 
-    public static final String MODEL_NAME = "vospace-inventory";
-    public static final String MODEL_VERSION = "0.15";
-    public static final String PREV_MODEL_VERSION = "0.3";
+    static URI RESOURCE_ID = URI.create("ivo://opencadc.org/vault");
     
-    static String[] CREATE_SQL = new String[] {
-        "generic.ModelVersion.sql",
-        "vospace.Node.sql",
-        "vospace.DeletedNodeEvent.sql",
-        "generic.HarvestState.sql",
-        "generic.PreauthKeyPair.sql",
-        "generic.permissions.sql"
-    };
+    static File ADMIN_CERT = FileUtil.getFileFromResource("vault-test.pem", Constants.class);
+    static File ALT_CERT = FileUtil.getFileFromResource("vault-auth-test.pem", Constants.class);
     
-    static String[] UPGRADE_SQL = new String[] {
-        "vospace.upgrade-0.15.sql",
-        "generic.permissions.sql"
-    };
+    static GroupURI ALT_GROUP = new GroupURI(URI.create("ivo://cadc.nrc.ca/gms?opencadc-vospace-test"));
     
-    public InitDatabaseVOS(DataSource ds, String database, String schema) { 
-        super(ds, database, schema, MODEL_NAME, MODEL_VERSION, PREV_MODEL_VERSION);
-        for (String s : CREATE_SQL) {
-            createSQL.add(s);
-        }
-        for (String s : UPGRADE_SQL) {
-            upgradeSQL.add(s);
-        }
-    }
-
-    @Override
-    protected URL findSQL(String fname) {
-        // SQL files are stored inside the jar file
-        return InitDatabaseSI.class.getClassLoader().getResource(fname);
+    private Constants() { 
     }
 }

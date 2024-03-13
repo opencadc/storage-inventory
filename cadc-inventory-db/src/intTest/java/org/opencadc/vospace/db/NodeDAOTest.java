@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2023.                            (c) 2023.
+*  (c) 2024.                            (c) 2024.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -182,7 +182,7 @@ public class NodeDAOTest {
         
         // put
         ContainerNode orig = new ContainerNode("container-test");
-        orig.parent = root;
+        orig.parentID = root.getID();
         orig.ownerID = "the-owner";
         nodeDAO.put(orig);
         
@@ -216,6 +216,7 @@ public class NodeDAOTest {
         Assert.assertTrue(a instanceof ContainerNode);
         ContainerNode c = (ContainerNode) a;
         Assert.assertEquals(orig.inheritPermissions, c.inheritPermissions);
+        Assert.assertEquals(orig.bytesUsed, c.bytesUsed);
         
         // these are set in put
         Assert.assertEquals(orig.getMetaChecksum(), a.getMetaChecksum());
@@ -228,7 +229,6 @@ public class NodeDAOTest {
         Thread.sleep(10L);
         orig.getReadOnlyGroup().add(new GroupURI(URI.create("ivo://opencadc.org/gms?g1")));
         orig.getReadWriteGroup().add(new GroupURI(URI.create("ivo://opencadc.org/gms?g3")));
-        orig.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "123"));
         orig.isPublic = true;
         orig.inheritPermissions = true;
         nodeDAO.put(orig);
@@ -251,7 +251,7 @@ public class NodeDAOTest {
         Assert.assertTrue(updated instanceof ContainerNode);
         ContainerNode uc = (ContainerNode) updated;
         Assert.assertEquals(orig.inheritPermissions, uc.inheritPermissions);
-        
+        Assert.assertEquals(orig.bytesUsed, uc.bytesUsed);
         
         nodeDAO.delete(orig.getID());
         Node gone = nodeDAO.get(orig.getID());
@@ -267,7 +267,7 @@ public class NodeDAOTest {
         // TODO: use get-by-path to find and remove the test node
         
         ContainerNode orig = new ContainerNode("container-test");
-        orig.parent = root;
+        orig.parentID = root.getID();
         orig.ownerID = "the-owner";
         orig.isPublic = true;
         orig.isLocked = false;
@@ -279,8 +279,6 @@ public class NodeDAOTest {
         orig.getReadWriteGroup().add(new GroupURI(URI.create("ivo://opencadc.org/gms?g6.g7")));
         orig.getReadWriteGroup().add(new GroupURI(URI.create("ivo://opencadc.org/gms?g6_g7")));
         orig.getReadWriteGroup().add(new GroupURI(URI.create("ivo://opencadc.org/gms?g6~g7")));
-        
-        orig.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "123"));
         orig.getProperties().add(new NodeProperty(URI.create("custom:prop"), "spaces in value"));
         orig.getProperties().add(new NodeProperty(URI.create("sketchy:a,b"), "comma in uri"));
         orig.getProperties().add(new NodeProperty(URI.create("sketchy:funny"), "value-with-{delims}"));
@@ -316,6 +314,7 @@ public class NodeDAOTest {
         Assert.assertTrue(a instanceof ContainerNode);
         ContainerNode c = (ContainerNode) a;
         Assert.assertEquals(orig.inheritPermissions, c.inheritPermissions);
+        Assert.assertEquals(orig.bytesUsed, c.bytesUsed);
         
         // these are set in put
         Assert.assertEquals(orig.getMetaChecksum(), a.getMetaChecksum());
@@ -333,7 +332,6 @@ public class NodeDAOTest {
         orig.getReadWriteGroup().clear();
         orig.getReadWriteGroup().add(new GroupURI(URI.create("ivo://opencadc.org/gms?g3")));
         orig.getProperties().clear();
-        orig.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "123"));
         orig.inheritPermissions = true;
         nodeDAO.put(orig);
         Node updated = nodeDAO.get(orig.getID());
@@ -355,6 +353,7 @@ public class NodeDAOTest {
         Assert.assertTrue(updated instanceof ContainerNode);
         ContainerNode uc = (ContainerNode) updated;
         Assert.assertEquals(orig.inheritPermissions, uc.inheritPermissions);
+        Assert.assertEquals(orig.bytesUsed, uc.bytesUsed);
         
         nodeDAO.delete(orig.getID());
         Node gone = nodeDAO.get(orig.getID());
@@ -367,9 +366,10 @@ public class NodeDAOTest {
         UUID rootID = new UUID(0L, 0L);
         ContainerNode root = new ContainerNode(rootID, "root");
         
-        DataNode orig = new DataNode(UUID.randomUUID(), "data-test", URI.create("cadc:vault/" + UUID.randomUUID()));
-        orig.parent = root;
+        DataNode orig = new DataNode("data-test");
+        orig.parentID = root.getID();
         orig.ownerID = "the-owner";
+        orig.storageID = URI.create("vault:" + UUID.randomUUID().toString());
         orig.isPublic = true;
         orig.isLocked = false;
         orig.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_TYPE, "text/plain"));
@@ -423,7 +423,6 @@ public class NodeDAOTest {
         orig.getReadWriteGroup().clear();
         orig.getReadWriteGroup().add(new GroupURI(URI.create("ivo://opencadc.org/gms?g3")));
         orig.getProperties().clear();
-        orig.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "123"));
         // don't change storageID
         nodeDAO.put(orig);
         Node updated = nodeDAO.get(orig.getID());
@@ -445,6 +444,7 @@ public class NodeDAOTest {
         
         Assert.assertTrue(a instanceof DataNode);
         DataNode udn = (DataNode) updated;
+        Assert.assertEquals(orig.bytesUsed, udn.bytesUsed);
         Assert.assertEquals(orig.storageID, udn.storageID);
         
         nodeDAO.delete(orig.getID());
@@ -461,7 +461,7 @@ public class NodeDAOTest {
         // TODO: use get-by-path to find and remove the test node
         
         LinkNode orig = new LinkNode("data-test", URI.create("vos://opencadc.org~srv/path/to/something"));
-        orig.parent = root;
+        orig.parentID = root.getID();
         orig.ownerID = "the-owner";
         orig.isPublic = true;
         orig.isLocked = false;
@@ -514,7 +514,6 @@ public class NodeDAOTest {
         orig.getReadWriteGroup().clear();
         orig.getReadWriteGroup().add(new GroupURI(URI.create("ivo://opencadc.org/gms?g3")));
         orig.getProperties().clear();
-        orig.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTLENGTH, "123"));
         // don't change target
         nodeDAO.put(orig);
         Node updated = nodeDAO.get(orig.getID());
@@ -543,13 +542,36 @@ public class NodeDAOTest {
     }
     
     @Test
+    public void testGetByStorageID() {
+        UUID rootID = new UUID(0L, 0L);
+        ContainerNode root = new ContainerNode(rootID, "root");
+        
+        DataNode notFound = nodeDAO.getDataNode(URI.create("vault:not-found"));
+        Assert.assertNull(notFound);
+        
+        DataNode orig = new DataNode("testGetByStorageID");
+        orig.parentID = root.getID();
+        orig.ownerID = "the-owner";
+        orig.storageID = URI.create("vault:" + UUID.randomUUID().toString());
+        nodeDAO.put(orig);
+        
+        // get-by-storageID
+        DataNode gbs = nodeDAO.getDataNode(orig.storageID);
+        Assert.assertNotNull(gbs);
+        log.info("found: "  + gbs.getID() + " aka " + gbs);
+        Assert.assertEquals(orig.getID(), gbs.getID());
+        
+        nodeDAO.delete(orig.getID());
+    }
+
+    @Test
     public void testGetWithLock() {
         UUID rootID = new UUID(0L, 0L);
         ContainerNode root = new ContainerNode(rootID, "root");
         
         // put
         ContainerNode orig = new ContainerNode("container-test");
-        orig.parent = root;
+        orig.parentID = root.getID();
         orig.ownerID = "the-owner";
         nodeDAO.put(orig);
         
@@ -572,12 +594,68 @@ public class NodeDAOTest {
     }
     
     @Test
+    public void testUpdateNodeSize() throws InterruptedException,
+            NoSuchAlgorithmException {
+        UUID rootID = new UUID(0L, 0L);
+        ContainerNode root = new ContainerNode(rootID, "root");
+        
+        final ContainerNode cnode = new ContainerNode("testUpdateNodeSize-container");
+        cnode.parentID = root.getID();
+        cnode.ownerID = "the-owner";
+        nodeDAO.put(cnode);
+        
+        final DataNode dnode = new DataNode("testUpdateNodeSize-data");
+        dnode.ownerID = "the-owner";
+        dnode.storageID =  URI.create("cadc:vault/" + UUID.randomUUID());
+        dnode.parentID = cnode.getID();
+        nodeDAO.put(dnode);
+        
+        final ContainerNode c1 = (ContainerNode) nodeDAO.get(cnode.getID());
+        Assert.assertNotNull(c1);
+        log.info("found: "  + c1.getID() + " aka " + c1);
+        Assert.assertEquals(cnode.getID(), c1.getID());
+        Assert.assertEquals(cnode.getName(), c1.getName());
+        Assert.assertEquals(root.getID(), c1.parentID);
+        Assert.assertNull(c1.bytesUsed);
+        
+        final DataNode d1 = (DataNode) nodeDAO.get(dnode.getID());
+        Assert.assertNotNull(d1);
+        log.info("found: "  + d1.getID() + " aka " + d1);
+        Assert.assertEquals(dnode.getID(), d1.getID());
+        Assert.assertEquals(dnode.getName(), d1.getName());
+        Assert.assertEquals(cnode.getID(), d1.parentID);
+        Assert.assertNull(d1.bytesUsed);
+        
+        final URI ccs = c1.getMetaChecksum();
+        final URI dcs = d1.getMetaChecksum();
+        
+        log.info("update DataNode");
+        d1.bytesUsed = 123L;
+        nodeDAO.put(d1);
+        final DataNode d2 = (DataNode) nodeDAO.get(dnode.getID());
+        Assert.assertNotNull(d2);
+        Assert.assertNotNull(d2.bytesUsed);
+        Assert.assertEquals(d1.bytesUsed, d2.bytesUsed);
+        
+        log.info("update ContainerNode.bytesUsed");
+        c1.bytesUsed = 123L;
+        nodeDAO.put(c1);
+        final ContainerNode c2 = (ContainerNode) nodeDAO.get(cnode.getID());
+        Assert.assertNotNull(c2);
+        Assert.assertNotNull(c2.bytesUsed);
+        Assert.assertEquals(123L, c2.bytesUsed.longValue());
+
+        nodeDAO.delete(dnode.getID());
+        nodeDAO.delete(cnode.getID());
+    }
+    
+    @Test
     public void testContainerNodeIterator() throws IOException {
         UUID rootID = new UUID(0L, 0L);
         ContainerNode root = new ContainerNode(rootID, "root");
         
         ContainerNode orig = new ContainerNode("container-test");
-        orig.parent = root;
+        orig.parentID = root.getID();
         orig.ownerID = "the-owner";
         nodeDAO.put(orig);
         
@@ -610,13 +688,13 @@ public class NodeDAOTest {
         
         // add children
         ContainerNode cont = new ContainerNode("container1");
-        cont.parent = orig;
+        cont.parentID = orig.getID();
         cont.ownerID = orig.ownerID;
         DataNode data = new DataNode(UUID.randomUUID(), "data1", URI.create("cadc:vault/" + UUID.randomUUID()));
-        data.parent = orig;
+        data.parentID = orig.getID();
         data.ownerID = orig.ownerID;
         LinkNode link = new LinkNode("link1", URI.create("cadc:ARCHIVE/data"));
-        link.parent = orig;
+        link.parentID = orig.getID();
         link.ownerID = orig.ownerID;
         log.info("put child: " + cont + " of " + cont.parent);
         nodeDAO.put(cont);
