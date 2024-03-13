@@ -1,8 +1,8 @@
 # Storage Inventory VOSpace-2.1 service (vault)
 
-The `vault` servcie is an implementation of the <a href="https://www.ivoa.net/documents/VOSpace/">IVOA VOSpace</a>
-specification designed to co-exist with other storage-inventory components. It provides a heirarchical data
-organization laye on top of the storage management of storage-inventory.
+The `vault` service is an implementation of the <a href="https://www.ivoa.net/documents/VOSpace/">IVOA VOSpace</a>
+specification designed to co-exist with other storage-inventory components. It provides a hierarchical data
+organization layer on top of the storage management of storage-inventory.
 
 The simplest configuration would be to deploy `vault` with `minoc` with a single metadata database and single
 back end storage system. Details: TBD.
