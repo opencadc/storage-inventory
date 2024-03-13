@@ -67,23 +67,9 @@
 
 package org.opencadc.vault;
 
-import ca.nrc.cadc.db.ConnectionConfig;
-import ca.nrc.cadc.db.DBConfig;
-import ca.nrc.cadc.db.DBUtil;
-import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
-import java.io.File;
-import java.net.URI;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.junit.Before;
-import org.junit.Ignore;
-import org.opencadc.inventory.StorageSite;
-import org.opencadc.inventory.db.SQLGenerator;
-import org.opencadc.inventory.db.StorageSiteDAO;
 
 /**
  *
