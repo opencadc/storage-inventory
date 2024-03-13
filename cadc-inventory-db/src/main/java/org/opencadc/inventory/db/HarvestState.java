@@ -137,6 +137,9 @@ public class HarvestState extends Entity {
 
     @Override
     public String toString() {
+        if (instanceID != null) {
+            return HarvestState.class.getSimpleName() + "[" + instanceID + "," + name + "," + resourceID + "]";
+        }
         return HarvestState.class.getSimpleName() + "[" + name + "," + resourceID + "]";
     }
 }

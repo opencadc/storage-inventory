@@ -8,6 +8,17 @@ completed. In the case of a `vault` service co-located with a global SI, the new
 Artifact is visible in the database once it is synced from the site of the PUT to 
 the global database by `fenwick` (or worst case: `ratik`).
 
+## NOTE
+This design was for supporting propagation of space used up the tree so that
+allocation space used was dynamically updated as content was modified. While the
+algorithm for doing that is nominally viable, the algorithm to validate and repair
+incorrect container node sizes in a live system is excessively complex and probably
+impossible to implement in practice (deadlocks, excessive database load and query
+processing, etc).
+
+**This design will not be completed and implemented** and is retained here for future 
+reference.
+
 ## TODO
 The design below only takes into account incremental propagation of space used 
 by stored files. It is not complete/verified until we also come up with a validation

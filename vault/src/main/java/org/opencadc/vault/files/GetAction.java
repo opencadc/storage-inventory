@@ -67,14 +67,18 @@
 
 package org.opencadc.vault.files;
 
+import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.net.TransientException;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.util.List;
+import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
 import org.opencadc.vospace.DataNode;
 import org.opencadc.vospace.NodeProperty;
 import org.opencadc.vospace.VOS;
 import org.opencadc.vospace.VOSURI;
+import org.opencadc.vospace.server.NodeFault;
 import org.opencadc.vospace.server.Utils;
 import org.opencadc.vospace.server.transfers.TransferGenerator;
 import org.opencadc.vospace.transfer.Direction;
@@ -96,6 +100,12 @@ public class GetAction extends HeadAction {
     public void doAction() throws Exception {
         DataNode node = resolveAndSetMetadata();
 
+        Subject caller = AuthenticationUtil.getCurrentSubject();
+        if (!voSpaceAuthorizer.hasSingleNodeReadPermission(node, caller)) {
+            // TODO: should output requested vos URI here
+            throw NodeFault.PermissionDenied.getStatus(syncInput.getPath());
+        }
+            
         if (node.bytesUsed == null || node.bytesUsed == 0L) {
             // empty file
             syncOutput.setCode(HttpURLConnection.HTTP_NO_CONTENT);

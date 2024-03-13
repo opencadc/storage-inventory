@@ -88,11 +88,13 @@ import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.PreauthKeyPair;
+import org.opencadc.inventory.db.HarvestStateDAO;
 import org.opencadc.inventory.db.PreauthKeyPairDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.db.version.InitDatabaseSI;
 import org.opencadc.inventory.transfer.StorageSiteAvailabilityCheck;
+import org.opencadc.vault.metadata.ArtifactSync;
 import org.opencadc.vospace.db.InitDatabaseVOS;
 import org.opencadc.vospace.server.NodePersistence;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -133,6 +135,7 @@ public class VaultInitAction extends InitAction {
     private String jndiPreauthKeys;
     private String jndiSiteAvailabilities;
     private Thread availabilityCheck;
+    private Thread artifactSync;
 
     public VaultInitAction() {
         super();
@@ -146,6 +149,7 @@ public class VaultInitAction extends InitAction {
         initNodePersistence();
         initKeyPair();
         initAvailabilityCheck();
+        initBackgroundWorkers();
     }
 
     @Override
@@ -165,6 +169,7 @@ public class VaultInitAction extends InitAction {
         }
         
         terminateAvailabilityCheck();
+        terminateBackgroundWorkers();
     }
     
     /**
@@ -412,9 +417,9 @@ public class VaultInitAction extends InitAction {
         }
     }
     
-    void initAvailabilityCheck() {
+    private void initAvailabilityCheck() {
         StorageSiteDAO storageSiteDAO = new StorageSiteDAO();
-        storageSiteDAO.setConfig(getDaoConfig(props));
+        storageSiteDAO.setConfig(getInvConfig(props));
 
         this.jndiSiteAvailabilities = appName + "-" + StorageSiteAvailabilityCheck.class.getName();
         terminateAvailabilityCheck();
@@ -423,7 +428,7 @@ public class VaultInitAction extends InitAction {
         this.availabilityCheck.start();
     }
 
-    private final void terminateAvailabilityCheck() {
+    private void terminateAvailabilityCheck() {
         if (this.availabilityCheck != null) {
             try {
                 log.info("terminating AvailabilityCheck Thread...");
@@ -436,6 +441,8 @@ public class VaultInitAction extends InitAction {
                 this.availabilityCheck = null;
             }
         }
+        
+        // ugh: bind() is inside StorageSiteAvailabilityCheck but unbind() is here
         try {
             InitialContext initialContext = new InitialContext();
             initialContext.unbind(this.jndiSiteAvailabilities);
@@ -444,4 +451,28 @@ public class VaultInitAction extends InitAction {
         }
     }
     
+    private void initBackgroundWorkers() {
+        HarvestStateDAO hsDAO = new HarvestStateDAO();
+        hsDAO.setConfig(getDaoConfig(props));
+        
+        terminateBackgroundWorkers();
+        this.artifactSync = new Thread(new ArtifactSync(hsDAO));
+        artifactSync.setDaemon(true);
+        artifactSync.start();
+    }
+    
+    private void terminateBackgroundWorkers() {
+        if (this.artifactSync != null) {
+            try {
+                log.info("terminating ArtifactSync Thread...");
+                this.artifactSync.interrupt();
+                this.artifactSync.join();
+                log.info("terminating ArtifactSync Thread... [OK]");
+            } catch (Throwable t) {
+                log.info("failed to terminate ArtifactSync thread", t);
+            } finally {
+                this.artifactSync = null;
+            }
+        }
+    }
 }

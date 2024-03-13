@@ -1,8 +1,8 @@
 # Storage Inventory VOSpace-2.1 service (vault)
 
-The `vault` servcie is an implementation of the <a href="https://www.ivoa.net/documents/VOSpace/">IVOA VOSpace</a>
-specification designed to co-exist with other storage-inventory components. It provides a heirarchical data
-organization laye on top of the storage management of storage-inventory.
+The `vault` service is an implementation of the <a href="https://www.ivoa.net/documents/VOSpace/">IVOA VOSpace</a>
+specification designed to co-exist with other storage-inventory components. It provides a hierarchical data
+organization layer on top of the storage management of storage-inventory.
 
 The simplest configuration would be to deploy `vault` with `minoc` with a single metadata database and single
 back end storage system. Details: TBD.
@@ -106,7 +106,7 @@ _all known_ sites. It only makes sense to enable this when `vault` is running in
 genuine not-found cases: transfer negotiation to GET the file that was never PUT.
 
 The _allocationParent_ is a path to a container node (directory) which contains space allocations. An allocation
-is owned by a user (uisually different from the _rootOwner_ admin user) who is responsible for the allocation
+is owned by a user (usually different from the _rootOwner_ admin user) who is responsible for the allocation
 and all conntent therein. The owner of an allocation is granted additional permissions within their 
 allocation (they can read/write/delete anything) so the owner cannot be blocked from access to any content
 within their allocation. This probably only matters for multi-user projects. Multiple _allocationParent_(s) may
