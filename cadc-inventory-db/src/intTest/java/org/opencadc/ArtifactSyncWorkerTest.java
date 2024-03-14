@@ -227,14 +227,14 @@ public class ArtifactSyncWorkerTest {
         log.info("found: "  + actual.getID() + " aka " + actual);
         Assert.assertEquals(expected.getContentLength(), actual.bytesUsed);
 
-        // update
-        Thread.sleep(20L);
+        // update the artifact only
+        artifactDAO.delete(actualArtifact.getID());
         expected = new Artifact(expected.getURI(), expected.getMetaChecksum(), new Date(), 333L);
         artifactDAO.put(expected);
         actual = (DataNode)nodeDAO.get(orig.getID());
         Assert.assertNotEquals(expected.getContentLength(), actual.bytesUsed);
 
-        // do the update
+        // run the update
         asWorker.run();
         actual = (DataNode)nodeDAO.get(orig.getID());
         Assert.assertEquals(expected.getContentLength(), actual.bytesUsed);
