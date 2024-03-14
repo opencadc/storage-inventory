@@ -110,14 +110,15 @@ public class ArtifactSyncWorker implements Runnable {
             while (iter.hasNext()) {
                 Artifact artifact = iter.next();
                 DataNode node = nodeDAO.getDataNode(artifact.getURI());
-                if ((node != null) && !artifact.getContentLength().equals(node.bytesUsed)) {
-                    node.bytesUsed = artifact.getContentLength();
+                if (node != null  && !artifact.getContentLength().equals(node.bytesUsed)) {
                     tm.startTransaction();
                     try {
+                        node = (DataNode)nodeDAO.lock(node);
+                        if (node == null) {
+                            continue; // node gone - race condition
+                        }
+                        node.bytesUsed = artifact.getContentLength();
                         nodeDAO.put(node);
-                        harvestState.curLastModified = artifact.getLastModified();
-                        harvestState.curID = node.getID();
-                        harvestStateDAO.put(harvestState, true);
                         tm.commitTransaction();
                         log.debug("Updated size of data node " + node.getName());
                     } catch (Exception ex) {
@@ -133,6 +134,9 @@ public class ArtifactSyncWorker implements Runnable {
                         }
                     }
                 }
+                harvestState.curLastModified = artifact.getLastModified();
+                harvestState.curID = node.getID();
+                harvestStateDAO.put(harvestState);
             }
         } catch (IOException ex) {
             log.error("Error closing iterator", ex);
