@@ -358,10 +358,6 @@ public class NodePersistenceImpl implements NodePersistence {
         if (ret == null) {
             return null;
         }
-        ret.parent = parent;
-        IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
-        ret.owner = identityManager.toSubject(ret.ownerID);
-        ret.ownerDisplay = identityManager.toDisplayString(ret.owner);
         
         // in principle we could have queried vospace.Node join inventory.Artifact above
         // and avoid this query.... simplicity for now
@@ -371,6 +367,46 @@ public class NodePersistenceImpl implements NodePersistence {
             Artifact a = artifactDAO.get(dn.storageID);
             DateFormat df = NodeWriter.getDateFormat();
             if (a != null) {
+                // DataNode.bytesUsed is an optimization (cache): 
+                // if DataNode.bytesUsed != Artifact.contentLength we update the cache
+                // this retains put+get consistency in a single-site deployed (with minoc)
+                // and may help hide some inconsistencies in child listing sizes
+                if (!a.getContentLength().equals(dn.bytesUsed)) {
+                    TransactionManager txn = dao.getTransactionManager();
+                    try {
+                        log.debug("starting node transaction");
+                        txn.startTransaction();
+                        log.debug("start txn: OK");
+            
+                        DataNode locked = (DataNode) dao.lock(dn);
+                        if (locked != null) {
+                            dn = locked; // safer than accidentally using the wrong variable
+                            dn.bytesUsed = a.getContentLength();
+                            dao.put(dn);
+                            ret = dn;
+                        }
+
+                        log.debug("commit txn...");
+                        txn.commitTransaction();
+                        log.debug("commit txn: OK");
+                        if (locked == null) {
+                            return null; // gone
+                        }
+                    } catch (Exception ex) {
+                        if (txn.isOpen()) {
+                            log.error("failed to update bytesUsed on " + dn.getID() + " aka " + dn.getName(), ex);
+                            txn.rollbackTransaction();
+                            log.debug("rollback txn: OK");
+                        }
+                    } finally {
+                        if (txn.isOpen()) {
+                            log.error("BUG - open transaction in finally");
+                            txn.rollbackTransaction();
+                            log.error("rollback txn: OK");
+                        }
+                    }
+                }
+                
                 Date d = ret.getLastModified();
                 Date cd = null;
                 if (ret.getLastModified().before(a.getLastModified())) {
@@ -396,19 +432,17 @@ public class NodePersistenceImpl implements NodePersistence {
                 if (a.contentType != null) {
                     ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_TYPE, a.contentType));
                 }
-                // TODO: a.getContentLength() is correct, but might differ from dn.bytesUsed due to eventual consistency
-                // child listing iterator can only report dn.bytesUsed
-                // correct or consistency with listing??
-                
-                // currently needed for consistency-requiring FilesTest
-                log.warn("DataNode.bytesUsed: " + dn.bytesUsed + " -> " + a.getContentLength());
-                dn.bytesUsed = a.getContentLength();
             }
             if (dn.bytesUsed == null) {
-                log.warn("DataNode.bytesUsed: 0 (no artifact)");
                 dn.bytesUsed = 0L; // no data stored
             }
         }
+        
+        ret.parent = parent;
+        IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
+        ret.owner = identityManager.toSubject(ret.ownerID);
+        ret.ownerDisplay = identityManager.toDisplayString(ret.owner);
+        
         return ret;
     }
 
@@ -645,7 +679,7 @@ public class NodePersistenceImpl implements NodePersistence {
         if (node.parent == null || dest.parent == null) {
             throw new IllegalArgumentException("args must both be peristent nodes before move");
         }
-        // try to detect attempt to dsconnect from path to root: node is a parent of dest
+        // try to detect attempt to disconnect from path to root: node is a parent of dest
         ContainerNode cur = dest;
         while (!cur.getID().equals(root.getID())) {
             cur = cur.parent;
@@ -654,28 +688,48 @@ public class NodePersistenceImpl implements NodePersistence {
             }
             
         }
-
-        Subject caller = AuthenticationUtil.getCurrentSubject();
-        node.owner = caller;
-        node.ownerID = null;
-        node.ownerDisplay = null;
-        node.parent = dest;
-        node.parentID = null;
-        if (newName != null) {
-            node.setName(newName);
-        }
+        
+        NodeDAO dao = getDAO();
+        TransactionManager txn = dao.getTransactionManager();
         try {
-            Node result = put(node);
-            log.debug("moved: " + result);
-        } catch (NodeNotSupportedException ex) {
-            LocalServiceURI loc = new LocalServiceURI(getResourceID());
-            VOSURI srcURI = loc.getURI(node);
-            throw new RuntimeException("BUG: failed to move node because of detected type change: " 
-                    + srcURI.getPath() + " type=" + node.getClass().getSimpleName(), ex);
+            log.debug("starting node transaction");
+            txn.startTransaction();
+            log.debug("start txn: OK");
+            
+            // lock the source node
+            Node locked = dao.lock(node);
+            if (locked != null) {      
+                node = locked; // safer than having two vars and accidentally using the wrong one
+                Subject caller = AuthenticationUtil.getCurrentSubject();
+                node.owner = caller;
+                node.ownerID = null;
+                node.ownerDisplay = null;
+                node.parent = dest;
+                node.parentID = null;
+                if (newName != null) {
+                    node.setName(newName);
+                }
+                Node result = put(node);
+                log.debug("moved: " + result);
+            }
+            log.debug("commit txn...");
+            txn.commitTransaction();
+            log.debug("commit txn: OK");
+        } catch (Exception ex) {
+            if (txn.isOpen()) {
+                log.error("failed to move " + node.getID() + " aka " + node.getName(), ex);
+                txn.rollbackTransaction();
+                log.debug("rollback txn: OK");
+            }
+        } finally {
+            if (txn.isOpen()) {
+                log.error("BUG - open transaction in finally");
+                txn.rollbackTransaction();
+                log.error("rollback txn: OK");
+            }
         }
     }
 
-    
     /**
      * Delete the specified node.
      * 
@@ -721,8 +775,7 @@ public class NodePersistenceImpl implements NodePersistence {
                     }
                 } else if (node instanceof DataNode) {
                     DataNode dn = (DataNode) node;
-                    NodeProperty len = dn.getProperty(VOS.PROPERTY_URI_CONTENTLENGTH);
-                    if (len != null) {
+                    if (dn.bytesUsed != null) {
                         // artifact exists
                         storageID = dn.storageID;
                     }
