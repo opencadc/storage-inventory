@@ -65,7 +65,7 @@
 ************************************************************************
 */
 
-package org.opencadc;
+package org.opencadc.vospace.db;
 
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
@@ -84,7 +84,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.ArtifactSyncWorker;
+import org.opencadc.vospace.db.ArtifactSyncWorker;
 import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.HarvestState;

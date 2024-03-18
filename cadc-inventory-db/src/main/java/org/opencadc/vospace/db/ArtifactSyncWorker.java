@@ -65,12 +65,14 @@
 ************************************************************************
  */
 
-package org.opencadc.inventory;
+package org.opencadc.vospace.db;
 
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
 import java.io.IOException;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.HarvestState;
 import org.opencadc.inventory.db.HarvestStateDAO;
