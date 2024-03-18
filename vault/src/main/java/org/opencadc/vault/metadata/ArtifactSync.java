@@ -72,8 +72,11 @@ import java.util.Date;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
+import org.opencadc.inventory.Namespace;
+import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.HarvestState;
 import org.opencadc.inventory.db.HarvestStateDAO;
+import org.opencadc.vospace.db.ArtifactSyncWorker;
 
 /**
  * Main artifact-sync agent that enables incremental sync of Artifact
@@ -84,67 +87,91 @@ import org.opencadc.inventory.db.HarvestStateDAO;
 public class ArtifactSync implements Runnable {
     private static final Logger log = Logger.getLogger(ArtifactSync.class);
 
-    private static final long SHORT_SLEEP = 12000L;
-    private static final long LONG_SLEEP = 2 * SHORT_SLEEP;
-    private static final long EVICT_AGE = 3 * LONG_SLEEP;
+    private static final long ROUNDS = 6000L; // 6 sec
+    private static final long SHORT_SLEEP = 2 * ROUNDS;
+    private static final long LONG_SLEEP = 5 * ROUNDS;
+    private static final long EVICT_AGE = 12 * ROUNDS;
+    
+    private static final long FAIL_SLEEP = 10 * ROUNDS; // slightly smaller than evict
     
     private final UUID instanceID = UUID.randomUUID();
-    private final HarvestStateDAO dao;
-    private String name = Artifact.class.getSimpleName();
-    private URI resourceID = URI.create("jdbc/inventory");
+    private final HarvestStateDAO stateDAO;
+    private final ArtifactDAO artifactDAO;
+    private final Namespace artifactNamespace;
     
-    public ArtifactSync(HarvestStateDAO dao) { 
-        this.dao = dao;
+    public ArtifactSync(HarvestStateDAO stateDAO, ArtifactDAO artifactDAO, Namespace artifactNamespace) { 
+        this.stateDAO = stateDAO;
+        this.artifactDAO = artifactDAO;
+        this.artifactNamespace = artifactNamespace;
         
         // fenwick setup for production workload:
         //dao.setUpdateBufferCount(99); // buffer 99 updates, do every 100
         //dao.setMaintCount(999); // buffer 999 so every 1000 real updates aka every 1e5 events
         
-        // here, we need timestamp updates to retain leader status, so
-        // dao.setMaintCount(9999); // every 1e4
+        // we need continuous timestamp updates to retain leader status, so only schedule maintenance
+        stateDAO.setUpdateBufferCount(0);
+        stateDAO.setMaintCount(9999); // every 1e4
     }
 
     @Override
     public void run() {
+        String name = Artifact.class.getSimpleName();
+        URI resourceID = URI.create("jdbc:inventory");
         try {
             Thread.sleep(SHORT_SLEEP);
             
             while (true) {
-                boolean leader = false;
                 log.debug("check leader " + instanceID);
-                HarvestState state = dao.get(name, resourceID);
+                HarvestState state = stateDAO.get(name, resourceID);
                 log.debug("check leader " + instanceID + " found: " + state);
                 if (state.instanceID == null) {
                     state.instanceID = instanceID;
-                    dao.put(state);
-                    state = dao.get(state.getID());
+                    stateDAO.put(state);
+                    state = stateDAO.get(state.getID());
                     log.debug("created: " + state);
                 }
-                if (instanceID.equals(state.instanceID)) {
-                    log.debug("still the leader...");
-                    dao.put(state, true);
-                    leader = true;
-                } else {
-                    // see if we should perform a coup...
-                    Date now = new Date();
-                    long age = now.getTime() - state.getLastModified().getTime();
-                    if (age > EVICT_AGE) {
-                        
-                        state.instanceID = instanceID;
-                        dao.put(state);
-                        state = dao.get(state.getID());
-                        leader = true;
-                        log.debug("EVICTED " + state.instanceID + " because age " + age + " > " + EVICT_AGE);
-                    }
-                }
+                
+                // determine leader
+                boolean leader = checkLeaderStatus(state);
 
                 if (leader) {
-                    log.debug("leader " + state.instanceID + " starting worker...");
-                    // TODO
-                    dao.flushBufferedState();
-                    Thread.sleep(SHORT_SLEEP / 2L); // for testing
-                    log.debug("idle leader " + state.instanceID + " sleep=" + SHORT_SLEEP);
-                    Thread.sleep(SHORT_SLEEP);
+                    log.info("LEADER " + state.instanceID);
+                    boolean fail = false;
+                    try {
+                        ArtifactSyncWorker worker = new ArtifactSyncWorker(stateDAO, state, artifactDAO, artifactNamespace);
+                        worker.run();
+                    } catch (Exception ex) {
+                        log.error("unexpected worker fail", ex);
+                        fail = true;
+                    }
+                    
+                    leader = checkLeaderStatus(state);
+                    if (!fail && leader) {
+                        try {
+                            stateDAO.flushBufferedState();
+                        } catch (Exception ex) {
+                            log.error("unexpected HarvestState flush fail", ex);
+                            fail = true;
+                        }
+                    }
+                    
+                    if (!fail && leader) {
+                        try {
+                            // update leader timestamp before sleeping
+                            stateDAO.put(state, true);
+                        } catch (Exception ex) {
+                            log.error("unexpected HarvestState force update fail", ex);
+                            fail = true;
+                        }
+                    }
+
+                    if (fail) {
+                        log.debug("failed leader " + state.instanceID + " sleep=" + FAIL_SLEEP);
+                        Thread.sleep(FAIL_SLEEP);
+                    } else {
+                        log.debug("idle leader " + state.instanceID + " sleep=" + SHORT_SLEEP);
+                        Thread.sleep(SHORT_SLEEP);
+                    }
                 } else {
                     log.debug("not leader: sleep=" + LONG_SLEEP);
                     Thread.sleep(LONG_SLEEP);
@@ -153,5 +180,25 @@ public class ArtifactSync implements Runnable {
         } catch (InterruptedException ex) {
             log.debug("interrupted - assuming shutdown", ex);
         }
+    }
+    
+    private boolean checkLeaderStatus(HarvestState state) {
+        boolean leader = false;
+        if (instanceID.equals(state.instanceID)) {
+            stateDAO.put(state, true);
+            leader = true;
+        } else {
+            // see if we should perform a coup...
+            Date now = new Date();
+            long age = now.getTime() - state.getLastModified().getTime();
+            if (age > EVICT_AGE) {
+                log.info("EVICTING " + state.instanceID + " because age " + age + " > " + EVICT_AGE);
+                state.instanceID = instanceID;
+                stateDAO.put(state);
+                state = stateDAO.get(state.getID());
+                leader = true;
+            }
+        }
+        return leader;
     }
 }

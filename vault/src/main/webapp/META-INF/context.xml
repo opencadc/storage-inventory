@@ -28,7 +28,7 @@
         testOnBorrow="true" validationQuery="select 123" />
     
      <!-- NOTE single connection is hard coded here!! -->
-    <Resource name="jdbc/iterator"
+    <Resource name="jdbc/inventory-iterator"
         auth="Container"
         type="javax.sql.DataSource"
         factory="org.apache.tomcat.jdbc.pool.DataSourceFactory" closeMethod="close"

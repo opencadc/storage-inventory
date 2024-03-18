@@ -88,6 +88,7 @@ import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.PreauthKeyPair;
+import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.HarvestStateDAO;
 import org.opencadc.inventory.db.PreauthKeyPairDAO;
 import org.opencadc.inventory.db.SQLGenerator;
@@ -111,6 +112,7 @@ public class VaultInitAction extends InitAction {
     
     static final String JNDI_VOS_DATASOURCE = "jdbc/nodes"; // context.xml
     static final String JNDI_INV_DATASOURCE = "jdbc/inventory"; // context.xml
+    static final String JNDI_INV_ITER_DATASOURCE = "jdbc/inventory-iterator"; // context.xml
     static final String JNDI_UWS_DATASOURCE = "jdbc/uws"; // context.xml
 
     // config keys
@@ -290,16 +292,17 @@ public class VaultInitAction extends InitAction {
         return ret;
     }
     
-    static Map<String, Object> getKeyPairConfig(MultiValuedProperties props) {
-        return getDaoConfig(props);
-        /*
+    static Map<String, Object> getIteratorConfig(MultiValuedProperties props) {
         Map<String, Object> ret = new TreeMap<>();
         ret.put(SQLGenerator.class.getName(), SQLGenerator.class); // not configurable right now
-        ret.put("jndiDataSourceName", JNDI_VOS_DATASOURCE);
-        ret.put("invSchema", props.getFirstPropertyValue(INVENTORY_SCHEMA_KEY)); // requied but unused
-        ret.put("genSchema", props.getFirstPropertyValue(VOSPACE_SCHEMA_KEY));
+        ret.put("jndiDataSourceName", JNDI_INV_ITER_DATASOURCE);
+        ret.put("invSchema", props.getFirstPropertyValue(INVENTORY_SCHEMA_KEY));
+        ret.put("genSchema", props.getFirstPropertyValue(INVENTORY_SCHEMA_KEY)); // for complete init
         return ret;
-        */
+    }
+    
+    static Map<String, Object> getKeyPairConfig(MultiValuedProperties props) {
+        return getDaoConfig(props);
     }
     
     private void initConfig() {
@@ -453,10 +456,15 @@ public class VaultInitAction extends InitAction {
     
     private void initBackgroundWorkers() {
         HarvestStateDAO hsDAO = new HarvestStateDAO();
-        hsDAO.setConfig(getDaoConfig(props));
+        hsDAO.setConfig(vosDaoConfig);
+        
+        ArtifactDAO artifactDAO = new ArtifactDAO();
+        Map<String,Object> iterprops = getIteratorConfig(props);
+        log.warn("iterator pool: " + iterprops.get("jndiDataSourceName"));
+        artifactDAO.setConfig(iterprops);
         
         terminateBackgroundWorkers();
-        this.artifactSync = new Thread(new ArtifactSync(hsDAO));
+        this.artifactSync = new Thread(new ArtifactSync(hsDAO, artifactDAO, storageNamespace));
         artifactSync.setDaemon(true);
         artifactSync.start();
     }
