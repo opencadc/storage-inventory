@@ -8,10 +8,10 @@ create table <schema>.Node (
     ownerID varchar(256) not null,
     isPublic boolean,
     isLocked boolean,
-    readOnlyGroups text,
-    readWriteGroups text,
+    readOnlyGroups text[],
+    readWriteGroups text[],
 
-    -- store all props in a 2D array
+    -- store misc props in a 2D array
     properties text[][],
 
     -- ContainerNode
