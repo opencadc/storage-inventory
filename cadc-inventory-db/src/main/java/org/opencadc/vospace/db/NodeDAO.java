@@ -72,6 +72,7 @@ import java.net.URI;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.db.AbstractDAO;
+import org.opencadc.inventory.db.HarvestStateDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.vospace.ContainerNode;
 import org.opencadc.vospace.DataNode;
@@ -92,6 +93,10 @@ public class NodeDAO extends AbstractDAO<Node> {
     
     public NodeDAO(boolean origin) {
         super(origin);
+    }
+
+    public NodeDAO(HarvestStateDAO harvestStateDAO) {
+        super(harvestStateDAO);
     }
 
     @Override
