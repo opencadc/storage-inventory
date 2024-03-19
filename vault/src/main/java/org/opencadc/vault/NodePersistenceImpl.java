@@ -166,18 +166,22 @@ public class NodePersistenceImpl implements NodePersistence {
     private final Namespace storageNamespace;
     
     private final boolean localGroupsOnly;
-    private URI resourceID;
+    private final URI resourceID;
     private final boolean preventNotFound;
+    
+    final String appName; // access by VaultTransferGenerator
     
     // possibly temporary hack so migration tool can set this to false and
     // preserve lastModified timestamps on nodes
     public boolean nodeOrigin = true;
     
-    public NodePersistenceImpl(URI resourceID) {
+    public NodePersistenceImpl(URI resourceID, String appName) {
         if (resourceID == null) {
             throw new IllegalArgumentException("resource ID required");
         }
         this.resourceID = resourceID;
+        this.appName = appName;
+        
         MultiValuedProperties config = VaultInitAction.getConfig();
         this.nodeDaoConfig = VaultInitAction.getDaoConfig(config);
         this.invDaoConfig = VaultInitAction.getInvConfig(config);
@@ -259,7 +263,7 @@ public class NodePersistenceImpl implements NodePersistence {
         keyDAO.setConfig(kpDaoConfig);
         PreauthKeyPair kp = keyDAO.get(VaultInitAction.KEY_PAIR_NAME);
         TokenTool tt = new TokenTool(kp.getPublicKey(), kp.getPrivateKey());
-        return new VaultTransferGenerator(this, getArtifactDAO(), tt, preventNotFound);
+        return new VaultTransferGenerator(this, appName, getArtifactDAO(), tt, preventNotFound);
     }
     
     private NodeDAO getDAO() {

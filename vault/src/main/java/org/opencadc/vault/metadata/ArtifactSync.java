@@ -88,8 +88,8 @@ public class ArtifactSync implements Runnable {
     private static final Logger log = Logger.getLogger(ArtifactSync.class);
 
     private static final long ROUNDS = 6000L; // 6 sec
-    private static final long SHORT_SLEEP = 2 * ROUNDS;
-    private static final long LONG_SLEEP = 5 * ROUNDS;
+    private static final long SHORT_SLEEP = 5 * ROUNDS;
+    private static final long LONG_SLEEP = 10 * ROUNDS;
     private static final long EVICT_AGE = 12 * ROUNDS;
     
     private static final long FAIL_SLEEP = 10 * ROUNDS; // slightly smaller than evict
@@ -98,6 +98,8 @@ public class ArtifactSync implements Runnable {
     private final HarvestStateDAO stateDAO;
     private final ArtifactDAO artifactDAO;
     private final Namespace artifactNamespace;
+    
+    private boolean offline = false;
     
     public ArtifactSync(HarvestStateDAO stateDAO, ArtifactDAO artifactDAO, Namespace artifactNamespace) { 
         this.stateDAO = stateDAO;
@@ -113,14 +115,24 @@ public class ArtifactSync implements Runnable {
         stateDAO.setMaintCount(9999); // every 1e4
     }
 
+    public void setOffline(boolean offline) {
+        this.offline = offline;
+        
+    }
+
     @Override
     public void run() {
         String name = Artifact.class.getSimpleName();
         URI resourceID = URI.create("jdbc:inventory");
         try {
-            Thread.sleep(SHORT_SLEEP);
+            Thread.sleep(1 * ROUNDS); // delay startup a bit
             
             while (true) {
+                while (offline) {
+                    log.warn("disabled: sleep=" + LONG_SLEEP);
+                    Thread.sleep(LONG_SLEEP);
+                }
+
                 log.debug("check leader " + instanceID);
                 HarvestState state = stateDAO.get(name, resourceID);
                 log.debug("check leader " + instanceID + " found: " + state);
@@ -135,7 +147,7 @@ public class ArtifactSync implements Runnable {
                 boolean leader = checkLeaderStatus(state);
 
                 if (leader) {
-                    log.info("LEADER " + state.instanceID);
+                    log.debug("leader: " + state);
                     boolean fail = false;
                     try {
                         ArtifactSyncWorker worker = new ArtifactSyncWorker(stateDAO, state, artifactDAO, artifactNamespace);

@@ -67,11 +67,17 @@
 
 package org.opencadc.vault;
 
+import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.vosi.Availability;
 import ca.nrc.cadc.vosi.AvailabilityPlugin;
 
+import ca.nrc.cadc.vosi.avail.CheckDataSource;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
+import javax.sql.DataSource;
 import org.apache.log4j.Logger;
+import org.opencadc.vault.metadata.ArtifactSync;
 
 /**
  * This class performs the work of determining if the executing artifact
@@ -130,7 +136,31 @@ public class ServiceAvailability implements AvailabilityPlugin {
                 return new Availability(false, RestAction.STATE_READ_ONLY_MSG);
             }
 
-            //TODO add availability checks for dependent services
+            // check database pools
+            DataSource ds;
+            String testSQL;
+            CheckDataSource cds;
+            
+            ds = DBUtil.findJNDIDataSource("jdbc/nodes");
+            testSQL = "select * from vospace.ModelVersion";
+            cds = new CheckDataSource(ds, testSQL);
+            cds.check();
+            
+            ds = DBUtil.findJNDIDataSource("jdbc/inventory");
+            testSQL = "select * from inventory.Artifact limit 1";
+            cds = new CheckDataSource(ds, testSQL);
+            cds.check();
+            
+            ds = DBUtil.findJNDIDataSource("jdbc/inventory-iterator");
+            testSQL = "select * from inventory.Artifact limit 1";
+            cds = new CheckDataSource(ds, testSQL);
+            cds.check();
+            
+            ds = DBUtil.findJNDIDataSource("jdbc/uws");
+            testSQL = "select * from uws.Job limit 1";
+            cds = new CheckDataSource(ds, testSQL);
+            cds.check();
+            
         } catch (Throwable t) {
             // the test itself failed
             log.debug("failure", t);
@@ -149,10 +179,13 @@ public class ServiceAvailability implements AvailabilityPlugin {
         String key = appName + RestAction.STATE_MODE_KEY;
         if (RestAction.STATE_OFFLINE.equalsIgnoreCase(state)) {
             System.setProperty(key, RestAction.STATE_OFFLINE);
+            setOffline(true);
         } else if (RestAction.STATE_READ_ONLY.equalsIgnoreCase(state)) {
             System.setProperty(key, RestAction.STATE_READ_ONLY);
+            setOffline(true);
         } else if (RestAction.STATE_READ_WRITE.equalsIgnoreCase(state)) {
             System.setProperty(key, RestAction.STATE_READ_WRITE);
+            setOffline(false);
         } else {
             throw new IllegalArgumentException("invalid state: " + state
                 + " expected: " + RestAction.STATE_READ_WRITE + "|" 
@@ -170,4 +203,14 @@ public class ServiceAvailability implements AvailabilityPlugin {
         return ret;
     }
 
+    private void setOffline(boolean offline) {
+        String jndiArtifactSync = appName + "-" + ArtifactSync.class.getName();
+        try {
+            InitialContext initialContext = new InitialContext();
+            ArtifactSync async = (ArtifactSync) initialContext.lookup(jndiArtifactSync);
+            async.setOffline(offline);
+        } catch (NamingException e) {
+            log.debug(String.format("unable to unbind %s - %s", jndiArtifactSync, e.getMessage()));
+        }
+    }
 }

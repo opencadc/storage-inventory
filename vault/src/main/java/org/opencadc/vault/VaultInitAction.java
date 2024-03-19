@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2023.                            (c) 2023.
+*  (c) 2024.                            (c) 2024.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -134,10 +134,11 @@ public class VaultInitAction extends InitAction {
     private List<String> allocationParents = new ArrayList<>();
 
     private String jndiNodePersistence;
-    private String jndiPreauthKeys;
+    private String jndiPreauthKeys;  // store pubkey in JNDI for download via GetKeyAction
+    private String jndiArtifactSync; // store in JNDI to support availability mode change
     private String jndiSiteAvailabilities;
     private Thread availabilityCheck;
-    private Thread artifactSync;
+    private Thread artifactSyncThread;
 
     public VaultInitAction() {
         super();
@@ -369,7 +370,7 @@ public class VaultInitAction extends InitAction {
             } catch (NamingException ignore) {
                 log.debug("unbind previous JNDI key (" + jndiNodePersistence + ") failed... ignoring");
             }
-            NodePersistence npi = new NodePersistenceImpl(resourceID);
+            NodePersistence npi = new NodePersistenceImpl(resourceID, appName);
             ctx.bind(jndiNodePersistence, npi);
 
             log.info("initNodePersistence: created JNDI key: " + jndiNodePersistence + " impl: " + npi.getClass().getName());
@@ -455,31 +456,54 @@ public class VaultInitAction extends InitAction {
     }
     
     private void initBackgroundWorkers() {
-        HarvestStateDAO hsDAO = new HarvestStateDAO();
-        hsDAO.setConfig(vosDaoConfig);
-        
-        ArtifactDAO artifactDAO = new ArtifactDAO();
-        Map<String,Object> iterprops = getIteratorConfig(props);
-        log.warn("iterator pool: " + iterprops.get("jndiDataSourceName"));
-        artifactDAO.setConfig(iterprops);
-        
-        terminateBackgroundWorkers();
-        this.artifactSync = new Thread(new ArtifactSync(hsDAO, artifactDAO, storageNamespace));
-        artifactSync.setDaemon(true);
-        artifactSync.start();
+        try {
+            HarvestStateDAO hsDAO = new HarvestStateDAO();
+            hsDAO.setConfig(vosDaoConfig);
+
+            ArtifactDAO artifactDAO = new ArtifactDAO();
+            Map<String,Object> iterprops = getIteratorConfig(props);
+            log.warn("iterator pool: " + iterprops.get("jndiDataSourceName"));
+            artifactDAO.setConfig(iterprops);
+
+            terminateBackgroundWorkers();
+            ArtifactSync async = new ArtifactSync(hsDAO, artifactDAO, storageNamespace);
+            this.artifactSyncThread = new Thread(async);
+            artifactSyncThread.setDaemon(true);
+            artifactSyncThread.start();
+
+            // store in JNDI so availability can set offline
+            String jndiArtifactSync = appName + "-" + ArtifactSync.class.getName();
+            InitialContext ctx = new InitialContext();
+            try {
+                ctx.unbind(jndiArtifactSync);
+            } catch (NamingException ignore) {
+                log.debug("unbind previous JNDI key (" + jndiPreauthKeys + ") failed... ignoring");
+            }
+            ctx.bind(jndiArtifactSync, async);
+            log.info("initBackgroundWorkers: created JNDI key: " + jndiArtifactSync);
+        } catch (Exception ex) {
+            throw new RuntimeException("check/init ArtifactSync failed", ex);
+        }
     }
     
     private void terminateBackgroundWorkers() {
-        if (this.artifactSync != null) {
+        if (this.artifactSyncThread != null) {
             try {
                 log.info("terminating ArtifactSync Thread...");
-                this.artifactSync.interrupt();
-                this.artifactSync.join();
+                this.artifactSyncThread.interrupt();
+                this.artifactSyncThread.join();
                 log.info("terminating ArtifactSync Thread... [OK]");
             } catch (Throwable t) {
                 log.info("failed to terminate ArtifactSync thread", t);
             } finally {
-                this.artifactSync = null;
+                this.artifactSyncThread = null;
+            }
+            
+            try {
+                InitialContext initialContext = new InitialContext();
+                initialContext.unbind(this.jndiArtifactSync);
+            } catch (NamingException e) {
+                log.debug(String.format("unable to unbind %s - %s", this.jndiArtifactSync, e.getMessage()));
             }
         }
     }

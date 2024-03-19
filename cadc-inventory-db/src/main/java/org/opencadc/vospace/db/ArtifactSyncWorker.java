@@ -117,9 +117,11 @@ public class ArtifactSyncWorker implements Runnable {
         DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
         if (harvestState.curLastModified != null) {
             log.info("ArtifactSyncWorker.artifactQuery source=" + harvestState.getResourceID() 
-                    + " instance=" + harvestState.instanceID + " start=" + df.format(harvestState.curLastModified));
+                    + " instance=" + harvestState.instanceID 
+                    + " start=" + df.format(harvestState.curLastModified));
         } else {
-            log.info("ArtifactSyncWorker.artifactQuery source=" + harvestState.getResourceID() + " instance=" + harvestState.instanceID);
+            log.info("ArtifactSyncWorker.artifactQuery source=" + harvestState.getResourceID() 
+                    + " instance=" + harvestState.instanceID);
         }
 
         String uriBucket = null; // process all artifacts in a single thread
@@ -163,10 +165,12 @@ public class ArtifactSyncWorker implements Runnable {
         }
         if (harvestState.curLastModified != null) {
             log.info("ArtifactSyncWorker.artifactQuery source=" + harvestState.getResourceID() 
-                    + " instance=" + harvestState.instanceID + " end=" + df.format(harvestState.curLastModified));
+                    + " instance=" + harvestState.instanceID 
+                    + " end=" + df.format(harvestState.curLastModified));
         } else {
             log.info("ArtifactSyncWorker.artifactQuery source=" + harvestState.getResourceID() 
-                    + " instance=" + harvestState.instanceID + " end=true");
+                    + " instance=" + harvestState.instanceID 
+                    + " end=true");
         }
     }
 }

@@ -27,14 +27,15 @@
         removeAbandoned="false"
         testOnBorrow="true" validationQuery="select 123" />
     
-     <!-- NOTE single connection is hard coded here!! -->
+     <!-- pool size is hard coded here: 2 so that the availability can check the pool 
+            without blocking while the iterator is running -->
     <Resource name="jdbc/inventory-iterator"
         auth="Container"
         type="javax.sql.DataSource"
         factory="org.apache.tomcat.jdbc.pool.DataSourceFactory" closeMethod="close"
         minEvictableIdleTimeMillis="60000" timeBetweenEvictionRunsMillis="30000"
         maxWait="20000"
-        initialSize="0" minIdle="0" maxIdle="1" maxActive="1"
+        initialSize="0" minIdle="0" maxIdle="2" maxActive="2"
         username="${org.opencadc.vault.inventory.username}" password="${org.opencadc.vault.inventory.password}"
         driverClassName="org.postgresql.Driver" url="${org.opencadc.vault.inventory.url}"
         removeAbandoned="false"
