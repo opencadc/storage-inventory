@@ -95,7 +95,7 @@ import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.db.version.InitDatabaseSI;
 import org.opencadc.inventory.transfer.StorageSiteAvailabilityCheck;
-import org.opencadc.vault.metadata.ArtifactSync;
+import org.opencadc.vault.metadata.DataNodeSizeSync;
 import org.opencadc.vospace.db.InitDatabaseVOS;
 import org.opencadc.vospace.server.NodePersistence;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -135,10 +135,12 @@ public class VaultInitAction extends InitAction {
 
     private String jndiNodePersistence;
     private String jndiPreauthKeys;  // store pubkey in JNDI for download via GetKeyAction
-    private String jndiArtifactSync; // store in JNDI to support availability mode change
+
     private String jndiSiteAvailabilities;
     private Thread availabilityCheck;
-    private Thread artifactSyncThread;
+
+    private String jndiDataNodeSizeSync; // store in JNDI to support availability mode change
+    private Thread dataNodeSizeSyncThread;
 
     public VaultInitAction() {
         super();
@@ -466,44 +468,44 @@ public class VaultInitAction extends InitAction {
             artifactDAO.setConfig(iterprops);
 
             terminateBackgroundWorkers();
-            ArtifactSync async = new ArtifactSync(hsDAO, artifactDAO, storageNamespace);
-            this.artifactSyncThread = new Thread(async);
-            artifactSyncThread.setDaemon(true);
-            artifactSyncThread.start();
+            DataNodeSizeSync async = new DataNodeSizeSync(hsDAO, artifactDAO, storageNamespace);
+            this.dataNodeSizeSyncThread = new Thread(async);
+            dataNodeSizeSyncThread.setDaemon(true);
+            dataNodeSizeSyncThread.start();
 
             // store in JNDI so availability can set offline
-            String jndiArtifactSync = appName + "-" + ArtifactSync.class.getName();
+            this.jndiDataNodeSizeSync = appName + "-" + DataNodeSizeSync.class.getName();
             InitialContext ctx = new InitialContext();
             try {
-                ctx.unbind(jndiArtifactSync);
+                ctx.unbind(jndiDataNodeSizeSync);
             } catch (NamingException ignore) {
                 log.debug("unbind previous JNDI key (" + jndiPreauthKeys + ") failed... ignoring");
             }
-            ctx.bind(jndiArtifactSync, async);
-            log.info("initBackgroundWorkers: created JNDI key: " + jndiArtifactSync);
+            ctx.bind(jndiDataNodeSizeSync, async);
+            log.info("initBackgroundWorkers: created JNDI key: " + jndiDataNodeSizeSync);
         } catch (Exception ex) {
             throw new RuntimeException("check/init ArtifactSync failed", ex);
         }
     }
     
     private void terminateBackgroundWorkers() {
-        if (this.artifactSyncThread != null) {
+        if (this.dataNodeSizeSyncThread != null) {
             try {
-                log.info("terminating ArtifactSync Thread...");
-                this.artifactSyncThread.interrupt();
-                this.artifactSyncThread.join();
-                log.info("terminating ArtifactSync Thread... [OK]");
+                log.info("terminating " + DataNodeSizeSync.class.getSimpleName()  + " Thread...");
+                this.dataNodeSizeSyncThread.interrupt();
+                this.dataNodeSizeSyncThread.join();
+                log.info("terminating " + DataNodeSizeSync.class.getSimpleName()  + " Thread... [OK]");
             } catch (Throwable t) {
-                log.info("failed to terminate ArtifactSync thread", t);
+                log.info("failed to terminate " + DataNodeSizeSync.class.getSimpleName()  + " thread", t);
             } finally {
-                this.artifactSyncThread = null;
+                this.dataNodeSizeSyncThread = null;
             }
             
             try {
                 InitialContext initialContext = new InitialContext();
-                initialContext.unbind(this.jndiArtifactSync);
+                initialContext.unbind(this.jndiDataNodeSizeSync);
             } catch (NamingException e) {
-                log.debug(String.format("unable to unbind %s - %s", this.jndiArtifactSync, e.getMessage()));
+                log.debug(String.format("unable to unbind %s - %s", this.jndiDataNodeSizeSync, e.getMessage()));
             }
         }
     }

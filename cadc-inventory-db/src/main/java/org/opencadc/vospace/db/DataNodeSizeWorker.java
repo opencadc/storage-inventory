@@ -86,8 +86,8 @@ import org.opencadc.vospace.DataNode;
  * 
  * @author adriand
  */
-public class ArtifactSyncWorker implements Runnable {
-    private static final Logger log = Logger.getLogger(ArtifactSyncWorker.class);
+public class DataNodeSizeWorker implements Runnable {
+    private static final Logger log = Logger.getLogger(DataNodeSizeWorker.class);
 
     private final HarvestState harvestState;
     private final NodeDAO nodeDAO;
@@ -103,7 +103,7 @@ public class ArtifactSyncWorker implements Runnable {
      * @param artifactDAO DAO class to query for artifacts
      * @param namespace artifact namespace
      */
-    public ArtifactSyncWorker(HarvestStateDAO harvestStateDAO, HarvestState harvestState, 
+    public DataNodeSizeWorker(HarvestStateDAO harvestStateDAO, HarvestState harvestState, 
             ArtifactDAO artifactDAO, Namespace namespace) {
         this.harvestState = harvestState;
         this.harvestStateDAO = harvestStateDAO;
@@ -114,13 +114,14 @@ public class ArtifactSyncWorker implements Runnable {
 
     @Override
     public void run() {
+        String opName = DataNodeSizeWorker.class.getSimpleName() + ".artifactQuery";
         DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
         if (harvestState.curLastModified != null) {
-            log.info("ArtifactSyncWorker.artifactQuery source=" + harvestState.getResourceID() 
+            log.info(opName + " source=" + harvestState.getResourceID() 
                     + " instance=" + harvestState.instanceID 
                     + " start=" + df.format(harvestState.curLastModified));
         } else {
-            log.info("ArtifactSyncWorker.artifactQuery source=" + harvestState.getResourceID() 
+            log.info(opName + " source=" + harvestState.getResourceID() 
                     + " instance=" + harvestState.instanceID);
         }
 
@@ -164,11 +165,11 @@ public class ArtifactSyncWorker implements Runnable {
             throw new RuntimeException("error while closing ResourceIterator", ex);
         }
         if (harvestState.curLastModified != null) {
-            log.info("ArtifactSyncWorker.artifactQuery source=" + harvestState.getResourceID() 
+            log.info(opName + " source=" + harvestState.getResourceID() 
                     + " instance=" + harvestState.instanceID 
                     + " end=" + df.format(harvestState.curLastModified));
         } else {
-            log.info("ArtifactSyncWorker.artifactQuery source=" + harvestState.getResourceID() 
+            log.info(opName + " source=" + harvestState.getResourceID() 
                     + " instance=" + harvestState.instanceID 
                     + " end=true");
         }

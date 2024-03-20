@@ -77,7 +77,7 @@ import javax.naming.InitialContext;
 import javax.naming.NamingException;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
-import org.opencadc.vault.metadata.ArtifactSync;
+import org.opencadc.vault.metadata.DataNodeSizeSync;
 
 /**
  * This class performs the work of determining if the executing artifact
@@ -204,10 +204,10 @@ public class ServiceAvailability implements AvailabilityPlugin {
     }
 
     private void setOffline(boolean offline) {
-        String jndiArtifactSync = appName + "-" + ArtifactSync.class.getName();
+        String jndiArtifactSync = appName + "-" + DataNodeSizeSync.class.getName();
         try {
             InitialContext initialContext = new InitialContext();
-            ArtifactSync async = (ArtifactSync) initialContext.lookup(jndiArtifactSync);
+            DataNodeSizeSync async = (DataNodeSizeSync) initialContext.lookup(jndiArtifactSync);
             async.setOffline(offline);
         } catch (NamingException e) {
             log.debug(String.format("unable to unbind %s - %s", jndiArtifactSync, e.getMessage()));

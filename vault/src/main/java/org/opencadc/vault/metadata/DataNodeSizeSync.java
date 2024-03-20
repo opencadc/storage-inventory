@@ -76,7 +76,7 @@ import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.HarvestState;
 import org.opencadc.inventory.db.HarvestStateDAO;
-import org.opencadc.vospace.db.ArtifactSyncWorker;
+import org.opencadc.vospace.db.DataNodeSizeWorker;
 
 /**
  * Main artifact-sync agent that enables incremental sync of Artifact
@@ -84,8 +84,8 @@ import org.opencadc.vospace.db.ArtifactSyncWorker;
  * 
  * @author pdowler
  */
-public class ArtifactSync implements Runnable {
-    private static final Logger log = Logger.getLogger(ArtifactSync.class);
+public class DataNodeSizeSync implements Runnable {
+    private static final Logger log = Logger.getLogger(DataNodeSizeSync.class);
 
     private static final long ROUNDS = 6000L; // 6 sec
     private static final long SHORT_SLEEP = 5 * ROUNDS;
@@ -101,7 +101,7 @@ public class ArtifactSync implements Runnable {
     
     private boolean offline = false;
     
-    public ArtifactSync(HarvestStateDAO stateDAO, ArtifactDAO artifactDAO, Namespace artifactNamespace) { 
+    public DataNodeSizeSync(HarvestStateDAO stateDAO, ArtifactDAO artifactDAO, Namespace artifactNamespace) { 
         this.stateDAO = stateDAO;
         this.artifactDAO = artifactDAO;
         this.artifactNamespace = artifactNamespace;
@@ -150,7 +150,7 @@ public class ArtifactSync implements Runnable {
                     log.debug("leader: " + state);
                     boolean fail = false;
                     try {
-                        ArtifactSyncWorker worker = new ArtifactSyncWorker(stateDAO, state, artifactDAO, artifactNamespace);
+                        DataNodeSizeWorker worker = new DataNodeSizeWorker(stateDAO, state, artifactDAO, artifactNamespace);
                         worker.run();
                     } catch (Exception ex) {
                         log.error("unexpected worker fail", ex);
