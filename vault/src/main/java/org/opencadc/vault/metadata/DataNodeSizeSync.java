@@ -106,10 +106,6 @@ public class DataNodeSizeSync implements Runnable {
         this.artifactDAO = artifactDAO;
         this.artifactNamespace = artifactNamespace;
         
-        // fenwick setup for production workload:
-        //dao.setUpdateBufferCount(99); // buffer 99 updates, do every 100
-        //dao.setMaintCount(999); // buffer 999 so every 1000 real updates aka every 1e5 events
-        
         // we need continuous timestamp updates to retain leader status, so only schedule maintenance
         stateDAO.setUpdateBufferCount(0);
         stateDAO.setMaintCount(9999); // every 1e4
@@ -117,7 +113,6 @@ public class DataNodeSizeSync implements Runnable {
 
     public void setOffline(boolean offline) {
         this.offline = offline;
-        
     }
 
     @Override
