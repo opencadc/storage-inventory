@@ -138,15 +138,25 @@ public class DataNodeSizeSync implements Runnable {
                     log.debug("created: " + state);
                 }
                 
+                long t1 = System.currentTimeMillis();
+                BackgroundLogInfo logInfo = new BackgroundLogInfo(instanceID.toString());
+                logInfo.setSuccess(false);
+                
                 // determine leader
                 boolean leader = checkLeaderStatus(state);
-
+                logInfo.leader = leader;
+                
+                log.info(logInfo.start());
+                long sleep = LONG_SLEEP; // default for not leader
                 if (leader) {
                     log.debug("leader: " + state);
                     boolean fail = false;
                     try {
                         DataNodeSizeWorker worker = new DataNodeSizeWorker(stateDAO, state, artifactDAO, artifactNamespace);
                         worker.run();
+                        logInfo.setLastModified(state.curLastModified);
+                        logInfo.processed = worker.getNumArtifactsProcessed();
+                        logInfo.setSuccess(true);
                     } catch (Exception ex) {
                         log.error("unexpected worker fail", ex);
                         fail = true;
@@ -173,16 +183,19 @@ public class DataNodeSizeSync implements Runnable {
                     }
 
                     if (fail) {
-                        log.debug("failed leader " + state.instanceID + " sleep=" + FAIL_SLEEP);
-                        Thread.sleep(FAIL_SLEEP);
+                        sleep = FAIL_SLEEP;
                     } else {
-                        log.debug("idle leader " + state.instanceID + " sleep=" + SHORT_SLEEP);
-                        Thread.sleep(SHORT_SLEEP);
+                        sleep = SHORT_SLEEP;
                     }
+                    logInfo.setSuccess(!fail);
+                    logInfo.setElapsedTime(System.currentTimeMillis() - t1);
                 } else {
-                    log.debug("not leader: sleep=" + LONG_SLEEP);
-                    Thread.sleep(LONG_SLEEP);
+                    // not leader success
+                    logInfo.setSuccess(true);
                 }
+                logInfo.sleep = sleep;
+                log.info(logInfo.end());
+                Thread.sleep(sleep);
             }
         } catch (InterruptedException ex) {
             log.debug("interrupted - assuming shutdown", ex);

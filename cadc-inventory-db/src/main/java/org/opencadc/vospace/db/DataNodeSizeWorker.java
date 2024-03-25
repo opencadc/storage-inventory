@@ -94,6 +94,8 @@ public class DataNodeSizeWorker implements Runnable {
     private final ArtifactDAO artifactDAO;
     private final HarvestStateDAO harvestStateDAO;
     private final Namespace storageNamespace;
+    
+    private long numArtifactsProcessed;
 
     /**
      * Worker constructor.
@@ -112,16 +114,21 @@ public class DataNodeSizeWorker implements Runnable {
         this.storageNamespace = namespace;
     }
 
+    public long getNumArtifactsProcessed() {
+        return numArtifactsProcessed;
+    }
+
     @Override
     public void run() {
+        this.numArtifactsProcessed = 0L;
         String opName = DataNodeSizeWorker.class.getSimpleName() + ".artifactQuery";
         DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
         if (harvestState.curLastModified != null) {
-            log.info(opName + " source=" + harvestState.getResourceID() 
+            log.debug(opName + " source=" + harvestState.getResourceID() 
                     + " instance=" + harvestState.instanceID 
                     + " start=" + df.format(harvestState.curLastModified));
         } else {
-            log.info(opName + " source=" + harvestState.getResourceID() 
+            log.debug(opName + " source=" + harvestState.getResourceID() 
                     + " instance=" + harvestState.instanceID);
         }
 
@@ -159,17 +166,18 @@ public class DataNodeSizeWorker implements Runnable {
                 harvestState.curLastModified = artifact.getLastModified();
                 harvestState.curID = artifact.getID();
                 harvestStateDAO.put(harvestState);
+                numArtifactsProcessed++;
             }
         } catch (IOException ex) {
             log.error("Error closing iterator", ex);
             throw new RuntimeException("error while closing ResourceIterator", ex);
         }
         if (harvestState.curLastModified != null) {
-            log.info(opName + " source=" + harvestState.getResourceID() 
+            log.debug(opName + " source=" + harvestState.getResourceID() 
                     + " instance=" + harvestState.instanceID 
                     + " end=" + df.format(harvestState.curLastModified));
         } else {
-            log.info(opName + " source=" + harvestState.getResourceID() 
+            log.debug(opName + " source=" + harvestState.getResourceID() 
                     + " instance=" + harvestState.instanceID 
                     + " end=true");
         }
