@@ -140,17 +140,18 @@ public class DataNodeSizeSync implements Runnable {
                 
                 long t1 = System.currentTimeMillis();
                 BackgroundLogInfo logInfo = new BackgroundLogInfo(instanceID.toString());
+                logInfo.setOperation(DataNodeSizeWorker.class.getSimpleName());
                 logInfo.setSuccess(false);
                 
                 // determine leader
                 boolean leader = checkLeaderStatus(state);
                 logInfo.leader = leader;
-                
-                log.info(logInfo.start());
-                long sleep = LONG_SLEEP; // default for not leader
+                logInfo.setLastModified(state.curLastModified);
+                long sleep = LONG_SLEEP;
                 if (leader) {
                     log.debug("leader: " + state);
                     boolean fail = false;
+                    log.info(logInfo.start());
                     try {
                         DataNodeSizeWorker worker = new DataNodeSizeWorker(stateDAO, state, artifactDAO, artifactNamespace);
                         worker.run();
@@ -191,6 +192,7 @@ public class DataNodeSizeSync implements Runnable {
                     logInfo.setElapsedTime(System.currentTimeMillis() - t1);
                 } else {
                     // not leader success
+                    sleep = LONG_SLEEP;
                     logInfo.setSuccess(true);
                 }
                 logInfo.sleep = sleep;
@@ -215,7 +217,6 @@ public class DataNodeSizeSync implements Runnable {
                 log.info("EVICTING " + state.instanceID + " because age " + age + " > " + EVICT_AGE);
                 state.instanceID = instanceID;
                 stateDAO.put(state);
-                state = stateDAO.get(state.getID());
                 leader = true;
             }
         }

@@ -72,6 +72,7 @@ import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
 import java.io.IOException;
 import java.text.DateFormat;
+import java.util.Date;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.Namespace;
@@ -88,6 +89,10 @@ import org.opencadc.vospace.DataNode;
  */
 public class DataNodeSizeWorker implements Runnable {
     private static final Logger log = Logger.getLogger(DataNodeSizeWorker.class);
+
+    // lookback when doing incremental harvest because head of sequence is
+    // not monotonic over short timescales (events arrive out of sequence)
+    private static final long LOOKBACK_TIME_MS = 60 * 1000L;
 
     private final HarvestState harvestState;
     private final NodeDAO nodeDAO;
@@ -132,12 +137,21 @@ public class DataNodeSizeWorker implements Runnable {
                     + " instance=" + harvestState.instanceID);
         }
 
+        final Date now = new Date();
+        final Date lookBack = new Date(now.getTime() - LOOKBACK_TIME_MS);
+        Date startTime = getQueryLowerBound(lookBack, harvestState.curLastModified);
+        if (lookBack != null && harvestState.curLastModified != null) {
+            log.debug("lookBack=" + df.format(lookBack) + " curLastModified=" + df.format(harvestState.curLastModified) 
+                + " -> " + df.format(startTime));
+        }
+
         String uriBucket = null; // process all artifacts in a single thread
-        try (final ResourceIterator<Artifact> iter = artifactDAO.iterator(storageNamespace, uriBucket, harvestState.curLastModified, true)) {
+        try (final ResourceIterator<Artifact> iter = artifactDAO.iterator(storageNamespace, uriBucket, startTime, true)) {
             TransactionManager tm = nodeDAO.getTransactionManager();
             while (iter.hasNext()) {
                 Artifact artifact = iter.next();
                 DataNode node = nodeDAO.getDataNode(artifact.getURI());
+                log.debug(artifact.getURI() + " len=" + artifact.getContentLength() + " -> " + node.getName());
                 if (node != null  && !artifact.getContentLength().equals(node.bytesUsed)) {
                     tm.startTransaction();
                     try {
@@ -181,5 +195,21 @@ public class DataNodeSizeWorker implements Runnable {
                     + " instance=" + harvestState.instanceID 
                     + " end=true");
         }
+    }
+
+    private Date getQueryLowerBound(Date lookBack, Date lastModified) {
+        if (lookBack == null) {
+            // feature not enabled
+            return lastModified;
+        }
+        if (lastModified == null) {
+            // first harvest
+            return null;
+        }
+        if (lookBack.before(lastModified)) {
+            return lookBack;
+        }
+        return lastModified;
+        
     }
 }
