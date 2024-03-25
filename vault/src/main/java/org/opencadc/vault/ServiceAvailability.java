@@ -71,7 +71,6 @@ import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.vosi.Availability;
 import ca.nrc.cadc.vosi.AvailabilityPlugin;
-
 import ca.nrc.cadc.vosi.avail.CheckDataSource;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
