@@ -1,7 +1,8 @@
 # Storage Inventory local artifact deletion process (ringhold)
 
-Process to delete local artifacts that are no longer being synchronised by fenwick. This tool is used
-to perform quick cleanup at a storage site after changing the fenwick artifact-filter policy.
+Process to remove the local copy of artifacts from a storage site inventory database and 
+generate DeletedStorageLocationEvent(s) so the removal will propagate correctly to a global inventory. 
+This does not remove the files from storage (see `tantar`).
 
 ## configuration
 See the [cadc-java](https://github.com/opencadc/docker-base/tree/master/cadc-java) image docs for general config requirements.
@@ -19,7 +20,7 @@ org.opencadc.ringhold.inventory.username={username for inventory admin}
 org.opencadc.ringhold.inventory.password={password for inventory admin}
 org.opencadc.ringhold.inventory.url=jdbc:postgresql://{server}/{database}
 
-# artifact namespace
+# artifact namespace(s) to remove
 org.opencadc.ringhold.namespace={storage site namespace}
 
 # artifact uri bucket filter (optional)
