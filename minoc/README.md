@@ -144,16 +144,9 @@ will be able to read files.
 See <a href="https://github.com/opencadc/core/tree/master/cadc-log">cadc-log</a> for common 
 dynamic logging control.
 
-### minoc-availability.properties (optional)
-WARN: This config file name is going to change to a common one for consistency across multiple services.
-
-The minoc-availability.properties file specifies which users have the authority to change the availability state of the minoc service. Each entry consists of a key=value pair. The key is always "users". The value is the x500 canonical user name.
-
-Example:
-```
-users = {user identity}
-```
-`users` specifies the user(s) who are authorized to make calls to the service. The value is a list of user identities (X500 distingushed name), one line per user. Optional: if the `minoc-availability.properties` is not found or does not list any `users`, the service will function in the default mode (ReadWrite) and the state will not be changeable.
+### cadc-vosi.properties (optional)
+See <a href="https://github.com/opencadc/reg/tree/master/cadc-vosi">cadc-vosi</a> for common 
+service state control.
 
 ### cadcproxy.pem (optional)
 This client certificate is used to make authenticated server-to-server calls for system-level A&A purposes.
@@ -174,15 +167,3 @@ docker run --rm -it minoc:latest /bin/bash
 docker run --rm --user tomcat:tomcat --volume=/path/to/external/config:/config:ro --name minoc minoc:latest
 ```
 
-## using it
-
-Using `cURL` is possible with Minoc to put a file for testing.
-
-**Note:** The `content-type` header is important!
-```bash
-$ curl -v -X PUT \
-  --header "content-type: application/fits" \ 
-  --data-binary @myfile.fits \
-  -E ~/.ssl/cadcproxy.pem \ 
-  https://myhost.com/minoc/files/test:TEST/myfile.fits
-```

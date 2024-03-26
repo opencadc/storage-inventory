@@ -14,13 +14,13 @@ sourceCompatibility = 1.8
 
 group = 'org.opencadc'
 
-version = '0.10.0'
+version = '1.0.0'
 
 description = 'OpenCADC Storage Inventory core library'
 def git_url = 'https://github.com/opencadc/storage-inventory'
 
 dependencies {
-    compile 'org.opencadc:cadc-util:[1.10.6,2.0)'
+    compile 'org.opencadc:cadc-util:[1.11.0,2.0)'
 
     testCompile 'junit:junit:[4.0,)'
 }

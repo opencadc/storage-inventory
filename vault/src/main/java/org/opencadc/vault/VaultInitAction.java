@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2023.                            (c) 2023.
+*  (c) 2024.                            (c) 2024.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -69,6 +69,7 @@ package org.opencadc.vault;
 
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.rest.InitAction;
+import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
@@ -88,13 +89,14 @@ import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.PreauthKeyPair;
+import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.HarvestStateDAO;
 import org.opencadc.inventory.db.PreauthKeyPairDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.db.version.InitDatabaseSI;
 import org.opencadc.inventory.transfer.StorageSiteAvailabilityCheck;
-import org.opencadc.vault.metadata.ArtifactSync;
+import org.opencadc.vault.metadata.DataNodeSizeSync;
 import org.opencadc.vospace.db.InitDatabaseVOS;
 import org.opencadc.vospace.server.NodePersistence;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -111,6 +113,7 @@ public class VaultInitAction extends InitAction {
     
     static final String JNDI_VOS_DATASOURCE = "jdbc/nodes"; // context.xml
     static final String JNDI_INV_DATASOURCE = "jdbc/inventory"; // context.xml
+    static final String JNDI_INV_ITER_DATASOURCE = "jdbc/inventory-iterator"; // context.xml
     static final String JNDI_UWS_DATASOURCE = "jdbc/uws"; // context.xml
 
     // config keys
@@ -129,13 +132,15 @@ public class VaultInitAction extends InitAction {
     private Namespace storageNamespace;
     private Map<String, Object> vosDaoConfig;
     private Map<String, Object> invDaoConfig;
-    private List<String> allocationParents = new ArrayList<>();
 
-    private String jndiNodePersistence;
-    private String jndiPreauthKeys;
-    private String jndiSiteAvailabilities;
+    private String jndiNodePersistence; // store in JNDI for cadc-vos-server lib
+    private String jndiPreauthKeys;  // store pubkey in JNDI for download via GetKeyAction
+
+    private String jndiSiteAvailabilities; // store in JNDI to share with ProtocolsGenerator
     private Thread availabilityCheck;
-    private Thread artifactSync;
+
+    private String jndiDataNodeSizeSync; // store in JNDI to support availability mode change
+    private Thread dataNodeSizeSyncThread;
 
     public VaultInitAction() {
         super();
@@ -144,8 +149,9 @@ public class VaultInitAction extends InitAction {
     @Override
     public void doInit() {
         initConfig();
-        initDatabase();
-        initUWSDatabase();
+        initDatabaseVOS();
+        initDatabaseINV();
+        initDatabaseUWS();
         initNodePersistence();
         initKeyPair();
         initAvailabilityCheck();
@@ -290,16 +296,17 @@ public class VaultInitAction extends InitAction {
         return ret;
     }
     
-    static Map<String, Object> getKeyPairConfig(MultiValuedProperties props) {
-        return getDaoConfig(props);
-        /*
+    static Map<String, Object> getIteratorConfig(MultiValuedProperties props) {
         Map<String, Object> ret = new TreeMap<>();
         ret.put(SQLGenerator.class.getName(), SQLGenerator.class); // not configurable right now
-        ret.put("jndiDataSourceName", JNDI_VOS_DATASOURCE);
-        ret.put("invSchema", props.getFirstPropertyValue(INVENTORY_SCHEMA_KEY)); // requied but unused
-        ret.put("genSchema", props.getFirstPropertyValue(VOSPACE_SCHEMA_KEY));
+        ret.put("jndiDataSourceName", JNDI_INV_ITER_DATASOURCE);
+        ret.put("invSchema", props.getFirstPropertyValue(INVENTORY_SCHEMA_KEY));
+        ret.put("genSchema", props.getFirstPropertyValue(INVENTORY_SCHEMA_KEY)); // for complete init
         return ret;
-        */
+    }
+    
+    static Map<String, Object> getKeyPairConfig(MultiValuedProperties props) {
+        return getDaoConfig(props);
     }
     
     private void initConfig() {
@@ -318,7 +325,7 @@ public class VaultInitAction extends InitAction {
         }
     }
 
-    private void initDatabase() {
+    private void initDatabaseVOS() {
         try {
             String dsname = (String) vosDaoConfig.get("jndiDataSourceName");
             String schema = (String) vosDaoConfig.get("vosSchema");
@@ -330,7 +337,9 @@ public class VaultInitAction extends InitAction {
         } catch (Exception ex) {
             throw new IllegalStateException("check/init vospace database failed", ex);
         }
-
+    }
+    
+    private void initDatabaseINV() {
         try {
             String dsname = (String) invDaoConfig.get("jndiDataSourceName");
             String schema = (String) invDaoConfig.get("invSchema");
@@ -344,7 +353,7 @@ public class VaultInitAction extends InitAction {
         }
     }
 
-    private void initUWSDatabase() {
+    private void initDatabaseUWS() {
         try {
             log.info("initDatabase: " + JNDI_UWS_DATASOURCE + " uws START");
             DataSource uws = DBUtil.findJNDIDataSource(JNDI_UWS_DATASOURCE);
@@ -366,7 +375,7 @@ public class VaultInitAction extends InitAction {
             } catch (NamingException ignore) {
                 log.debug("unbind previous JNDI key (" + jndiNodePersistence + ") failed... ignoring");
             }
-            NodePersistence npi = new NodePersistenceImpl(resourceID);
+            NodePersistence npi = new NodePersistenceImpl(resourceID, appName);
             ctx.bind(jndiNodePersistence, npi);
 
             log.info("initNodePersistence: created JNDI key: " + jndiNodePersistence + " impl: " + npi.getClass().getName());
@@ -452,26 +461,64 @@ public class VaultInitAction extends InitAction {
     }
     
     private void initBackgroundWorkers() {
-        HarvestStateDAO hsDAO = new HarvestStateDAO();
-        hsDAO.setConfig(getDaoConfig(props));
-        
-        terminateBackgroundWorkers();
-        this.artifactSync = new Thread(new ArtifactSync(hsDAO));
-        artifactSync.setDaemon(true);
-        artifactSync.start();
+        try {
+            HarvestStateDAO hsDAO = new HarvestStateDAO();
+            hsDAO.setConfig(vosDaoConfig);
+
+            ArtifactDAO artifactDAO = new ArtifactDAO();
+            Map<String,Object> iterprops = getIteratorConfig(props);
+            log.warn("iterator pool: " + iterprops.get("jndiDataSourceName"));
+            artifactDAO.setConfig(iterprops);
+            
+            // determine startup mode
+            boolean offline = false; // normal
+            String key = appName + RestAction.STATE_MODE_KEY;
+            String ret = System.getProperty(key);
+            if (ret != null 
+                    && (RestAction.STATE_READ_ONLY.equals(ret) || RestAction.STATE_OFFLINE.equals(ret))) {
+                offline = true;
+            }
+
+            terminateBackgroundWorkers();
+            DataNodeSizeSync async = new DataNodeSizeSync(hsDAO, artifactDAO, storageNamespace);
+            async.setOffline(offline);
+            this.dataNodeSizeSyncThread = new Thread(async);
+            dataNodeSizeSyncThread.setDaemon(true);
+            dataNodeSizeSyncThread.start();
+
+            // store in JNDI so availability can set offline
+            this.jndiDataNodeSizeSync = appName + "-" + DataNodeSizeSync.class.getName();
+            InitialContext ctx = new InitialContext();
+            try {
+                ctx.unbind(jndiDataNodeSizeSync);
+            } catch (NamingException ignore) {
+                log.debug("unbind previous JNDI key (" + jndiPreauthKeys + ") failed... ignoring");
+            }
+            ctx.bind(jndiDataNodeSizeSync, async);
+            log.info("initBackgroundWorkers: created JNDI key: " + jndiDataNodeSizeSync);
+        } catch (Exception ex) {
+            throw new RuntimeException("check/init ArtifactSync failed", ex);
+        }
     }
     
     private void terminateBackgroundWorkers() {
-        if (this.artifactSync != null) {
+        if (this.dataNodeSizeSyncThread != null) {
             try {
-                log.info("terminating ArtifactSync Thread...");
-                this.artifactSync.interrupt();
-                this.artifactSync.join();
-                log.info("terminating ArtifactSync Thread... [OK]");
+                log.info("terminating " + DataNodeSizeSync.class.getSimpleName()  + " Thread...");
+                this.dataNodeSizeSyncThread.interrupt();
+                this.dataNodeSizeSyncThread.join();
+                log.info("terminating " + DataNodeSizeSync.class.getSimpleName()  + " Thread... [OK]");
             } catch (Throwable t) {
-                log.info("failed to terminate ArtifactSync thread", t);
+                log.info("failed to terminate " + DataNodeSizeSync.class.getSimpleName()  + " thread", t);
             } finally {
-                this.artifactSync = null;
+                this.dataNodeSizeSyncThread = null;
+            }
+            
+            try {
+                InitialContext initialContext = new InitialContext();
+                initialContext.unbind(this.jndiDataNodeSizeSync);
+            } catch (NamingException e) {
+                log.debug(String.format("unable to unbind %s - %s", this.jndiDataNodeSizeSync, e.getMessage()));
             }
         }
     }

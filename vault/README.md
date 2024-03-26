@@ -41,7 +41,6 @@ org.opencadc.vault.nodes.password={password for vospace pool}
 org.opencadc.vault.nodes.url=jdbc:postgresql://{server}/{database}
 
 org.opencadc.vault.inventory.maxActive={max connections for inventory pool}
-# optional: config for separate inventory pool
 org.opencadc.vault.inventory.username={username for inventory pool}
 org.opencadc.vault.inventory.password={password for inventory pool}
 org.opencadc.vault.inventory.url=jdbc:postgresql://{server}/{database}
@@ -58,13 +57,12 @@ VOSI-availability output.
 
 The _inventory_ account owns and manages (create, alter, drop) inventory database objects and manages
 all the content (update and delete Artifact,  insert DeletedArtifactEvent). The database is specified 
-in the JDBC URL and the schema name is specified in the minoc.properties (below). Failure to connect or 
+in the JDBC URL and the schema name is specified in the vault.properties (below). Failure to connect or 
 initialize the database will show up in logs and in the VOSI-availability output. The _inventory_ content 
 may be in the same database as the _nodes_, in a different database in the same server, or in a different 
-server entirely. See `org.opencadc.vault.singlePool` below for the pros and cons. Note: it is a good
-idea to set `maxActive` to a valid integer (e.g. 1 because the tomcat connection pool doesn't like 0 and
-decides to make it 100 instead) when using a single pool; this avoids an ugly but meaningless stack trace 
-in the logs at startup.
+server entirely. See `org.opencadc.vault.singlePool` below for the pros and cons. The _inventory_ pool must
+be functional for initialization, availability checks (`maxActive` = 1 with `singlePool` is sufficient), and
+the connection information is re-used by an internal background thread that synchronizes data node sizes.
 
 The _uws_ account owns and manages (create, alter, drop) uws database objects in the `uws` schema and manages all
 the content (insert, update, delete). The database is specified in the JDBC URLFailure to connect or initialize the
@@ -128,28 +126,21 @@ DeletedArtifactEvent are done in a separate transaction and if that fails the Ar
 orphaned until the vault validation (see ???) runs and fixes such a discrepancy. However, _singlePool_ = `false` 
 allows the content to be stored in two separate databases or servers.
 
-The _root.owner_ owns the root node and has full read and write permission in the root container, so it can 
-create and delete container nodes at the root and assign container node properties that are normally read-only
-to normal users: owner, quota, etc. This must be set to the username of the admin.
+The _root.owner_ key configures the owner of the root node; the owner and has full read and write permission 
+in the root container, so it can create and delete container nodes at the root and assign container node properties 
+that are normally read-only to normal users: owner, quota, etc. This must be set to the username of the admin.
 
-The _storage.namespace_ configures `vault` to use the specified namespace in storage-inventory to store files. 
+The _storage.namespace_ key configures `vault` to use the specified namespace in storage-inventory to store files. 
 This only applies to new data nodes that are created and will not effect previously created nodes and artifacts.
 Probably don't want to change this... prevent change? TBD.
 
-### vault-availability.properties (optional)
+### cadc-log.properties (optional)
+See <a href="https://github.com/opencadc/core/tree/master/cadc-log">cadc-log</a> for common 
+dynamic logging control.
 
-The vault-availability.properties file specifies which users have the authority to change the availability state of 
-the vault service. Each entry consists of a key=value pair. The key is always "users". The value is the x500 canonical 
-user name.
-
-Example:
-```
-users = {user identity}
-```
-`users` specifies the user(s) who are authorized to make calls to the service. The value is a list of user
-identities (X500 distingushed name), one line per user. Optional: if the `vault-availability.properties` is 
-not found or does not list any `users`, the service will function in the default mode (ReadWrite) and the 
-state will not be changeable.
+### cadc-vosi.properties (optional)
+See <a href="https://github.com/opencadc/reg/tree/master/cadc-vosi">cadc-vosi</a> for common 
+service state control.
 
 ## building it
 ```

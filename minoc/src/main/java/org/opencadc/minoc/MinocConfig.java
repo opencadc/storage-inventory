@@ -116,7 +116,6 @@ public class MinocConfig {
     private final MultiValuedProperties configProperties;
     
     private final Map<URI,byte[]> trustedServices = new TreeMap<>();
-    private boolean trustedServiceKeySync = false;
     private final List<URI> readGrantServices = new ArrayList<>();
     private final List<URI> writeGrantServices = new ArrayList<>();
     private final boolean readable;
@@ -180,7 +179,7 @@ public class MinocConfig {
                     throw new IllegalStateException("invalid config: " + TRUST_KEY + "=" + s + " INVALID", ex);
                 }
             }
-            trustedServiceKeySync = false;
+            // try to sync keys on startup
             syncKeys();
         }
         
@@ -351,43 +350,39 @@ public class MinocConfig {
     }
 
     public Map<URI, byte[]> getTrustedServices() {
+        // check and try to sync missing keys before request
         syncKeys();
         return trustedServices;
     }
     
     private void syncKeys() {
-        if (!trustedServiceKeySync) {
-            int numFails = 0;
-            RegistryClient reg = new RegistryClient();
-            // check map for null keys and try to retrieve them
-            for (Map.Entry<URI,byte[]> me : trustedServices.entrySet()) {
-                if (me.getValue() == null) {
-                    try {
-                        log.info("get trusted pubkey: " + me.getKey());
-                        URL capURL = reg.getAccessURL(RegistryClient.Query.CAPABILITIES, me.getKey());
-                        String s = capURL.toExternalForm().replace("/capabilities", "/pubkey");
-                        URL keyURL = new URL(s);
-                        log.info("get trusted pubkey: " + me.getKey() + " -> " + keyURL);
-                        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                        HttpGet get = new HttpGet(keyURL, bos);
-                        get.setConnectionTimeout(6000);
-                        get.setReadTimeout(6000);
-                        get.setRetry(0, 0, HttpTransfer.RetryReason.NONE);
-                        get.run();
-                        if (get.getThrowable() != null) {
-                            throw (Exception) get.getThrowable();
-                        }
-                        byte[] key = bos.toByteArray();
-                        trustedServices.put(me.getKey(), key);
-                        log.info("get trusted pubkey: " + me.getKey() + " OK");
-                    } catch (Exception ex) {
-                        log.warn("failed to get public key from " + me.getKey() + ": " + ex);
-                        numFails++;
+        RegistryClient reg = new RegistryClient();
+        // check map for null keys and try to retrieve them
+        // ASSUMPTION: keys never change once generated so if they do then minoc
+        //             needs to be restarted
+        for (Map.Entry<URI,byte[]> me : trustedServices.entrySet()) {
+            if (me.getValue() == null) {
+                try {
+                    log.info("get trusted pubkey: " + me.getKey());
+                    URL capURL = reg.getAccessURL(RegistryClient.Query.CAPABILITIES, me.getKey());
+                    String s = capURL.toExternalForm().replace("/capabilities", "/pubkey");
+                    URL keyURL = new URL(s);
+                    log.info("get trusted pubkey: " + me.getKey() + " -> " + keyURL);
+                    ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                    HttpGet get = new HttpGet(keyURL, bos);
+                    get.setConnectionTimeout(6000);
+                    get.setReadTimeout(6000);
+                    get.setRetry(0, 0, HttpTransfer.RetryReason.NONE);
+                    get.run();
+                    if (get.getThrowable() != null) {
+                        throw (Exception) get.getThrowable();
                     }
+                    byte[] key = bos.toByteArray();
+                    trustedServices.put(me.getKey(), key);
+                    log.info("get trusted pubkey: " + me.getKey() + " OK");
+                } catch (Exception ex) {
+                    log.warn("failed to get public key from " + me.getKey() + ": " + ex);
                 }
-            }
-            if (numFails == 0) {
-                trustedServiceKeySync = true;
             }
         }
     }
