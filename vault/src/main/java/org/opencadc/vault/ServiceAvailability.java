@@ -201,15 +201,15 @@ public class ServiceAvailability implements AvailabilityPlugin {
         }
         return ret;
     }
-
+    
     private void setOffline(boolean offline) {
-        String jndiArtifactSync = appName + "-" + DataNodeSizeSync.class.getName();
+        String jndiKey = appName + "-" + DataNodeSizeSync.class.getName();
         try {
             InitialContext initialContext = new InitialContext();
-            DataNodeSizeSync async = (DataNodeSizeSync) initialContext.lookup(jndiArtifactSync);
+            DataNodeSizeSync async = (DataNodeSizeSync) initialContext.lookup(jndiKey);
             async.setOffline(offline);
         } catch (NamingException e) {
-            log.debug(String.format("unable to unbind %s - %s", jndiArtifactSync, e.getMessage()));
+            log.debug(String.format("unable to find %s - %s", jndiKey, e.getMessage()));
         }
     }
 }

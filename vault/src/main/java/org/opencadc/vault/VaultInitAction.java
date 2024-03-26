@@ -69,6 +69,7 @@ package org.opencadc.vault;
 
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.rest.InitAction;
+import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
@@ -131,12 +132,11 @@ public class VaultInitAction extends InitAction {
     private Namespace storageNamespace;
     private Map<String, Object> vosDaoConfig;
     private Map<String, Object> invDaoConfig;
-    private List<String> allocationParents = new ArrayList<>();
 
-    private String jndiNodePersistence;
+    private String jndiNodePersistence; // store in JNDI for cadc-vos-server lib
     private String jndiPreauthKeys;  // store pubkey in JNDI for download via GetKeyAction
 
-    private String jndiSiteAvailabilities;
+    private String jndiSiteAvailabilities; // store in JNDI to share with ProtocolsGenerator
     private Thread availabilityCheck;
 
     private String jndiDataNodeSizeSync; // store in JNDI to support availability mode change
@@ -149,8 +149,9 @@ public class VaultInitAction extends InitAction {
     @Override
     public void doInit() {
         initConfig();
-        initDatabase();
-        initUWSDatabase();
+        initDatabaseVOS();
+        initDatabaseINV();
+        initDatabaseUWS();
         initNodePersistence();
         initKeyPair();
         initAvailabilityCheck();
@@ -324,7 +325,7 @@ public class VaultInitAction extends InitAction {
         }
     }
 
-    private void initDatabase() {
+    private void initDatabaseVOS() {
         try {
             String dsname = (String) vosDaoConfig.get("jndiDataSourceName");
             String schema = (String) vosDaoConfig.get("vosSchema");
@@ -336,7 +337,9 @@ public class VaultInitAction extends InitAction {
         } catch (Exception ex) {
             throw new IllegalStateException("check/init vospace database failed", ex);
         }
-
+    }
+    
+    private void initDatabaseINV() {
         try {
             String dsname = (String) invDaoConfig.get("jndiDataSourceName");
             String schema = (String) invDaoConfig.get("invSchema");
@@ -350,7 +353,7 @@ public class VaultInitAction extends InitAction {
         }
     }
 
-    private void initUWSDatabase() {
+    private void initDatabaseUWS() {
         try {
             log.info("initDatabase: " + JNDI_UWS_DATASOURCE + " uws START");
             DataSource uws = DBUtil.findJNDIDataSource(JNDI_UWS_DATASOURCE);
@@ -466,9 +469,19 @@ public class VaultInitAction extends InitAction {
             Map<String,Object> iterprops = getIteratorConfig(props);
             log.warn("iterator pool: " + iterprops.get("jndiDataSourceName"));
             artifactDAO.setConfig(iterprops);
+            
+            // determine startup mode
+            boolean offline = false; // normal
+            String key = appName + RestAction.STATE_MODE_KEY;
+            String ret = System.getProperty(key);
+            if (ret != null 
+                    && (RestAction.STATE_READ_ONLY.equals(ret) || RestAction.STATE_OFFLINE.equals(ret))) {
+                offline = true;
+            }
 
             terminateBackgroundWorkers();
             DataNodeSizeSync async = new DataNodeSizeSync(hsDAO, artifactDAO, storageNamespace);
+            async.setOffline(offline);
             this.dataNodeSizeSyncThread = new Thread(async);
             dataNodeSizeSyncThread.setDaemon(true);
             dataNodeSizeSyncThread.start();
