@@ -70,6 +70,7 @@ package org.opencadc.vault.files;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
+import ca.nrc.cadc.rest.Version;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Date;
@@ -107,6 +108,13 @@ public class HeadAction extends RestAction {
         return null;
     }
 
+    @Override
+    protected String getServerImpl() {
+        // no null version checking because fail to build correctly can't get past basic testing
+        Version v = getVersionFromResource();
+        return "storage-inventory/vault-" + v.getMajorMinor();
+    }
+    
     @Override
     public void initAction() throws Exception {
         String jndiNodePersistence = super.appName + "-" + NodePersistence.class.getName();
