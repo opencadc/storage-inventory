@@ -134,7 +134,8 @@ public class DataNodeSizeWorker implements Runnable {
                     + " start=" + df.format(harvestState.curLastModified));
         } else {
             log.debug(opName + " source=" + harvestState.getResourceID() 
-                    + " instance=" + harvestState.instanceID);
+                    + " instance=" + harvestState.instanceID
+                    + " start=null");
         }
 
         final Date now = new Date();
@@ -193,7 +194,7 @@ public class DataNodeSizeWorker implements Runnable {
         } else {
             log.debug(opName + " source=" + harvestState.getResourceID() 
                     + " instance=" + harvestState.instanceID 
-                    + " end=true");
+                    + " end=null");
         }
     }
 

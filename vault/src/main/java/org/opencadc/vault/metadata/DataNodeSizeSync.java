@@ -157,7 +157,6 @@ public class DataNodeSizeSync implements Runnable {
                         worker.run();
                         logInfo.setLastModified(state.curLastModified);
                         logInfo.processed = worker.getNumArtifactsProcessed();
-                        logInfo.setSuccess(true);
                     } catch (Exception ex) {
                         log.error("unexpected worker fail", ex);
                         fail = true;

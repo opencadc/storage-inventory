@@ -91,7 +91,8 @@ org.opencadc.minoc.recoverableNamespace = {namespace}
 The optional _trust.preauth_ key(s) configure `minoc` to trust external service(s) to have performed
 authorization checks. Such services may include a signed token in the URL and `minoc` will validate 
 the request using a public key retrieved from the service instead of performing authorization checks
-itself. Example:
+itself. Currently, only `raven` and `vault` can generate such URLs and provide access to their
+public keys. Example:
 ```
 # trust a SI global inventory
 org.opencadc.minoc.trust.preauth = ivo://example.net/raven
@@ -99,13 +100,13 @@ org.opencadc.minoc.trust.preauth = ivo://example.net/raven
 # trust a SI VOSpace service
 org.opencadc.minoc.trust.preauth = ivo://example.net/vault
 ```
-Setting _trust.preauth_ one or more times also implies _readable_ and _writable_ are _true_.
+Setting _trust.preauth_ one or more times implicitly sets _readable_ and _writable_ to _true_.
 
 The optional _readGrantProvider_ and _writeGrantProvider_ keys configure minoc to call other services to 
 get grants (permissions) for operations. Multiple values of the granting service resourceID(s) may be provided 
 by including multiple property settings (one per line). All services will be consulted but a single positive 
-result is sufficient to grant permission for an action. Setting these values also sets the implied _readable_
-and _writable_ is _true_ respectively.
+result is sufficient to grant permission for an action. Setting these values implicitly sets _readable_
+and _writable_ to _true_ respectively.
 
 The optional _readable_ and _writable_ keys configure minoc explicitly rather than relying on one or more of 
 the above trust or grant provider settings. For example, this allows one to configure a read-only minoc

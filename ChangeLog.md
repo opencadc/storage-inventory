@@ -17,13 +17,13 @@ added optional `org.opencadc.minoc.readable` and `org.opencadc.minoc.writable` c
 A `minoc` service will advertise (via inventory.StorageSite record in the database) the
 _readable_ and _writable_ status; this information is synced to global inventory and
 used by `raven` to determine if it should generate PUT or GET URLs that use the `minoc`
-service(s) at that site. By default, the configuration of _readGrantProvider_(s) and
-_writeGrantProvider_(s) is used to determine the default status; configuration of any
-_trust.preauth_ will also make make the status _readable_ and _writable_ even if the
-service is only intending to accept one or the other. 
+service(s) at that site. The configuration of _readGrantProvider_(s) and
+_writeGrantProvider_(s) implicitly determines the status (_readable_ and _writable_
+respectively); configuration of any _trust.preauth_ will also implicitly make make the 
+status _readable_ and _writable_.
 
-The explicit _readable_ and _writable_ configuration options will override all other 
-logic and set the status accordingly. This is currently optional but may be required
+The explicit _readable_ and _writable_ configuration options will override the above 
+implicit logic and set the status accordingly. This is currently optional but may be required
 in a future version.
 
 ```
