@@ -81,6 +81,9 @@ import java.nio.file.Path;
 import org.apache.log4j.Logger;
 
 /**
+ * <p>Class is no longer used, switched to using configured namespace and bucketUri to query
+ * for artifacts to remove. But left in this package if a use case is found at a future date.
+ </p>
  * Implementation of ArtifactSelector that includes artifacts via selective queries.
  * This class requires one or more fragments of SQL (a WHERE clause), each in a separate
  * file located in {user.home}/config/include and named {something}.sql -- see the

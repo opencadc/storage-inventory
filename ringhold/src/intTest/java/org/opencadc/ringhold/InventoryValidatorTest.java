@@ -73,6 +73,7 @@ import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.db.version.InitDatabase;
+import ca.nrc.cadc.util.BucketSelector;
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
@@ -84,20 +85,17 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Date;
-import java.util.Map;
-import java.util.MissingResourceException;
-import java.util.Properties;
-import java.util.TreeMap;
-import java.util.UUID;
+import java.util.*;
 import javax.sql.DataSource;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
+import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
@@ -108,7 +106,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 /**
  * Various versions of:
  * Insert artifacts more than uri pattern
- * Run tool with one uri deselector
+ * Run tool with different Namespaces specified
  * Confirm delete storage location event creation and absence of artifacts in inventory
  */
 public class InventoryValidatorTest {
@@ -119,7 +117,7 @@ public class InventoryValidatorTest {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
         Log4jInit.setLevel("org.opencadc.inventory.db", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.ringhold", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.ringhold", Level.INFO);
     }
 
     static String INVENTORY_SERVER = "RINGHOLD_TEST";
@@ -188,80 +186,12 @@ public class InventoryValidatorTest {
 
     @Before
     public void setup() throws Exception {
-        writeConfig();
         truncateTables();
     }
 
     @Test
-    public void missingConfigTest() throws Exception {
-        final Path includePath = new File(TMP_DIR + "/config").toPath();
-        Files.createDirectories(includePath);
-        final File includeFile = new File(includePath.toFile(), "artifact-deselector.sql");
-        boolean deleted = includeFile.delete();
-        Assert.assertTrue("include file not deleted", deleted);
-
-        configTest();
-    }
-
-    @Test
-    public void emptyConfigTest() throws Exception {
-        final Path includePath = new File(TMP_DIR + "/config").toPath();
-        Files.createDirectories(includePath);
-        final File includeFile = new File(includePath.toFile(), "artifact-deselector.sql");
-
-        final FileWriter fileWriter = new FileWriter(includeFile);
-        fileWriter.write("");
-        fileWriter.flush();
-        fileWriter.close();
-
-        configTest();
-    }
-
-    @Test
-    public void onlyCommentsConfigTest() throws Exception {
-        final Path includePath = new File(TMP_DIR + "/config").toPath();
-        Files.createDirectories(includePath);
-        final File includeFile = new File(includePath.toFile(), "artifact-deselector.sql");
-
-        final FileWriter fileWriter = new FileWriter(includeFile);
-        fileWriter.write("# WHERE uri LIKE 'cadc:INTTEST/%'");
-        fileWriter.flush();
-        fileWriter.close();
-
-        configTest();
-    }
-
-    @Test
-    public void doesNotStartWithWhereConfigTest() throws Exception {
-        final Path includePath = new File(TMP_DIR + "/config").toPath();
-        Files.createDirectories(includePath);
-        final File includeFile = new File(includePath.toFile(), "artifact-deselector.sql");
-
-        final FileWriter fileWriter = new FileWriter(includeFile);
-        fileWriter.write("uri LIKE 'cadc:INTTEST/%'\r\n");
-        fileWriter.flush();
-        fileWriter.close();
-
-        configTest();
-    }
-
-    @Test
-    public void multipleWhereConfigTest() throws Exception {
-        final Path includePath = new File(TMP_DIR + "/config").toPath();
-        Files.createDirectories(includePath);
-        final File includeFile = new File(includePath.toFile(), "artifact-deselector.sql");
-
-        final FileWriter fileWriter = new FileWriter(includeFile);
-        fileWriter.write("WHERE uri LIKE 'cadc:INTTEST/%'\r\n");
-        fileWriter.write("WHERE uri LIKE 'cadc:TEST/%'");
-        fileWriter.flush();
-        fileWriter.close();
-
-        configTest();
-    }
-
-    public void configTest() {
-        StorageLocation storageLocation = new StorageLocation(URI.create("ivo://cadc.nrc.ca/foo"));
+    public void noArtifactsMatchNamespace() throws Exception {
+        StorageLocation storageLocation = new StorageLocation(URI.create("cadc:foo"));
 
         Artifact a1 = getTestArtifact("cadc:TEST/one.txt");
         a1.storageLocation = storageLocation;
@@ -273,48 +203,11 @@ public class InventoryValidatorTest {
         a3.storageLocation = storageLocation;
         this.artifactDAO.put(a3);
 
-        try {
-            System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.daoConfig, this.daoConfig);
-            testSubject.run();
-            Assert.fail("should throw an exception for invalid config");
-        } catch (Exception expected) {
-            // exception expected
-        } finally {
-            System.setProperty("user.home", USER_HOME);
-        }
-
-        a1 = this.artifactDAO.get(a1.getID());
-        Assert.assertNotNull(a1);
-        a2 = this.artifactDAO.get(a2.getID());
-        Assert.assertNotNull(a2);
-        a3 = this.artifactDAO.get(a3.getID());
-        Assert.assertNotNull(a3);
-
-        DeletedStorageLocationEvent dsle1 = this.deletedStorageLocationEventDAO.get(a1.getID());
-        Assert.assertNull(dsle1);
-        DeletedStorageLocationEvent dsle2 = this.deletedStorageLocationEventDAO.get(a2.getID());
-        Assert.assertNull(dsle2);
-        DeletedStorageLocationEvent dsle3 = this.deletedStorageLocationEventDAO.get(a3.getID());
-    }
-
-    @Test
-    public void noArtifactsMatchFilter() throws Exception {
-        StorageLocation storageLocation = new StorageLocation(URI.create("ivo://cadc.nrc.ca/foo"));
-
-        Artifact a1 = getTestArtifact("cadc:TEST/one.txt");
-        a1.storageLocation = storageLocation;
-        this.artifactDAO.put(a1);
-        Artifact a2 = getTestArtifact("cadc:INT/two.txt");
-        a2.storageLocation = storageLocation;
-        this.artifactDAO.put(a2);
-        Artifact a3 = getTestArtifact("cadc:CADC/three.txt");
-        a3.storageLocation = storageLocation;
-        this.artifactDAO.put(a3);
+        List<Namespace> namespaces = Collections.singletonList(new Namespace("cadc:NOMATCH/"));
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.daoConfig, this.daoConfig);
+            InventoryValidator testSubject = new InventoryValidator(daoConfig, daoConfig, namespaces, null);
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -336,9 +229,9 @@ public class InventoryValidatorTest {
     }
 
     @Test
-    public void someArtifactsMatchFilter() throws Exception {
-        StorageLocation a_storageLocation = new StorageLocation(URI.create("ivo://cadc.nrc.ca/foo"));
-        StorageLocation b_storageLocation = new StorageLocation(URI.create("ivo://cadc.nrc.ca/bar"));
+    public void someArtifactsMatchNamespace() throws Exception {
+        StorageLocation a_storageLocation = new StorageLocation(URI.create("cadc:foo"));
+        StorageLocation b_storageLocation = new StorageLocation(URI.create("cadc:bar"));
 
         Artifact b1 = getTestArtifact("cadc:INT/one.txt");
         b1.storageLocation = b_storageLocation;
@@ -359,9 +252,12 @@ public class InventoryValidatorTest {
         b3.storageLocation = b_storageLocation;
         this.artifactDAO.put(b3);
 
+        List<Namespace> namespaces = Collections.singletonList(new Namespace("cadc:INTTEST/"));
+        BucketSelector buckets = new BucketSelector("0-f");
+
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.daoConfig, this.daoConfig);
+            InventoryValidator testSubject = new InventoryValidator(daoConfig, daoConfig, namespaces, buckets);
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
@@ -397,40 +293,202 @@ public class InventoryValidatorTest {
     }
 
     @Test
-    public void allArtifactsMatchFilter() throws Exception {
-        StorageLocation storageLocation = new StorageLocation(URI.create("ivo://cadc.nrc.ca/foo"));
+    public void allArtifactsMatchNamespace() throws Exception {
+        StorageLocation a_storageLocation = new StorageLocation(URI.create("cadc:foo"));
+        StorageLocation b_storageLocation = new StorageLocation(URI.create("cadc:bar"));
 
-        Artifact a1 = getTestArtifact("cadc:INTTEST/one.txt");
-        a1.storageLocation = storageLocation;
+        Artifact b1 = getTestArtifact("cadc:INT/one.txt");
+        b1.storageLocation = b_storageLocation;
+        this.artifactDAO.put(b1);
+        Artifact b2 = getTestArtifact("cadc:INT_TEST/two.txt");
+        b2.storageLocation = b_storageLocation;
+        this.artifactDAO.put(b2);
+        Artifact a1 = getTestArtifact("cadc:INTTEST/three.txt");
+        a1.storageLocation = a_storageLocation;
         this.artifactDAO.put(a1);
-        Artifact a2 = getTestArtifact("cadc:INTTEST/two.txt");
-        a2.storageLocation = storageLocation;
+        Artifact a2 = getTestArtifact("cadc:INTTEST/four.txt");
+        a2.storageLocation = a_storageLocation;
         this.artifactDAO.put(a2);
-        Artifact a3 = getTestArtifact("cadc:INTTEST/three.txt");
-        a3.storageLocation = storageLocation;
+        Artifact a3 = getTestArtifact("cadc:INTTEST/five.txt");
+        a3.storageLocation = a_storageLocation;
         this.artifactDAO.put(a3);
+        Artifact b3 = getTestArtifact("cadc:TEST/six.txt");
+        b3.storageLocation = b_storageLocation;
+        this.artifactDAO.put(b3);
+
+        List<Namespace> namespaces = Arrays.asList(new Namespace("cadc:INT/"),
+                new Namespace("cadc:INT_TEST/"), new Namespace("cadc:INTTEST/"),
+                new Namespace("cadc:TEST/"));
+        BucketSelector buckets = new BucketSelector("0-f");
 
         try {
             System.setProperty("user.home", TMP_DIR);
-            InventoryValidator testSubject = new InventoryValidator(this.daoConfig, this.daoConfig);
+            InventoryValidator testSubject = new InventoryValidator(daoConfig, daoConfig, namespaces, buckets);
             testSubject.run();
         } finally {
             System.setProperty("user.home", USER_HOME);
         }
 
+        DeletedStorageLocationEvent b_dsle1 = this.deletedStorageLocationEventDAO.get(b1.getID());
+        Assert.assertNotNull(b_dsle1);
+        DeletedStorageLocationEvent b_dsle2 = this.deletedStorageLocationEventDAO.get(b2.getID());
+        Assert.assertNotNull(b_dsle2);
         DeletedStorageLocationEvent a_dsle1 = this.deletedStorageLocationEventDAO.get(a1.getID());
         Assert.assertNotNull(a_dsle1);
         DeletedStorageLocationEvent a_dsle2 = this.deletedStorageLocationEventDAO.get(a2.getID());
         Assert.assertNotNull(a_dsle2);
         DeletedStorageLocationEvent a_dsle3 = this.deletedStorageLocationEventDAO.get(a3.getID());
         Assert.assertNotNull(a_dsle3);
+        DeletedStorageLocationEvent b_dsle3 = this.deletedStorageLocationEventDAO.get(b3.getID());
+        Assert.assertNotNull(b_dsle3);
 
+        b1 = this.artifactDAO.get(b1.getID());
+        Assert.assertNull(b1);
+        b2 = this.artifactDAO.get(b2.getID());
+        Assert.assertNull(b2);
         a1 = this.artifactDAO.get(a1.getID());
         Assert.assertNull(a1);
         a2 = this.artifactDAO.get(a2.getID());
         Assert.assertNull(a2);
         a3 = this.artifactDAO.get(a3.getID());
         Assert.assertNull(a3);
+        b3 = this.artifactDAO.get(b3.getID());
+        Assert.assertNull(b3);
+    }
+
+    private Artifact getTestArtifact(final String uri) {
+        UUID uuid = UUID.randomUUID();
+        URI checkSum =  URI.create("md5:" + HexUtil.toHex(uuid.getMostSignificantBits()) + HexUtil.toHex(uuid.getLeastSignificantBits()));
+        return new Artifact(URI.create(uri), checkSum, new Date(), 512L);
+    }
+
+    private void truncateTables() throws Exception {
+        final JdbcTemplate jdbcTemplate = new JdbcTemplate(DBUtil.findJNDIDataSource(jndiPath));
+        jdbcTemplate.execute("TRUNCATE TABLE " + INVENTORY_SCHEMA + ".deletedArtifactEvent");
+        jdbcTemplate.execute("TRUNCATE TABLE " + INVENTORY_SCHEMA + ".deletedStorageLocationEvent");
+        jdbcTemplate.execute("TRUNCATE TABLE " + INVENTORY_SCHEMA + ".obsoleteStorageLocation");
+        jdbcTemplate.execute("TRUNCATE TABLE " + INVENTORY_SCHEMA + ".storageSite");
+        jdbcTemplate.execute("TRUNCATE TABLE " + INVENTORY_SCHEMA + ".harvestState");
+        jdbcTemplate.execute("TRUNCATE TABLE " + INVENTORY_SCHEMA + ".Artifact");
+    }
+
+
+    // below are tests for the ArtifactDeselector, which is not currently used,
+    // but preserved in case one day it is again.
+
+    @Ignore
+    @Test
+    public void missingConfigTest() throws Exception {
+        final Path includePath = new File(TMP_DIR + "/config").toPath();
+        Files.createDirectories(includePath);
+        final File includeFile = new File(includePath.toFile(), "artifact-deselector.sql");
+        boolean deleted = includeFile.delete();
+        Assert.assertTrue("include file not deleted", deleted);
+
+        configTest();
+    }
+
+    @Ignore
+    @Test
+    public void emptyConfigTest() throws Exception {
+        final Path includePath = new File(TMP_DIR + "/config").toPath();
+        Files.createDirectories(includePath);
+        final File includeFile = new File(includePath.toFile(), "artifact-deselector.sql");
+
+        final FileWriter fileWriter = new FileWriter(includeFile);
+        fileWriter.write("");
+        fileWriter.flush();
+        fileWriter.close();
+
+        configTest();
+    }
+
+    @Ignore
+    @Test
+    public void onlyCommentsConfigTest() throws Exception {
+        final Path includePath = new File(TMP_DIR + "/config").toPath();
+        Files.createDirectories(includePath);
+        final File includeFile = new File(includePath.toFile(), "artifact-deselector.sql");
+
+        final FileWriter fileWriter = new FileWriter(includeFile);
+        fileWriter.write("# WHERE uri LIKE 'cadc:INTTEST/%'");
+        fileWriter.flush();
+        fileWriter.close();
+
+        configTest();
+    }
+
+    @Ignore
+    @Test
+    public void doesNotStartWithWhereConfigTest() throws Exception {
+        final Path includePath = new File(TMP_DIR + "/config").toPath();
+        Files.createDirectories(includePath);
+        final File includeFile = new File(includePath.toFile(), "artifact-deselector.sql");
+
+        final FileWriter fileWriter = new FileWriter(includeFile);
+        fileWriter.write("uri LIKE 'cadc:INTTEST/%'\r\n");
+        fileWriter.flush();
+        fileWriter.close();
+
+        configTest();
+    }
+
+    @Ignore
+    @Test
+    public void multipleWhereConfigTest() throws Exception {
+        final Path includePath = new File(TMP_DIR + "/config").toPath();
+        Files.createDirectories(includePath);
+        final File includeFile = new File(includePath.toFile(), "artifact-deselector.sql");
+
+        final FileWriter fileWriter = new FileWriter(includeFile);
+        fileWriter.write("WHERE uri LIKE 'cadc:INTTEST/%'\r\n");
+        fileWriter.write("WHERE uri LIKE 'cadc:TEST/%'");
+        fileWriter.flush();
+        fileWriter.close();
+
+        configTest();
+    }
+
+    @Ignore
+    @Test
+    public void configTest() {
+        StorageLocation storageLocation = new StorageLocation(URI.create("ivo://cadc.nrc.ca/foo"));
+
+        Artifact a1 = getTestArtifact("cadc:TEST/one.txt");
+        a1.storageLocation = storageLocation;
+        this.artifactDAO.put(a1);
+        Artifact a2 = getTestArtifact("cadc:INT/two.txt");
+        a2.storageLocation = storageLocation;
+        this.artifactDAO.put(a2);
+        Artifact a3 = getTestArtifact("cadc:CADC/three.txt");
+        a3.storageLocation = storageLocation;
+        this.artifactDAO.put(a3);
+
+        try {
+            System.setProperty("user.home", TMP_DIR);
+            List<Namespace> namespaces = Collections.singletonList(new Namespace("cadc:FOO/"));
+            BucketSelector buckets = new BucketSelector("0-f");
+            InventoryValidator testSubject = new InventoryValidator(this.daoConfig, this.daoConfig, namespaces, buckets);
+            testSubject.run();
+            Assert.fail("should throw an exception for invalid config");
+        } catch (Exception expected) {
+            // exception expected
+        } finally {
+            System.setProperty("user.home", USER_HOME);
+        }
+
+        a1 = this.artifactDAO.get(a1.getID());
+        Assert.assertNotNull(a1);
+        a2 = this.artifactDAO.get(a2.getID());
+        Assert.assertNotNull(a2);
+        a3 = this.artifactDAO.get(a3.getID());
+        Assert.assertNotNull(a3);
+
+        DeletedStorageLocationEvent dsle1 = this.deletedStorageLocationEventDAO.get(a1.getID());
+        Assert.assertNull(dsle1);
+        DeletedStorageLocationEvent dsle2 = this.deletedStorageLocationEventDAO.get(a2.getID());
+        Assert.assertNull(dsle2);
+        DeletedStorageLocationEvent dsle3 = this.deletedStorageLocationEventDAO.get(a3.getID());
     }
 
     private void writeConfig() throws IOException {
@@ -442,23 +500,6 @@ public class InventoryValidatorTest {
         fileWriter.write("WHERE uri LIKE 'cadc:INTTEST/%'");
         fileWriter.flush();
         fileWriter.close();
-    }
-
-    private Artifact getTestArtifact(final String uri) {
-        UUID uuid = UUID.randomUUID();
-        URI checkSum =  URI.create("md5:" + HexUtil.toHex(uuid.getMostSignificantBits()) + HexUtil.toHex(uuid.getLeastSignificantBits()));
-        return new Artifact(URI.create(uri), checkSum, new Date(), 512L);
-    }
-
-
-    private void truncateTables() throws Exception {
-        final JdbcTemplate jdbcTemplate = new JdbcTemplate(DBUtil.findJNDIDataSource(jndiPath));
-        jdbcTemplate.execute("TRUNCATE TABLE " + INVENTORY_SCHEMA + ".deletedArtifactEvent");
-        jdbcTemplate.execute("TRUNCATE TABLE " + INVENTORY_SCHEMA + ".deletedStorageLocationEvent");
-        jdbcTemplate.execute("TRUNCATE TABLE " + INVENTORY_SCHEMA + ".obsoleteStorageLocation");
-        jdbcTemplate.execute("TRUNCATE TABLE " + INVENTORY_SCHEMA + ".storageSite");
-        jdbcTemplate.execute("TRUNCATE TABLE " + INVENTORY_SCHEMA + ".harvestState");
-        jdbcTemplate.execute("TRUNCATE TABLE " + INVENTORY_SCHEMA + ".Artifact");
     }
 
 }
