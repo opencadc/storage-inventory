@@ -84,7 +84,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.vospace.db.ArtifactSyncWorker;
+import org.opencadc.vospace.db.DataNodeSizeWorker;
 import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.HarvestState;
@@ -101,8 +101,8 @@ import org.opencadc.vospace.db.NodeDAO;
  *
  * @author adriand
  */
-public class ArtifactSyncWorkerTest {
-    private static final Logger log = Logger.getLogger(ArtifactSyncWorkerTest.class);
+public class DataNodeSizeWorkerTest {
+    private static final Logger log = Logger.getLogger(DataNodeSizeWorkerTest.class);
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
@@ -117,7 +117,7 @@ public class ArtifactSyncWorkerTest {
     ArtifactDAO artifactDAO;
 
 
-    public ArtifactSyncWorkerTest() throws Exception {
+    public DataNodeSizeWorkerTest() throws Exception {
         DBConfig dbrc = new DBConfig();
         ConnectionConfig cc = dbrc.getConnectionConfig(TestUtil.SERVER, TestUtil.DATABASE);
         DBUtil.PoolConfig pool = new DBUtil.PoolConfig(cc, 1, 6000L, "select 123");
@@ -219,7 +219,7 @@ public class ArtifactSyncWorkerTest {
         harvestStateDAO.put(hs);
         hs = harvestStateDAO.get(hsName, resourceID);
 
-        ArtifactSyncWorker asWorker = new ArtifactSyncWorker(harvestStateDAO, hs, artifactDAO, siNamespace);
+        DataNodeSizeWorker asWorker = new DataNodeSizeWorker(harvestStateDAO, hs, artifactDAO, siNamespace);
         asWorker.run();
 
         actual = (DataNode)nodeDAO.get(orig.getID());

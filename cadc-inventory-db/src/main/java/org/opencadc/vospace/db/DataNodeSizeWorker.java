@@ -67,9 +67,12 @@
 
 package org.opencadc.vospace.db;
 
+import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
 import java.io.IOException;
+import java.text.DateFormat;
+import java.util.Date;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.Namespace;
@@ -77,24 +80,38 @@ import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.HarvestState;
 import org.opencadc.inventory.db.HarvestStateDAO;
 import org.opencadc.vospace.DataNode;
-import org.opencadc.vospace.db.NodeDAO;
 
 /**
- * This class performs the work of synchronizing the size of Data Nodes between backend storage and Node Persistence
+ * This class performs the work of synchronizing the size of Data Nodes from 
+ * inventory (Artifact) to vopsace (Node).
  * 
  * @author adriand
  */
-public class ArtifactSyncWorker implements Runnable {
-    private static final Logger log = Logger.getLogger(ArtifactSyncWorker.class);
+public class DataNodeSizeWorker implements Runnable {
+    private static final Logger log = Logger.getLogger(DataNodeSizeWorker.class);
+
+    // lookback when doing incremental harvest because head of sequence is
+    // not monotonic over short timescales (events arrive out of sequence)
+    private static final long LOOKBACK_TIME_MS = 60 * 1000L;
 
     private final HarvestState harvestState;
     private final NodeDAO nodeDAO;
     private final ArtifactDAO artifactDAO;
     private final HarvestStateDAO harvestStateDAO;
     private final Namespace storageNamespace;
+    
+    private long numArtifactsProcessed;
 
-    public ArtifactSyncWorker(HarvestStateDAO harvestStateDAO, HarvestState harvestState, ArtifactDAO artifactDAO,
-                              Namespace namespace) {
+    /**
+     * Worker constructor.
+     * 
+     * @param harvestStateDAO DAO class to persist progress in the vospace database
+     * @param harvestState current HarvestState instance
+     * @param artifactDAO DAO class to query for artifacts
+     * @param namespace artifact namespace
+     */
+    public DataNodeSizeWorker(HarvestStateDAO harvestStateDAO, HarvestState harvestState, 
+            ArtifactDAO artifactDAO, Namespace namespace) {
         this.harvestState = harvestState;
         this.harvestStateDAO = harvestStateDAO;
         this.nodeDAO = new NodeDAO(harvestStateDAO);
@@ -102,16 +119,40 @@ public class ArtifactSyncWorker implements Runnable {
         this.storageNamespace = namespace;
     }
 
+    public long getNumArtifactsProcessed() {
+        return numArtifactsProcessed;
+    }
+
     @Override
     public void run() {
-        log.debug("Start harvesting " + harvestState.toString() + " at " + harvestState.curLastModified);
+        this.numArtifactsProcessed = 0L;
+        String opName = DataNodeSizeWorker.class.getSimpleName() + ".artifactQuery";
+        DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+        if (harvestState.curLastModified != null) {
+            log.debug(opName + " source=" + harvestState.getResourceID() 
+                    + " instance=" + harvestState.instanceID 
+                    + " start=" + df.format(harvestState.curLastModified));
+        } else {
+            log.debug(opName + " source=" + harvestState.getResourceID() 
+                    + " instance=" + harvestState.instanceID
+                    + " start=null");
+        }
 
-        TransactionManager tm = nodeDAO.getTransactionManager();
-        try (final ResourceIterator<Artifact> iter = artifactDAO.iterator(storageNamespace, null,
-                harvestState.curLastModified, true)) {
+        final Date now = new Date();
+        final Date lookBack = new Date(now.getTime() - LOOKBACK_TIME_MS);
+        Date startTime = getQueryLowerBound(lookBack, harvestState.curLastModified);
+        if (lookBack != null && harvestState.curLastModified != null) {
+            log.debug("lookBack=" + df.format(lookBack) + " curLastModified=" + df.format(harvestState.curLastModified) 
+                + " -> " + df.format(startTime));
+        }
+
+        String uriBucket = null; // process all artifacts in a single thread
+        try (final ResourceIterator<Artifact> iter = artifactDAO.iterator(storageNamespace, uriBucket, startTime, true)) {
+            TransactionManager tm = nodeDAO.getTransactionManager();
             while (iter.hasNext()) {
                 Artifact artifact = iter.next();
                 DataNode node = nodeDAO.getDataNode(artifact.getURI());
+                log.debug(artifact.getURI() + " len=" + artifact.getContentLength() + " -> " + node.getName());
                 if (node != null  && !artifact.getContentLength().equals(node.bytesUsed)) {
                     tm.startTransaction();
                     try {
@@ -122,7 +163,8 @@ public class ArtifactSyncWorker implements Runnable {
                         node.bytesUsed = artifact.getContentLength();
                         nodeDAO.put(node);
                         tm.commitTransaction();
-                        log.debug("Updated size of data node " + node.getName());
+                        log.debug("ArtifactSyncWorker.updateDataNode id=" + node.getID() 
+                                + " bytesUsed=" + node.bytesUsed + " artifact.lastModified=" + df.format(artifact.getLastModified()));
                     } catch (Exception ex) {
                         log.debug("Failed to update data node size for " + node.getName(), ex);
                         tm.rollbackTransaction();
@@ -137,13 +179,38 @@ public class ArtifactSyncWorker implements Runnable {
                     }
                 }
                 harvestState.curLastModified = artifact.getLastModified();
-                harvestState.curID = node.getID();
+                harvestState.curID = artifact.getID();
                 harvestStateDAO.put(harvestState);
+                numArtifactsProcessed++;
             }
         } catch (IOException ex) {
             log.error("Error closing iterator", ex);
             throw new RuntimeException("error while closing ResourceIterator", ex);
         }
-        log.debug("End harvesting " + harvestState.toString() + " at " + harvestState.curLastModified);
+        if (harvestState.curLastModified != null) {
+            log.debug(opName + " source=" + harvestState.getResourceID() 
+                    + " instance=" + harvestState.instanceID 
+                    + " end=" + df.format(harvestState.curLastModified));
+        } else {
+            log.debug(opName + " source=" + harvestState.getResourceID() 
+                    + " instance=" + harvestState.instanceID 
+                    + " end=null");
+        }
+    }
+
+    private Date getQueryLowerBound(Date lookBack, Date lastModified) {
+        if (lookBack == null) {
+            // feature not enabled
+            return lastModified;
+        }
+        if (lastModified == null) {
+            // first harvest
+            return null;
+        }
+        if (lookBack.before(lastModified)) {
+            return lookBack;
+        }
+        return lastModified;
+        
     }
 }

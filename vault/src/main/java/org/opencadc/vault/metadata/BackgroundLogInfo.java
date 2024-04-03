@@ -67,91 +67,40 @@
 
 package org.opencadc.vault.metadata;
 
-import java.net.URI;
+import ca.nrc.cadc.date.DateUtil;
+import ca.nrc.cadc.log.WebServiceLogInfo;
+import java.text.DateFormat;
 import java.util.Date;
-import java.util.UUID;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.db.HarvestState;
-import org.opencadc.inventory.db.HarvestStateDAO;
 
 /**
- * Main artifact-sync agent that enables incremental sync of Artifact
- * metadata to Node.
+ * Log structure for background threads.
  * 
  * @author pdowler
  */
-public class ArtifactSync implements Runnable {
-    private static final Logger log = Logger.getLogger(ArtifactSync.class);
+public class BackgroundLogInfo extends WebServiceLogInfo {
+    private static final Logger log = Logger.getLogger(BackgroundLogInfo.class);
 
-    private static final long SHORT_SLEEP = 12000L;
-    private static final long LONG_SLEEP = 2 * SHORT_SLEEP;
-    private static final long EVICT_AGE = 3 * LONG_SLEEP;
+    public Boolean leader;
+    public String instance;
+    public String lastmodified;
+    public Long processed;
+    public Long sleep;
     
-    private final UUID instanceID = UUID.randomUUID();
-    private final HarvestStateDAO dao;
-    private String name = Artifact.class.getSimpleName();
-    private URI resourceID = URI.create("jdbc/inventory");
     
-    public ArtifactSync(HarvestStateDAO dao) { 
-        this.dao = dao;
-        
-        // fenwick setup for production workload:
-        //dao.setUpdateBufferCount(99); // buffer 99 updates, do every 100
-        //dao.setMaintCount(999); // buffer 999 so every 1000 real updates aka every 1e5 events
-        
-        // here, we need timestamp updates to retain leader status, so
-        // dao.setMaintCount(9999); // every 1e4
+    public BackgroundLogInfo(String instance) {
+        super.serviceName = "vault";
+        this.instance = instance;
     }
-
-    @Override
-    public void run() {
-        try {
-            Thread.sleep(SHORT_SLEEP);
-            
-            while (true) {
-                boolean leader = false;
-                log.debug("check leader " + instanceID);
-                HarvestState state = dao.get(name, resourceID);
-                log.debug("check leader " + instanceID + " found: " + state);
-                if (state.instanceID == null) {
-                    state.instanceID = instanceID;
-                    dao.put(state);
-                    state = dao.get(state.getID());
-                    log.debug("created: " + state);
-                }
-                if (instanceID.equals(state.instanceID)) {
-                    log.debug("still the leader...");
-                    dao.put(state, true);
-                    leader = true;
-                } else {
-                    // see if we should perform a coup...
-                    Date now = new Date();
-                    long age = now.getTime() - state.getLastModified().getTime();
-                    if (age > EVICT_AGE) {
-                        
-                        state.instanceID = instanceID;
-                        dao.put(state);
-                        state = dao.get(state.getID());
-                        leader = true;
-                        log.debug("EVICTED " + state.instanceID + " because age " + age + " > " + EVICT_AGE);
-                    }
-                }
-
-                if (leader) {
-                    log.debug("leader " + state.instanceID + " starting worker...");
-                    // TODO
-                    dao.flushBufferedState();
-                    Thread.sleep(SHORT_SLEEP / 2L); // for testing
-                    log.debug("idle leader " + state.instanceID + " sleep=" + SHORT_SLEEP);
-                    Thread.sleep(SHORT_SLEEP);
-                } else {
-                    log.debug("not leader: sleep=" + LONG_SLEEP);
-                    Thread.sleep(LONG_SLEEP);
-                }
-            }
-        } catch (InterruptedException ex) {
-            log.debug("interrupted - assuming shutdown", ex);
-        }
+    
+    public void setOperation(String op) {
+        super.method = op;
     }
+    
+    public void setLastModified(Date ts) {
+        DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+        this.lastmodified = df.format(ts);
+    }
+    
+    
 }
