@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2021.                            (c) 2021.
+*  (c) 2023.                            (c) 2023.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -69,10 +69,6 @@ package org.opencadc.raven;
 
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.reg.Standards;
-import ca.nrc.cadc.vos.Direction;
-import ca.nrc.cadc.vos.Protocol;
-import ca.nrc.cadc.vos.Transfer;
-import ca.nrc.cadc.vos.VOS;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URI;
@@ -80,6 +76,11 @@ import java.net.URLEncoder;
 import java.util.Iterator;
 import java.util.List;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.transfer.ProtocolsGenerator;
+import org.opencadc.vospace.VOS;
+import org.opencadc.vospace.transfer.Direction;
+import org.opencadc.vospace.transfer.Protocol;
+import org.opencadc.vospace.transfer.Transfer;
 
 /**
  * Class to execute a "files" GET action.
@@ -139,16 +140,18 @@ public class GetFilesAction extends FilesAction {
         proto.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
         transfer.getProtocols().add(proto);
 
-        ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.publicKeyFile, this.privateKeyFile,
-                                                       this.user, this.siteAvailabilities, this.siteRules,
-                                                       this.preventNotFound, this.storageResolver);
+        ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.siteAvailabilities, this.siteRules);
+        pg.tokenGen = this.tokenGen;
+        pg.user = this.user;
+        pg.preventNotFound = this.preventNotFound;
+        pg.storageResolver = this.storageResolver;
         List<Protocol> protos = pg.getProtocols(transfer);
         if (protos.isEmpty()) {
             throw new ResourceNotFoundException("not available: " + artifactURI);
         }
 
         URI ret = URI.create(protos.get(0).getEndpoint());
-        if (pg.storageResolverAdded && protos.size() == 1) {
+        if (pg.getStorageResolverAdded() && protos.size() == 1) {
             logInfo.setMessage("external redirect: " + ret.toASCIIString());
         }
         // for now return the first URL in the list

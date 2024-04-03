@@ -142,15 +142,15 @@ public class ServiceAvailability implements AvailabilityPlugin {
         String note = "service is accepting requests";
 
         try {
-            MultiValuedProperties props = MinocInitAction.getConfig();
-            Map<String, Object> config = MinocInitAction.getDaoConfig(props);
-            ArtifactDAO dao = new ArtifactDAO();
-            dao.setConfig(config); // connectivity tested
-
             String state = getState();
             if (RestAction.STATE_OFFLINE.equals(state)) {
                 return new Availability(false, RestAction.STATE_OFFLINE_MSG);
             }
+            
+            MinocConfig config = MinocInitAction.getConfig(appName);
+            ArtifactDAO dao = new ArtifactDAO();
+            dao.setConfig(config.getDaoConfig()); // connectivity tested
+            
             if (RestAction.STATE_READ_ONLY.equals(state)) {
                 return new Availability(false, RestAction.STATE_READ_ONLY_MSG);
             }
@@ -213,6 +213,9 @@ public class ServiceAvailability implements AvailabilityPlugin {
                 }
             }
 
+            // TODO: check grant providers
+            // TODO: check for null pubkeys for trusted services
+            
         } catch (CheckException ce) {
             // tests determined that the resource is not working
             isGood = false;

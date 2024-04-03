@@ -69,17 +69,21 @@ package org.opencadc.ringhold;
 
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.util.BucketSelector;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.util.StringUtil;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import javax.naming.NamingException;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.db.SQLGenerator;
 
 /**
@@ -99,6 +103,8 @@ public class Main {
     private static final String DB_USERNAME_CONFIG_KEY = CONFIG_PREFIX + ".inventory.username";
     private static final String DB_PASSWORD_CONFIG_KEY = CONFIG_PREFIX + ".inventory.password";
     private static final String DB_URL_CONFIG_KEY = CONFIG_PREFIX + ".inventory.url";
+    private static final String NAMESPACE_CONFIG_KEY = CONFIG_PREFIX + ".namespace";
+    private static final String BUCKETS_CONFIG_KEY = CONFIG_PREFIX + ".buckets";
 
     // Used to verify configuration items.  See the README for descriptions.
     private static final String[] MANDATORY_PROPERTY_KEYS = {
@@ -107,7 +113,8 @@ public class Main {
         DB_URL_CONFIG_KEY,
         DB_USERNAME_CONFIG_KEY,
         LOGGING_CONFIG_KEY,
-        SQLGENERATOR_CONFIG_KEY
+        SQLGENERATOR_CONFIG_KEY,
+        NAMESPACE_CONFIG_KEY
     };
 
     public static void main(final String[] args) {
@@ -151,17 +158,33 @@ public class Main {
             }
             
             final Map<String, Object> daoConfig = new TreeMap<>();
-            daoConfig.put("schema", props.getFirstPropertyValue(DB_SCHEMA_CONFIG_KEY));
+            daoConfig.put("invSchema", props.getFirstPropertyValue(DB_SCHEMA_CONFIG_KEY));
+            daoConfig.put("genSchema", props.getFirstPropertyValue(DB_SCHEMA_CONFIG_KEY));
             daoConfig.put("jndiDataSourceName", "jdbc/inventory-txn");
             final String configuredSQLGenerator = props.getFirstPropertyValue(SQLGENERATOR_CONFIG_KEY);
             daoConfig.put(SQLGENERATOR_CONFIG_KEY, Class.forName(configuredSQLGenerator));
             
             final Map<String, Object> iterConfig = new TreeMap<>();
-            iterConfig.put("schema", daoConfig.get("schema"));
+            iterConfig.put("invSchema", daoConfig.get("schema"));
+            iterConfig.put("genSchema", daoConfig.get("schema"));
             iterConfig.put("jndiDataSourceName", "jdbc/inventory-iter");
             iterConfig.put(SQLGENERATOR_CONFIG_KEY, Class.forName(configuredSQLGenerator));
 
-            final InventoryValidator doit = new InventoryValidator(daoConfig, iterConfig);
+            // check namespaces are valid
+            final List<String> configuredNamespaces = props.getProperty(NAMESPACE_CONFIG_KEY);
+            final List<Namespace> namespaces = new ArrayList<>();
+            for (String namespace : configuredNamespaces) {
+                namespaces.add(new Namespace(namespace));
+            }
+
+            // uri buckets
+            BucketSelector bucketSelector = null;
+            final String buckets = props.getFirstPropertyValue(BUCKETS_CONFIG_KEY);
+            if (buckets != null) {
+                bucketSelector = new BucketSelector(buckets);
+            }
+
+            final InventoryValidator doit = new InventoryValidator(daoConfig, iterConfig, namespaces, bucketSelector);
             doit.run();
         } catch (Throwable unexpected) {
             log.fatal("Unexpected failure", unexpected);

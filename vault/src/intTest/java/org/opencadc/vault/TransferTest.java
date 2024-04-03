@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2023.                            (c) 2023.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,52 +65,33 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.server;
+package org.opencadc.vault;
 
-import ca.nrc.cadc.db.DBUtil;
-import ca.nrc.cadc.rest.InitAction;
-import java.util.Map;
-import java.util.TreeMap;
-import javax.sql.DataSource;
+import ca.nrc.cadc.util.Log4jInit;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.db.version.InitDatabase;
 
 /**
- * Base class for storage service database initialisation.
- * 
+ *
  * @author pdowler
  */
-public abstract class InitDatabaseAction extends InitAction {
-    private static final Logger log = Logger.getLogger(InitDatabaseAction.class);
+public class TransferTest extends org.opencadc.conformance.vos.TransferTest {
+    private static final Logger log = Logger.getLogger(TransferTest.class);
 
-    protected final Map<String,Object> daoConfig = new TreeMap<>();
-    
-    protected InitDatabaseAction() {
-    }
-
-    @Override
-    public void doInit() {
-        initDaoConfig();
-        initDatabase();
+    static {
+        Log4jInit.setLevel("org.opencadc.vault", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.conformance.vos", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.vospace", Level.INFO);
+        Log4jInit.setLevel("ca.nrc.cadc.net", Level.INFO);
     }
     
-    /**
-     * Add content to the (protected) daoConfig map.
-     */
-    protected abstract void initDaoConfig();
+    // these are the same as raven intTest
+    static String SERVER = "VAULT_TEST";
+    static String DATABASE = "cadctest";
+    static String SCHEMA = "inventory";
     
-    private void initDatabase() {
-        log.info("initDatabase: START");
-        try {
-            String jndiDataSourceName = (String) daoConfig.get("jndiDataSourceName");
-            String database = (String) daoConfig.get("database");
-            String schema = (String) daoConfig.get("schema");
-            DataSource ds = DBUtil.findJNDIDataSource(jndiDataSourceName);
-            InitDatabase init = new InitDatabase(ds, database, schema);
-            init.doInit();
-            log.info("initDatabase: " + jndiDataSourceName + " " + schema + " OK");
-        } catch (Exception ex) {
-            throw new IllegalStateException("check/init database failed", ex);
-        }
+    public TransferTest() {
+        super(Constants.RESOURCE_ID, Constants.ADMIN_CERT);
+        enableTestDataNodePermission(Constants.ALT_GROUP, Constants.ALT_CERT);
     }
 }

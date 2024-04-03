@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2021.                            (c) 2021.
+*  (c) 2023.                            (c) 2023.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -70,18 +70,20 @@ package org.opencadc.raven;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.rest.SyncOutput;
-import ca.nrc.cadc.vos.Direction;
-import ca.nrc.cadc.vos.Protocol;
-import ca.nrc.cadc.vos.Transfer;
-import ca.nrc.cadc.vos.VOS;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Set;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.StorageSiteDAO;
+import org.opencadc.inventory.transfer.ProtocolsGenerator;
 import org.opencadc.permissions.ReadGrant;
-import org.opencadc.permissions.TokenTool;
+import org.opencadc.vospace.VOS;
+import org.opencadc.vospace.transfer.Direction;
+import org.opencadc.vospace.transfer.Protocol;
+import org.opencadc.vospace.transfer.Transfer;
 
 /**
  * Interface with inventory to get the metadata of an artifact.
@@ -108,19 +110,27 @@ public class HeadFilesAction extends FilesAction {
         log.debug("Starting HEAD action for " + artifactURI.toASCIIString());
         Artifact artifact = artifactDAO.get(artifactURI);
         
-        if (artifact == null) {
-            if (this.preventNotFound) {
+        if (artifact == null && preventNotFound) {
+            StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
+            Set<StorageSite> sites = storageSiteDAO.list();
+            if (!sites.isEmpty()) {
                 // check known storage sites
-                ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.publicKeyFile, this.privateKeyFile,
-                        this.user, this.siteAvailabilities, this.siteRules, this.preventNotFound, this.storageResolver);
-                StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
+                ProtocolsGenerator pg = new ProtocolsGenerator(
+                        this.artifactDAO, this.siteAvailabilities, this.siteRules);
+                pg.tokenGen = this.tokenGen;
+                pg.user = this.user;
+                pg.preventNotFound = this.preventNotFound;
+                pg.storageResolver = this.storageResolver;
+
                 Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace);
                 Protocol proto = new Protocol(VOS.PROTOCOL_HTTPS_GET);
                 proto.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
                 transfer.getProtocols().add(proto);
-                TokenTool tk = new TokenTool(publicKeyFile, privateKeyFile);
-                String authToken = tk.generateToken(artifactURI, ReadGrant.class, user);
-                artifact = pg.getUnsyncedArtifact(artifactURI, transfer, storageSiteDAO.list(), authToken);
+                String authToken = null;
+                if (tokenGen != null) {
+                    authToken = tokenGen.generateToken(artifactURI, ReadGrant.class, user);
+                }
+                artifact = pg.getUnsyncedArtifact(artifactURI, transfer, sites, authToken);
             }
         }
         
@@ -158,7 +168,7 @@ public class HeadFilesAction extends FilesAction {
         syncOutput.setLastModified(artifact.getContentLastModified());
         syncOutput.setHeader("Content-Length", artifact.getContentLength());
         String filename = InventoryUtil.computeArtifactFilename(artifact.getURI());
-        syncOutput.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+        syncOutput.setHeader("Content-Disposition", "inline; filename=\"" + filename + "\"");
         if (artifact.contentEncoding != null) {
             syncOutput.setHeader("Content-Encoding", artifact.contentEncoding);
         }

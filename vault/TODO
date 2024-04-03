@@ -1,0 +1,22 @@
+
+* NodePersistenceImpl: review for necessary transactions and locks
+
+* NodePersistenceImpl: reconcile with NodePersistence API and assign responsibilities
+- property update checking
+- permission checking
+- link node resolution
+
+* files endpoint:
+- if coexist with minoc: generate pre-auth  URL to it and redirect
+- if coexist with raven: need raven ProtocolsGenerator
+
+* transfer negotiation: 
+- review cadc-vos-server and cavern implementations
+- probably a complete TransferRunner; maybe separate sync and async runners
+- if co-exist with minoc: generate pre-auth  URL to it
+- if co-exist with raven: need raven ProtocolsGenerator
+- figure out if/how vault can have it's own uws tables in db or share with inventory (luskan)
+
+* pre-auth URL keys -- what to support? recommend?
+- vault has it's own key pair && minoc(s) have multiple pub keys?
+- vault and raven share private key?

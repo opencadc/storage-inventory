@@ -77,8 +77,12 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.Set;
+import java.util.StringTokenizer;
 import java.util.UUID;
 import org.apache.log4j.Logger;
+import org.opencadc.gms.GroupURI;
+import org.opencadc.vospace.NodeProperty;
 
 /**
  *
@@ -378,39 +382,116 @@ public class Util {
         throw new UnsupportedOperationException("converting " + o.getClass().getName() + " " + o + " to byte[]");
     }
 
-    /*
-     * public static int[] getIntArray(ResultSet rs, int col)
-     * throws SQLException
-     * {
-     * Object o = rs.getObject(col);
-     * return toIntArray(o);
-     * }
-     *
-     * static int[] toIntArray(Object o)
-     * throws SQLException
-     * {
-     * if (o == null)
-     * return null;
-     * if (o instanceof Array)
-     * {
-     * Array a = (Array) o;
-     * o = a.getArray();
-     * }
-     * if (o instanceof int[])
-     * return (int[]) o;
-     * if (o instanceof byte[])
-     * return CaomUtil.decodeIntArray((byte[]) o);
-     * if (o instanceof Integer[])
-     * {
-     * Integer[] ia = (Integer[]) o;
-     * int[] ret = new int[ia.length];
-     * for (int i=0; i<ia.length; i++)
-     * ret[i] = ia[i].intValue();
-     * return ret;
-     * }
-     * throw new UnsupportedOperationException("converting " +
-     * o.getClass().getName() + " " + o + " to int[]");
-     * }
-     */
+    // fills the dest set
+    public static void parseArrayGroupURI(String val, Set<GroupURI> dest) {
+        // postgresql 1D array: {a,"b,c"}
+        if (val == null || val.isEmpty()) {
+            return;
+        }
+        // GroupURI names can contain alphanumeric,comma,dash,dot,underscore,~
+        // PG quotes them if comma is present (eg in the group name)
+        char delim = '"';
+        int i = 0;
+        int j = val.indexOf(delim);
+        while (j != -1) {
+            String token = val.substring(i, j);
+            //log.warn("token: " + i + "," + j + " " + token);
+            i = j + 1;
+            j = val.indexOf(delim, i);
+            
+            handleToken(token, dest);
+        }
+        String token = val.substring(i);
+        //log.warn("token: " + i + " " + token);
+        handleToken(token, dest);
+    }
     
+    private static void handleToken(String token, Set<GroupURI> dest) {
+        if (token.startsWith("ivo://")) {
+            dest.add(new GroupURI(URI.create(token)));
+        } else {
+            StringTokenizer st = new StringTokenizer(token, "{,}");
+            while (st.hasMoreTokens()) {
+                String s = st.nextToken();
+                dest.add(new GroupURI(URI.create(s)));
+            }
+        }
+    }
+
+    // fills the dest set
+    public static void parseArrayProps(String val, Set<NodeProperty> dest) {
+        // postgresql 2D array: {{a,b},{c,d}}
+        if (val == null || val.isEmpty()) {
+            return;
+        }
+        char open = '{';
+        char close = '}';
+        char quote = '"';
+        int i = val.indexOf(open);
+        int j = val.lastIndexOf(close);
+        if (j > i) {
+            val = val.substring(i + 1, j);
+        }
+        i = val.indexOf(open);
+        j = val.indexOf(close, i + 1);
+        int k = 0;
+        while (i != -1 && j != -1 && k++ < 20) {
+            String t1 = val.substring(i + 1, j);
+            //log.warn("\tt1: " + i + "," + j + " " + t1);
+            handleProp(t1, dest);
+            
+            if (i != -1 && j > 0) {
+                i = val.indexOf(open, j);
+                j = val.indexOf(close, i + 1);
+                // look ahead for quotes
+                int q = val.indexOf(quote, i);
+                //log.warn("i=" + i + " j=" + j + " q=" + q);
+                if (q != -1 && q < j) {
+                    int cq = val.indexOf(quote, q + 1);
+                    j = val.indexOf(close, cq);
+                    //log.warn("\tcq=" + cq + " j=" + j);
+                }
+            }
+        }
+    }
+    
+    private static void handleProp(String token, Set<NodeProperty> dest) {
+        int q = token.indexOf('"');
+        int cq = -1;
+        if (q == -1) {
+            q = Integer.MAX_VALUE;
+        } else {
+            cq = token.indexOf('"', q + 1);
+        }
+        int c = token.indexOf(',');
+
+        String key;
+        int split = c;
+        if (c < q) {
+            // key
+            key = token.substring(0, c);
+        } else {
+            // "key"
+            key = token.substring(q + 1, cq);
+            split = cq + 1;
+        }
+        //log.warn("\tkey: " + key);
+        
+        q = token.indexOf('"', split + 1);
+        cq = -1;
+        if (q == -1) {
+            q = Integer.MAX_VALUE;
+        } else {
+            cq = token.indexOf('"', q + 1);
+        }
+        String val;
+        if (token.length() < q) {
+            val = token.substring(split + 1);
+        } else {
+            val = token.substring(q + 1, cq);
+        }
+        //log.warn("\tval: " + val);
+        
+        dest.add(new NodeProperty(URI.create(key), val));
+    }
 }

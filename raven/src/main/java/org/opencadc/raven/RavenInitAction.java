@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2021.                            (c) 2021.
+*  (c) 2023.                            (c) 2023.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,33 +67,35 @@
 
 package org.opencadc.raven;
 
+import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.rest.InitAction;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
+import ca.nrc.cadc.util.RsaSignatureGenerator;
 import ca.nrc.cadc.util.StringUtil;
-import ca.nrc.cadc.vosi.Availability;
-import ca.nrc.cadc.vosi.AvailabilityClient;
-
-import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.security.KeyPair;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
-
 import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
-
+import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Namespace;
-import org.opencadc.inventory.StorageSite;
+import org.opencadc.inventory.PreauthKeyPair;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.PreauthKeyPairDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
+import org.opencadc.inventory.db.version.InitDatabaseSI;
+import org.opencadc.inventory.transfer.StorageSiteAvailabilityCheck;
+import org.opencadc.inventory.transfer.StorageSiteRule;
+import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  *
@@ -102,30 +104,28 @@ import org.opencadc.inventory.db.StorageSiteDAO;
 public class RavenInitAction extends InitAction {
     private static final Logger log = Logger.getLogger(RavenInitAction.class);
 
+    static String KEY_PAIR_NAME = "raven-preauth-keys";
+    
     // config keys
     private static final String RAVEN_KEY = "org.opencadc.raven";
-    private static final String RAVEN_CONSIST_KEY = "org.opencadc.raven.consistency";
 
-    static final String JNDI_DATASOURCE = "jdbc/inventory"; // context.xml
-    static final String JNDI_AVAILABILITY_NAME = ".availabilities";
+    static final String JNDI_QUERY_DATASOURCE = "jdbc/query"; // context.xml
+    static final String JNDI_ADMIN_DATASOURCE = "jdbc/inventory"; // context.xml
 
     static final String SCHEMA_KEY = RAVEN_KEY + ".inventory.schema";
-
-    static final String PUBKEYFILE_KEY = RAVEN_KEY + ".publicKeyFile";
-    static final String PRIVKEYFILE_KEY = RAVEN_KEY + ".privateKeyFile";
+    static final String PREVENT_NOT_FOUND_KEY = RAVEN_KEY + ".consistency.preventNotFound";
+    static final String PREAUTH_KEY = RAVEN_KEY + ".keys.preauth";
+    
     static final String READ_GRANTS_KEY = RAVEN_KEY + ".readGrantProvider";
     static final String WRITE_GRANTS_KEY = RAVEN_KEY + ".writeGrantProvider";
-
     static final String RESOLVER_ENTRY = "ca.nrc.cadc.net.StorageResolver";
-    static final String PREVENT_NOT_FOUND_KEY = RAVEN_CONSIST_KEY + ".preventNotFound";
-
+    
     static final String DEV_AUTH_ONLY_KEY = RAVEN_KEY + ".authenticateOnly";
-
-    static final int AVAILABILITY_CHECK_TIMEOUT = 30; //secs
-    static final int AVAILABILITY_FULL_CHECK_TIMEOUT = 300; //secs
 
     // set init initConfig, used by subsequent init methods
     MultiValuedProperties props;
+    
+    private String jndiPreauthKeys;
     private String siteAvailabilitiesKey;
     private Thread availabilityCheck;
 
@@ -136,16 +136,24 @@ public class RavenInitAction extends InitAction {
     @Override
     public void doInit() {
         initConfig();
-        initDAO();
+        initDatabase();
+        initKeyPair();
+        initQueryDAO();
         initGrantProviders();
-        initKeys();
         initStorageSiteRules();
         initAvailabilityCheck();
     }
 
     @Override
     public void doShutdown() {
-        terminate();
+        try {
+            Context ctx = new InitialContext();
+            ctx.unbind(jndiPreauthKeys);
+        } catch (Exception oops) {
+            log.error("unbind failed during destroy", oops);
+        }
+        
+        terminateAvailabilityCheck();
     }
     
     void initConfig() {
@@ -154,9 +162,71 @@ public class RavenInitAction extends InitAction {
         log.info("initConfig: OK");
     }
     
-    void initDAO() {
+    private void initDatabase() {
+        log.info("initDatabase: START");
+        try {
+            Map<String,Object> daoConfig = getDaoConfig(props, JNDI_ADMIN_DATASOURCE);
+            String jndiDataSourceName = (String) daoConfig.get("jndiDataSourceName");
+            String database = (String) daoConfig.get("database");
+            String schema = (String) daoConfig.get("invSchema");
+            DataSource ds = DBUtil.findJNDIDataSource(jndiDataSourceName);
+            InitDatabaseSI init = new InitDatabaseSI(ds, database, schema);
+            init.doInit();
+            log.info("initDatabase: " + jndiDataSourceName + " " + schema + " OK");
+        } catch (Exception ex) {
+            throw new IllegalStateException("check/init database failed", ex);
+        }
+    }
+    
+    private void initKeyPair() {
+        String enablePreauthKeys = props.getFirstPropertyValue(PREAUTH_KEY);
+        if (enablePreauthKeys == null || !"true".equals(enablePreauthKeys)) {
+            log.info("initKeyPair: " + PREAUTH_KEY + " == " + enablePreauthKeys + " - SKIP");
+            return;
+        }
+        
+        log.info("initKeyPair: START");
+        jndiPreauthKeys = appName + "-" + PreauthKeyPair.class.getName();
+        try {
+            Map<String,Object> daoConfig = getDaoConfig(props, JNDI_ADMIN_DATASOURCE);
+            PreauthKeyPairDAO dao = new PreauthKeyPairDAO();
+            dao.setConfig(daoConfig);
+            PreauthKeyPair keys = dao.get(KEY_PAIR_NAME);
+            if (keys == null) {
+                KeyPair kp = RsaSignatureGenerator.getKeyPair(4096);
+                keys = new PreauthKeyPair(KEY_PAIR_NAME, kp.getPublic().getEncoded(), kp.getPrivate().getEncoded());
+                try {
+                    dao.put(keys);
+                    log.info("initKeyPair: new keys created - OK");
+                    
+                } catch (DataIntegrityViolationException oops) {
+                    log.warn("persist new " + PreauthKeyPair.class.getSimpleName() + " failed (" + oops + ") -- probably race condition");
+                    keys = dao.get(KEY_PAIR_NAME);
+                    if (keys != null) {
+                        log.info("race condition confirmed: another instance created keys - OK");
+                    } else {
+                        throw new RuntimeException("check/init " + KEY_PAIR_NAME + " failed", oops);
+                    }
+                }
+            } else {
+                log.info("initKeyPair: re-use existing keys - OK");
+            }
+            Context ctx = new InitialContext();
+            try {
+                ctx.unbind(jndiPreauthKeys);
+            } catch (NamingException ignore) {
+                log.debug("unbind previous JNDI key (" + jndiPreauthKeys + ") failed... ignoring");
+            }
+            ctx.bind(jndiPreauthKeys, keys);
+            log.info("initKeyPair: created JNDI key: " + jndiPreauthKeys);
+        } catch (Exception ex) {
+            throw new RuntimeException("check/init " + KEY_PAIR_NAME + " failed", ex);
+        }
+    }
+    
+    void initQueryDAO() {
         log.info("initDAO: START");
-        Map<String,Object> dc = getDaoConfig(props);
+        Map<String,Object> dc = getDaoConfig(props, JNDI_QUERY_DATASOURCE);
         ArtifactDAO artifactDAO = new ArtifactDAO();
         artifactDAO.setConfig(dc); // connectivity tested
         log.info("initDAO: OK");
@@ -189,22 +259,6 @@ public class RavenInitAction extends InitAction {
         }
         log.info("initGrantProviders: OK");
     }
-    
-    void initKeys() {
-        log.info("initKeys: START");
-        String pubkeyFileName = props.getFirstPropertyValue(RavenInitAction.PUBKEYFILE_KEY);
-        String privkeyFileName = props.getFirstPropertyValue(RavenInitAction.PRIVKEYFILE_KEY);
-        if (pubkeyFileName == null && privkeyFileName == null) {
-            log.info("initKeys: disabled OK");
-            return;
-        }
-        File publicKeyFile = new File(System.getProperty("user.home") + "/config/" + pubkeyFileName);
-        File privateKeyFile = new File(System.getProperty("user.home") + "/config/" + privkeyFileName);
-        if (!publicKeyFile.exists() || !privateKeyFile.exists()) {
-            throw new IllegalStateException("invalid config: missing public/private key pair files -- " + publicKeyFile + " | " + privateKeyFile);
-        }
-        log.info("initKeys: OK");
-    }
 
     void initStorageSiteRules() {
         log.info("initStorageSiteRules: START");
@@ -214,16 +268,16 @@ public class RavenInitAction extends InitAction {
 
     void initAvailabilityCheck() {
         StorageSiteDAO storageSiteDAO = new StorageSiteDAO();
-        storageSiteDAO.setConfig(getDaoConfig(props));
+        storageSiteDAO.setConfig(getDaoConfig(props, JNDI_QUERY_DATASOURCE));
 
-        this.siteAvailabilitiesKey = this.appName + RavenInitAction.JNDI_AVAILABILITY_NAME;
-        terminate();
-        this.availabilityCheck = new Thread(new AvailabilityCheck(storageSiteDAO, this.siteAvailabilitiesKey));
+        this.siteAvailabilitiesKey = appName + "-" + StorageSiteAvailabilityCheck.class.getName();
+        terminateAvailabilityCheck();
+        this.availabilityCheck = new Thread(new StorageSiteAvailabilityCheck(storageSiteDAO, siteAvailabilitiesKey));
         this.availabilityCheck.setDaemon(true);
         this.availabilityCheck.start();
     }
 
-    private final void terminate() {
+    private final void terminateAvailabilityCheck() {
         if (this.availabilityCheck != null) {
             try {
                 log.info("terminating AvailabilityCheck Thread...");
@@ -275,24 +329,6 @@ public class RavenInitAction extends InitAction {
         } else {
             sb.append("OK");
         }
-
-        // optional
-        String pub = mvp.getFirstPropertyValue(RavenInitAction.PUBKEYFILE_KEY);
-        sb.append("\n\t").append(RavenInitAction.PUBKEYFILE_KEY).append(": ");
-        if (pub == null) {
-            sb.append("MISSING");
-        } else {
-            sb.append("OK");
-        }
-
-        String priv = mvp.getFirstPropertyValue(RavenInitAction.PRIVKEYFILE_KEY);
-        sb.append("\n\t").append(RavenInitAction.PRIVKEYFILE_KEY).append(": ");
-        if (priv == null) {
-            sb.append("MISSING");
-        } else {
-            sb.append("OK");
-        }
-
         
         if (!ok) {
             throw new IllegalStateException(sb.toString());
@@ -301,14 +337,15 @@ public class RavenInitAction extends InitAction {
         return mvp;
     }
 
-    static Map<String,Object> getDaoConfig(MultiValuedProperties props) {
+    static Map<String,Object> getDaoConfig(MultiValuedProperties props, String pool) {
         String cname = props.getFirstPropertyValue(SQLGenerator.class.getName());
         try {
             Map<String,Object> ret = new TreeMap<>();
             Class clz = Class.forName(cname);
             ret.put(SQLGenerator.class.getName(), clz);
-            ret.put("jndiDataSourceName", RavenInitAction.JNDI_DATASOURCE);
-            ret.put("schema", props.getFirstPropertyValue(RavenInitAction.SCHEMA_KEY));
+            ret.put("jndiDataSourceName", pool);
+            ret.put("invSchema", props.getFirstPropertyValue(RavenInitAction.SCHEMA_KEY));
+            ret.put("genSchema", props.getFirstPropertyValue(RavenInitAction.SCHEMA_KEY));
             //config.put("database", null);
             return ret;
         } catch (ClassNotFoundException ex) {
@@ -372,111 +409,4 @@ public class RavenInitAction extends InitAction {
         }
         return prefs;
     }
-
-    private static class AvailabilityCheck implements Runnable {
-        private final StorageSiteDAO storageSiteDAO;
-        private final Map<URI, SiteState> siteStates;
-        private final Map<URI, Availability> siteAvailabilities;
-
-        public AvailabilityCheck(StorageSiteDAO storageSiteDAO, String siteAvailabilitiesKey) {
-            this.storageSiteDAO = storageSiteDAO;
-            this.siteStates = new HashMap<URI, SiteState>();
-            this.siteAvailabilities = new HashMap<URI, Availability>();
-
-            try {
-                Context initialContext = new InitialContext();
-                // check if key already bound, if so unbind
-                try {
-                    initialContext.unbind(siteAvailabilitiesKey);
-                } catch (NamingException ignore) {
-                    // ignore
-                }
-                initialContext.bind(siteAvailabilitiesKey, this.siteAvailabilities);
-            } catch (NamingException e) {
-                throw new IllegalStateException(String.format("unable to bind %s to initial context: %s",
-                                                              siteAvailabilitiesKey, e.getMessage()), e);
-            }
-        }
-
-        @Override
-        public void run() {
-            int lastSiteQuerySecs = 0;
-            while (true) {
-                Set<StorageSite> sites = storageSiteDAO.list();
-                if (lastSiteQuerySecs >= AVAILABILITY_FULL_CHECK_TIMEOUT) {
-                    sites = storageSiteDAO.list();
-                    lastSiteQuerySecs = 0;
-                } else {
-                    lastSiteQuerySecs += AVAILABILITY_CHECK_TIMEOUT;
-                }
-
-                for (StorageSite site: sites) {
-                    URI resourceID = site.getResourceID();
-                    log.debug("checking site: " + resourceID);
-                    SiteState siteState = this.siteStates.get(resourceID);
-                    if (siteState == null) {
-                        siteState = new SiteState(false, 0);
-                    }
-                    boolean minDetail = siteState.isMinDetail();
-                    Availability availability;
-                    try {
-                        availability = getAvailability(resourceID, minDetail);
-                    } catch (Exception e) {
-                        availability = new Availability(false, e.getMessage());
-                        log.debug(String.format("availability check failed %s - %s", resourceID, e.getMessage()));
-                    }
-                    final boolean prev = siteState.available;
-                    siteState.available = availability.isAvailable();
-                    this.siteStates.put(resourceID, siteState);
-                    this.siteAvailabilities.put(resourceID, availability);
-                    String message = String.format("availability check %s %s - %s", minDetail ? "MIN" : "FULL",
-                                                   resourceID, siteState.available ? "UP" : "DOWN");
-                    if (!siteState.available) {
-                        log.warn(message);
-                    } else if (prev != siteState.available) {
-                        log.info(message);
-                    } else {
-                        log.debug(message);
-                    }
-                }
-
-                try {
-                    log.debug(String.format("sleep availability checks for %d secs", AVAILABILITY_CHECK_TIMEOUT));
-                    Thread.sleep(AVAILABILITY_CHECK_TIMEOUT * 1000);
-                } catch (InterruptedException e) {
-                    throw new IllegalStateException("AvailabilityCheck thread interrupted during sleep");
-                }
-            }
-        }
-
-        private Availability getAvailability(URI resourceID, boolean minDetail) {
-            AvailabilityClient client = new AvailabilityClient(resourceID, minDetail);
-            return client.getAvailability();
-        }
-
-        private class SiteState {
-
-            public boolean available;
-            public int lastFullCheckSecs;
-
-            public SiteState(boolean available, int lastFullCheckSecs) {
-                this.available = available;
-                this.lastFullCheckSecs = lastFullCheckSecs;
-            }
-
-            public boolean isMinDetail() {
-                log.debug(String.format("isMinDetail() available=%b, lastFullCheckSecs=%d",
-                                        available, lastFullCheckSecs));
-                if (this.available && this.lastFullCheckSecs < AVAILABILITY_FULL_CHECK_TIMEOUT) {
-                    this.lastFullCheckSecs += AVAILABILITY_CHECK_TIMEOUT;
-                    return true;
-                }
-                this.lastFullCheckSecs = 0;
-                return false;
-            }
-
-        }
-
-    }
-
 }

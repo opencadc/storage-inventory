@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2022.                            (c) 2022.
+*  (c) 2024.                            (c) 2024.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -79,6 +79,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
@@ -86,7 +89,7 @@ import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
-import org.opencadc.inventory.db.version.InitDatabase;
+import org.opencadc.inventory.db.version.InitDatabaseSI;
 import org.opencadc.inventory.storage.StorageAdapter;
 
 /**
@@ -96,31 +99,10 @@ import org.opencadc.inventory.storage.StorageAdapter;
 public class MinocInitAction extends InitAction {
     private static final Logger log = Logger.getLogger(MinocInitAction.class);
     
-    static final String JNDI_DATASOURCE = "jdbc/inventory"; // context.xml
-    
-    // config keys
-    private static final String MINOC_KEY = "org.opencadc.minoc";
-    static final String RESOURCE_ID_KEY = MINOC_KEY + ".resourceID";
-    
-    static final String SQLGEN_KEY = SQLGenerator.class.getName();
-    
-    static final String SCHEMA_KEY = MINOC_KEY + ".inventory.schema";
-    
-    static final String SA_KEY = StorageAdapter.class.getName();
-    
-    static final String PUBKEYFILE_KEY = MINOC_KEY + ".publicKeyFile";
-    static final String READ_GRANTS_KEY = MINOC_KEY + ".readGrantProvider";
-    static final String WRITE_GRANTS_KEY = MINOC_KEY + ".writeGrantProvider";
-    
-    static final String RECOVERABLE_NS_KEY = MINOC_KEY + ".recoverableNamespace";
-    
-    static final String DEV_AUTH_ONLY_KEY = MINOC_KEY + ".authenticateOnly";
-    
     // set init initConfig, used by subsequent init methods
-    
-    MultiValuedProperties props;
+    private MinocConfig config;
+    private String jndiConfigKey;
     private URI resourceID;
-    private Map<String,Object> daoConfig;
 
     public MinocInitAction() { 
         super();
@@ -133,175 +115,68 @@ public class MinocInitAction extends InitAction {
         initStorageSite();
         initStorageAdapter();
     }
-    
-    /**
-     * Read config file and verify that all required entries are present.
-     * 
-     * @return MultiValuedProperties containing the application config
-     * @throws IllegalStateException if required config items are missing
-     */
-    static MultiValuedProperties getConfig() {
-        PropertiesReader r = new PropertiesReader("minoc.properties");
-        MultiValuedProperties mvp = r.getAllProperties();
 
-        StringBuilder sb = new StringBuilder();
-        sb.append("incomplete config: ");
-        boolean ok = true;
-
-        String rid = mvp.getFirstPropertyValue(RESOURCE_ID_KEY);
-        sb.append("\n\t" + RESOURCE_ID_KEY + ": ");
-        if (rid == null) {
-            sb.append("MISSING");
-            ok = false;
-        } else {
-            sb.append("OK");
-        }
-
-        String sac = mvp.getFirstPropertyValue(SA_KEY);
-        sb.append("\n\t").append(SA_KEY).append(": ");
-        if (sac == null) {
-            sb.append("MISSING");
-            ok = false;
-        } else {
-            sb.append("OK");
-        }
-
-        String sqlgen = mvp.getFirstPropertyValue(SQLGEN_KEY);
-        sb.append("\n\t").append(SQLGEN_KEY).append(": ");
-        if (sqlgen == null) {
-            sb.append("MISSING");
-            ok = false;
-        } else {
-            try {
-                Class c = Class.forName(sqlgen);
-                sb.append("OK");
-            } catch (ClassNotFoundException ex) {
-                sb.append("class not found: " + sqlgen);
-                ok = false;
-            }
-        }
-
-        String schema = mvp.getFirstPropertyValue(SCHEMA_KEY);
-        sb.append("\n\t").append(SCHEMA_KEY).append(": ");
-        if (schema == null) {
-            sb.append("MISSING");
-            ok = false;
-        } else {
-            sb.append("OK");
-        }
-        
-        // optional
-        String pubkeyFileName = mvp.getFirstPropertyValue(PUBKEYFILE_KEY);
-        sb.append("\n\t").append(PUBKEYFILE_KEY).append(": ");
-        if (pubkeyFileName != null) {
-            File pk = new File(System.getProperty("user.home") + "/config/" + pubkeyFileName);
-            if (!pk.exists()) {
-                sb.append(" NOT FOUND ").append(pk.getAbsolutePath());
-                ok = false;
-            } else {
-                sb.append("OK");
-            }
-        }
-        
-        // optional
-        List<String> readGrants = mvp.getProperty(READ_GRANTS_KEY);
-        if (readGrants != null) {
-            for (String s : readGrants) {
-                sb.append("\n\t").append(READ_GRANTS_KEY + "=").append(s);
-                try {
-                    URI u = new URI(s);
-                    sb.append(" OK");
-                } catch (URISyntaxException ex) {
-                    sb.append(" INVALID");
-                    ok = false;
-                }
-            }
-        }
-
-        // optional
-        List<String> writeGrants = mvp.getProperty(WRITE_GRANTS_KEY);
-        if (writeGrants != null) {
-            for (String s : writeGrants) {
-                sb.append("\n\t").append(WRITE_GRANTS_KEY + "=").append(s);
-                try {
-                    URI u = new URI(s);
-                    sb.append(" OK");
-                } catch (URISyntaxException ex) {
-                    sb.append(" INVALID");
-                    ok = false;
-                }
-            }
-        }
-        
-        // optional
-        List<String> rawRecNS = mvp.getProperty(RECOVERABLE_NS_KEY);
-        if (rawRecNS != null) {
-            for (String s : rawRecNS) {
-                sb.append("\n\t").append(RECOVERABLE_NS_KEY + "=").append(s);
-                try {
-                    Namespace ns = new Namespace(s);
-                } catch (Exception ex) {
-                    sb.append(" INVALID");
-                }
-            }
-        }
-
-        if (!ok) {
-            throw new IllegalStateException(sb.toString());
-        }
-
-        return mvp;
-    }
-    
-    static Map<String,Object> getDaoConfig(MultiValuedProperties props) {
-        String cname = props.getFirstPropertyValue(SQLGenerator.class.getName());
+    @Override
+    public void doShutdown() {
+        super.doShutdown();
         try {
-            Map<String,Object> ret = new TreeMap<>();
-            Class clz = Class.forName(cname);
-            ret.put(SQLGenerator.class.getName(), clz);
-            ret.put("jndiDataSourceName", MinocInitAction.JNDI_DATASOURCE);
-            ret.put("schema", props.getFirstPropertyValue(MinocInitAction.SCHEMA_KEY));
-            //config.put("database", null);
-            return ret;
-        } catch (ClassNotFoundException ex) {
-            throw new IllegalStateException("invalid config: failed to load SQLGenerator: " + cname);
+            Context ctx = new InitialContext();
+            ctx.unbind(jndiConfigKey);
+        } catch (NamingException ex) {
+            log.debug("failed to remove config from JNDI", ex);
         }
     }
     
-    static List<Namespace> getRecoverableNamespaces(MultiValuedProperties props) {
-        List<Namespace> ret = new ArrayList<>();
-        List<String> rawRecNS = props.getProperty(RECOVERABLE_NS_KEY);
-        if (rawRecNS != null) {
-            for (String s : rawRecNS) {
-                ret.add(new Namespace(s));
-            }
+    // get config from JNDI
+    static MinocConfig getConfig(String appName) {
+        String key = appName + "-" + MinocConfig.class.getName();
+        try {
+            Context ctx = new InitialContext();
+            MinocConfig ret = (MinocConfig) ctx.lookup(key);
+            return ret;
+        } catch (NamingException ex) {
+            throw new RuntimeException("BUG: failed to get config from JNDI", ex);
         }
-        return ret;
     }
     
     private void initConfig() {
         log.info("initConfig: START");
-        this.props = getConfig();
-        String rid = props.getFirstPropertyValue(RESOURCE_ID_KEY);
+        this.config = new MinocConfig();
+        MultiValuedProperties mvp = config.getProperties();
+        String rid = mvp.getFirstPropertyValue(MinocConfig.RESOURCE_ID_KEY);
+        jndiConfigKey = appName + "-" + MinocConfig.class.getName();
+        try {
+            Context ctx = new InitialContext();
+            try {
+                ctx.unbind(jndiConfigKey);
+            } catch (NamingException ignore) {
+                log.debug("unbind previous JNDI key (" + jndiConfigKey + ") failed... ignoring");
+            }
+            ctx.bind(jndiConfigKey, config);
+
+            log.info("created JNDI key: " + jndiConfigKey + " object: " + config.getClass().getName());
+        } catch (Exception ex) {
+            log.error("Failed to create JNDI Key " + jndiConfigKey, ex);
+        }
         
         try {
             this.resourceID = new URI(rid);
-            this.daoConfig = getDaoConfig(props);
             log.info("initConfig: OK");
         } catch (URISyntaxException ex) {
-            throw new IllegalStateException("invalid config: " + RESOURCE_ID_KEY + " must be a valid URI");
+            throw new IllegalStateException("invalid config: " + MinocConfig.RESOURCE_ID_KEY + " must be a valid URI");
         }
     }
     
     private void initDatabase() {
         log.info("initDatabase: START");
         try {
-            DataSource ds = DBUtil.findJNDIDataSource(JNDI_DATASOURCE);
+            Map<String,Object> daoConfig = config.getDaoConfig();
+            DataSource ds = DBUtil.findJNDIDataSource(MinocConfig.JNDI_DATASOURCE);
             String database = (String) daoConfig.get("database");
-            String schema = (String) daoConfig.get("schema");
-            InitDatabase init = new InitDatabase(ds, database, schema);
+            String schema = (String) daoConfig.get("invSchema");
+            InitDatabaseSI init = new InitDatabaseSI(ds, database, schema);
             init.doInit();
-            log.info("initDatabase: " + JNDI_DATASOURCE + " " + schema + " OK");
+            log.info("initDatabase: " + MinocConfig.JNDI_DATASOURCE + " " + schema + " OK");
         } catch (Exception ex) {
             throw new IllegalStateException("check/init database failed", ex);
         }
@@ -309,6 +184,7 @@ public class MinocInitAction extends InitAction {
     
     private void initStorageSite() {
         log.info("initStorageSite: START");
+        Map<String,Object> daoConfig = config.getDaoConfig();
         StorageSiteDAO ssdao = new StorageSiteDAO();
         ssdao.setConfig(daoConfig);
         
@@ -320,9 +196,9 @@ public class MinocInitAction extends InitAction {
         if (name.charAt(0) == '/') {
             name = name.substring(1);
         }
-        
-        boolean allowRead = !props.getProperty(READ_GRANTS_KEY).isEmpty();
-        boolean allowWrite = !props.getProperty(WRITE_GRANTS_KEY).isEmpty();
+
+        boolean allowRead = config.isReadable();
+        boolean allowWrite = config.isWritable();
             
         StorageSite self = null;
         if (curlist.isEmpty()) {
@@ -334,7 +210,6 @@ public class MinocInitAction extends InitAction {
             self.setName(name);
             self.setAllowRead(allowRead);
             self.setAllowWrite(allowWrite);
-            
         } else {
             throw new IllegalStateException("BUG: found " + curlist.size() + " StorageSite entries; expected 0 or 1");
         }
@@ -345,12 +220,7 @@ public class MinocInitAction extends InitAction {
     
     private void initStorageAdapter() {
         log.info("initStorageAdapter: START");
-        StorageAdapter storageAdapter = InventoryUtil.loadPlugin(props.getFirstPropertyValue(MinocInitAction.SA_KEY));
-        List<Namespace> rec = MinocInitAction.getRecoverableNamespaces(props);
-        for (Namespace ns : rec) {
-            log.info("initStorageAdapter: recoverableNamespace  = " + ns.getNamespace());
-        }
-        storageAdapter.setRecoverableNamespaces(rec);
-        log.info("initStorageAdapter: " + storageAdapter.getClass().getName() + " OK");
+        StorageAdapter sa = config.getStorageAdapter();
+        log.info("initStorageAdapter: " + sa.getClass().getName() + " OK");
     }
 }

@@ -68,6 +68,7 @@
 package org.opencadc.inventory.db;
 
 import java.net.URI;
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.UUID;
 import org.apache.log4j.Logger;
@@ -176,12 +177,16 @@ public class HarvestStateDAO extends AbstractDAO<HarvestState> {
 
     @Override
     public void put(HarvestState val) {
-        if (curBufferCount < updateBufferCount) {
+        put(val, false);
+    }
+
+    public void put(HarvestState val, boolean forceTimestampUpdate) {
+        if (curBufferCount < updateBufferCount && !forceTimestampUpdate) {
             log.debug("buffering: " + curBufferCount + " < " + updateBufferCount + " " + val);
             curBufferCount++;
             bufferedState = val;
         } else {
-            super.put(val);
+            super.put(val, false, forceTimestampUpdate);
             curBufferCount = 0;
             bufferedState = null;
             
@@ -190,13 +195,15 @@ public class HarvestStateDAO extends AbstractDAO<HarvestState> {
                 if (curMaintCount == maintCount) {
                     String sql = "VACUUM " + gen.getTable(HarvestState.class);
                     log.warn("maintenance: " + curMaintCount + "==" + maintCount + " " + sql);
-                    //JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-                    //jdbc.execute(sql);
                     try {
-                        dataSource.getConnection().createStatement().execute(sql);
-                    } catch (SQLException ex) {
-                        log.error("ERROR: " + sql + " FAILED", ex);
-                        // yes, log and proceed
+                        try (Connection c = dataSource.getConnection()) {
+                            c.createStatement().execute(sql);
+                        } catch (SQLException ex) {
+                            log.error("maintenance failed: " + sql, ex);
+                            // yes, log and proceed
+                        } // auto-close to return to pool
+                    } catch (Exception ex) {
+                        log.error("failed to close connection after maintenance: " + sql, ex);
                     }
                     curMaintCount = 0;
                 } else {

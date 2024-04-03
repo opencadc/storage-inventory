@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2024.                            (c) 2024.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -80,7 +80,7 @@ import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageLocationEventDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
-import org.opencadc.inventory.db.version.InitDatabase;
+import org.opencadc.inventory.db.version.InitDatabaseSI;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 
@@ -106,8 +106,9 @@ public class LuskanEnvironment {
         final Map<String, Object> daoConfig = new TreeMap<>();
         daoConfig.put(SQLGenerator.class.getName(), SQLGenerator.class);
         daoConfig.put("jndiDataSourceName", jndiPath);
-        daoConfig.put("database", TestUtil.LUSKAN_DATABASE);
-        daoConfig.put("schema", TestUtil.LUSKAN_SCHEMA);
+        //daoConfig.put("database", TestUtil.LUSKAN_DATABASE);
+        daoConfig.put("invSchema", TestUtil.LUSKAN_SCHEMA);
+        daoConfig.put("genSchema", TestUtil.LUSKAN_SCHEMA);
 
         storageSiteDAO.setConfig(daoConfig);
         artifactDAO.setConfig(daoConfig);
@@ -115,9 +116,9 @@ public class LuskanEnvironment {
         deletedArtifactEventDAO.setConfig(daoConfig);
         deletedStorageLocationEventDAO.setConfig(daoConfig);
 
-        new InitDatabase(DBUtil.findJNDIDataSource(jndiPath),
+        new InitDatabaseSI(DBUtil.findJNDIDataSource(jndiPath),
                          (String) daoConfig.get("database"),
-                         (String) daoConfig.get("schema")).doInit();
+                         (String) daoConfig.get("invSchema")).doInit();
     }
 
     void cleanTestEnvironment() throws Exception {

@@ -66,20 +66,19 @@
  */
 
 
-package org.opencadc.raven;
+package org.opencadc.inventory.transfer;
 
 import ca.nrc.cadc.util.Log4jInit;
-
 import java.net.InetAddress;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.SortedSet;
 import java.util.TreeSet;
-
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -101,10 +100,16 @@ public class ProtocolsGeneratorTest {
         for (int i = 0; i < 10; i++) {
             sites.add(new StorageSite(URI.create("ivo://site" + i), "site1" + i, true, rd.nextBoolean()));
         }
-        ProtocolsGenerator.prioritizePullFromSites(sites);
-        for (StorageSite s : sites) {
-            log.info("found: " + s.getID() + " aka " +  s.getResourceID());
-        }
+        List<StorageSite> result1 = ProtocolsGenerator.prioritizePullFromSites(sites);
+        Assert.assertEquals(sites.size(), result1.size());
+        Assert.assertTrue(result1.containsAll(sites));
+        
+        List<StorageSite> result2 = ProtocolsGenerator.prioritizePullFromSites(sites);
+        Assert.assertEquals(sites.size(), result2.size());
+        Assert.assertTrue(result2.containsAll(sites));
+        
+        // test random order
+        Assert.assertNotEquals(result1, result2);
     }
 
     @Test

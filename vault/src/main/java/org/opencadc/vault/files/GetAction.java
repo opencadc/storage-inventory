@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2021.                            (c) 2021.
+ *  (c) 2024.                            (c) 2024.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -62,27 +62,69 @@
  *  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
  *                                       <http://www.gnu.org/licenses/>.
  *
- *  : 5 $
- *
  ************************************************************************
  */
 
-package org.opencadc.raven;
+package org.opencadc.vault.files;
 
+import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.net.TransientException;
+import java.net.HttpURLConnection;
 import java.util.List;
+import javax.security.auth.Subject;
+import org.apache.log4j.Logger;
+import org.opencadc.vospace.DataNode;
+import org.opencadc.vospace.VOS;
+import org.opencadc.vospace.VOSURI;
+import org.opencadc.vospace.server.NodeFault;
+import org.opencadc.vospace.server.Utils;
+import org.opencadc.vospace.server.transfers.TransferGenerator;
+import org.opencadc.vospace.transfer.Direction;
+import org.opencadc.vospace.transfer.Protocol;
+import org.opencadc.vospace.transfer.Transfer;
 
-import org.opencadc.inventory.Namespace;
+/**
+ * Class to redirect to a storage URL from which the content of a DataNode can be downloaded
+ * @author adriand
+ */
+public class GetAction extends HeadAction {
+    protected static Logger log = Logger.getLogger(GetAction.class);
 
-public class StorageSiteRule {
-
-    private final List<Namespace> namespaces;
-
-    public StorageSiteRule(List<Namespace> namespaces) {
-        this.namespaces = namespaces;
+    public GetAction() {
+        super();
     }
 
-    public List<Namespace> getNamespaces() {
-        return this.namespaces;
+    @Override
+    public void doAction() throws Exception {
+        DataNode node = resolveAndSetMetadata();
+
+        Subject caller = AuthenticationUtil.getCurrentSubject();
+        if (!voSpaceAuthorizer.hasSingleNodeReadPermission(node, caller)) {
+            // TODO: should output requested vos URI here
+            throw NodeFault.PermissionDenied.getStatus(syncInput.getPath());
+        }
+            
+        if (node.bytesUsed == null || node.bytesUsed == 0L) {
+            // empty file
+            syncOutput.setCode(HttpURLConnection.HTTP_NO_CONTENT);
+            return;
+        }
+
+        VOSURI targetURI = localServiceURI.getURI(node);
+        Transfer pullTransfer = new Transfer(targetURI.getURI(), Direction.pullFromVoSpace);
+        pullTransfer.version = VOS.VOSPACE_21;
+        pullTransfer.getProtocols().add(new Protocol(VOS.PROTOCOL_HTTPS_GET)); // anon, preauth
+
+        TransferGenerator tg = nodePersistence.getTransferGenerator();
+        List<Protocol> protos = tg.getEndpoints(targetURI, pullTransfer, null);
+        if (protos.isEmpty()) {
+            throw new TransientException("No location found for file " + Utils.getPath(node));
+        }
+        Protocol proto = protos.get(0);
+        String loc = proto.getEndpoint();
+        log.debug("Location: " + loc);
+        syncOutput.setHeader("Location", loc);
+        syncOutput.setCode(HttpURLConnection.HTTP_SEE_OTHER);
     }
 
 }

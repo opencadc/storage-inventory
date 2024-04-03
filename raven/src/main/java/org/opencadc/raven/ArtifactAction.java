@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2022.                            (c) 2022.
+*  (c) 2023.                            (c) 2023.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -73,12 +73,11 @@ import ca.nrc.cadc.net.StorageResolver;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.rest.Version;
 import ca.nrc.cadc.util.MultiValuedProperties;
-import ca.nrc.cadc.vos.Direction;
-import ca.nrc.cadc.vos.Transfer;
+import ca.nrc.cadc.util.RsaSignatureGenerator;
 import ca.nrc.cadc.vosi.Availability;
-import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.security.KeyPair;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -87,10 +86,17 @@ import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.PreauthKeyPair;
 import org.opencadc.inventory.db.ArtifactDAO;
+import org.opencadc.inventory.db.PreauthKeyPairDAO;
+import org.opencadc.inventory.transfer.StorageSiteAvailabilityCheck;
+import org.opencadc.inventory.transfer.StorageSiteRule;
 import org.opencadc.permissions.ReadGrant;
+import org.opencadc.permissions.TokenTool;
 import org.opencadc.permissions.WriteGrant;
 import org.opencadc.permissions.client.PermissionsCheck;
+import org.opencadc.vospace.transfer.Direction;
+import org.opencadc.vospace.transfer.Transfer;
 
 /**
  * Abstract class for all that raven action classes have in common,
@@ -109,8 +115,7 @@ public abstract class ArtifactAction extends RestAction {
 
     // immutable state set in constructor
     protected final ArtifactDAO artifactDAO;
-    protected final File publicKeyFile;
-    protected final File privateKeyFile;
+    protected TokenTool tokenGen;
     protected final List<URI> readGrantServices = new ArrayList<>();
     protected final List<URI> writeGrantServices = new ArrayList<>();
     protected StorageResolver storageResolver;
@@ -120,15 +125,15 @@ public abstract class ArtifactAction extends RestAction {
     protected Map<URI, StorageSiteRule> siteRules;
 
     protected final boolean preventNotFound;
+    protected final boolean preauthKeys;
 
     // constructor for unit tests with no config/init
     ArtifactAction(boolean init) {
         super();
         this.authenticateOnly = false;
-        this.publicKeyFile = null;
-        this.privateKeyFile = null;
         this.artifactDAO = null;
         this.preventNotFound = false;
+        this.preauthKeys = false;
         this.storageResolver = null;
     }
 
@@ -172,33 +177,13 @@ public abstract class ArtifactAction extends RestAction {
             authenticateOnly = false;
         }
 
-        initResolver();
-
-        // technically, raven only needs the private key to generate pre-auth tokens
-        // but both are specified here for clarity
-        // - in principle, raven could export it's public key and minoc(s) could retrieve it
-        // - for now, minoc(s) need to be configured with the public key to validate pre-auth
-
-        String pubkeyFileName = props.getFirstPropertyValue(RavenInitAction.PUBKEYFILE_KEY);
-        String privkeyFileName = props.getFirstPropertyValue(RavenInitAction.PRIVKEYFILE_KEY);
-        if (pubkeyFileName == null && privkeyFileName == null) {
-            log.debug("public/private key preauth not enabled by config");
-            this.publicKeyFile = null;
-            this.privateKeyFile = null;
-        } else {
-            this.publicKeyFile = new File(System.getProperty("user.home") + "/config/" + pubkeyFileName);
-            this.privateKeyFile = new File(System.getProperty("user.home") + "/config/" + privkeyFileName);
-            if (!publicKeyFile.exists() || !privateKeyFile.exists()) {
-                throw new IllegalStateException("invalid config: missing public/private key pair files -- " + publicKeyFile + " | " + privateKeyFile);
-            }
-        }
-
-        Map<String, Object> config = RavenInitAction.getDaoConfig(props);
+        Map<String, Object> config = RavenInitAction.getDaoConfig(props, RavenInitAction.JNDI_QUERY_DATASOURCE);
         this.artifactDAO = new ArtifactDAO();
         artifactDAO.setConfig(config); // connectivity tested
       
         // get the storage site rules
         this.siteRules = RavenInitAction.getStorageSiteRules(props);
+        
         String pnf = props.getFirstPropertyValue(RavenInitAction.PREVENT_NOT_FOUND_KEY);
         if (pnf != null) {
             this.preventNotFound = Boolean.valueOf(pnf);
@@ -206,9 +191,36 @@ public abstract class ArtifactAction extends RestAction {
         } else {
             throw new IllegalStateException("invalid config: missing preventNotFound configuration");
         }
+        
+        String pak = props.getFirstPropertyValue(RavenInitAction.PREAUTH_KEY);
+        if (pak != null) {
+            this.preauthKeys = Boolean.valueOf(pak);
+            log.debug("Using preauth keys: " + this.preauthKeys);
+        } else {
+            this.preauthKeys = false;
+        }
     }
 
-    protected void initResolver() {
+    @Override
+    public void initAction() throws Exception {
+        super.initAction();
+        initResolver();
+        
+        if (preauthKeys) {
+            String jndiPreauthKeys = appName + "-" + PreauthKeyPair.class.getName();
+            Context ctx = new InitialContext();
+            try {
+                log.debug("lookup: " + jndiPreauthKeys);
+                PreauthKeyPair keys = (PreauthKeyPair) ctx.lookup(jndiPreauthKeys);
+                log.debug("found: " + keys);
+                this.tokenGen = new TokenTool(keys.getPublicKey(), keys.getPrivateKey());
+            } catch (NamingException ex) {
+                throw new RuntimeException("BUG: failed to find keys via JNDI", ex);
+            }
+        }
+    }
+    
+    void initResolver() {
         MultiValuedProperties props = RavenInitAction.getConfig();
         String resolverName = props.getFirstPropertyValue(RavenInitAction.RESOLVER_ENTRY);
         if (resolverName != null) {
@@ -265,7 +277,7 @@ public abstract class ArtifactAction extends RestAction {
             throw new IllegalArgumentException("Missing artifact URI from path or request content");
         }
 
-        String siteAvailabilitiesKey = this.appName + RavenInitAction.JNDI_AVAILABILITY_NAME;
+        String siteAvailabilitiesKey = this.appName + "-" + StorageSiteAvailabilityCheck.class.getName();
         log.debug("siteAvailabilitiesKey: " + siteAvailabilitiesKey);
         try {
             Context initContext = new InitialContext();
@@ -283,7 +295,6 @@ public abstract class ArtifactAction extends RestAction {
     protected String getServerImpl() {
         // no null version checking because fail to build correctly can't get past basic testing
         Version v = getVersionFromResource();
-        String ret = "storage-inventory/raven-" + v.getMajorMinor();
-        return ret;
+        return "storage-inventory/raven-" + v.getMajorMinor();
     }
 }

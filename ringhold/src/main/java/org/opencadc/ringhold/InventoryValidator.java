@@ -69,12 +69,17 @@ package org.opencadc.ringhold;
 
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
-import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.util.BucketSelector;
 import java.io.IOException;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
+import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
 
@@ -89,28 +94,27 @@ public class InventoryValidator implements Runnable {
 
     private final ArtifactDAO artifactIteratorDAO;
     private final ArtifactDAO artifactDAO;
-    private final String deselector;
+    private final List<Namespace> namespaces;
+    private final BucketSelector bucketSelector;
     
-    public InventoryValidator(Map<String, Object> txnConfig, Map<String, Object> iterConfig) { 
+    public InventoryValidator(Map<String, Object> txnConfig, Map<String, Object> iterConfig,
+                              List<Namespace> namespaces, BucketSelector bucketSelector) {
+        InventoryUtil.assertNotNull(InventoryValidator.class, "txnConfig", txnConfig);
+        InventoryUtil.assertNotNull(InventoryValidator.class, "iterConfig", iterConfig);
+        InventoryUtil.assertNotNull(InventoryValidator.class, "namespaces", namespaces);
+
         this.artifactDAO = new ArtifactDAO();
         artifactDAO.setConfig(txnConfig);
         
         this.artifactIteratorDAO = new ArtifactDAO();
         artifactIteratorDAO.setConfig(iterConfig);
 
-        ArtifactDeselector artifactDeselector = new ArtifactDeselector();
-        try {
-            this.deselector = artifactDeselector.getConstraint();
-        } catch (ResourceNotFoundException ex) {
-            throw new IllegalArgumentException("missing required configuration: "
-                                                   + ArtifactDeselector.SQL_FILTER_FILE_NAME, ex);
-        } catch (IOException ex) {
-            throw new IllegalArgumentException("unable to read config: " + ArtifactDeselector.SQL_FILTER_FILE_NAME, ex);
-        }
+        this.namespaces = namespaces;
+        this.bucketSelector = bucketSelector;
     }
 
     /**
-     * Find an artifact with a uri pattern in the deselector,
+     * Find an artifact for the given namespace(s) and optional bucketUri,
      * delete the artifact and generate a deleted storage location event.
      */
     @Override
@@ -119,31 +123,68 @@ public class InventoryValidator implements Runnable {
         final DeletedStorageLocationEventDAO deletedStorageLocationEventDAO =
             new DeletedStorageLocationEventDAO(this.artifactDAO);
 
-        try (final ResourceIterator<Artifact> artifactIterator =
-            this.artifactIteratorDAO.iterator(this.deselector, null, false)) {
+        for (Namespace namespace : namespaces) {
+            if (bucketSelector == null) {
+                iterateBucket(transactionManager, deletedStorageLocationEventDAO, namespace,null);
+            } else {
+                Iterator<String> bucketIter = bucketSelector.getBucketIterator();
+                while (bucketIter.hasNext()) {
+                    String bucket = bucketIter.next();
+                    log.info(InventoryValidator.class.getSimpleName() + ".START bucket=" + bucket);
+                    int retries = 0;
+                    boolean done = false;
+                    while (!done && retries < 3) {
+                        try {
+                            iterateBucket(transactionManager, deletedStorageLocationEventDAO, namespace, bucket);
+                            log.info(InventoryValidator.class.getSimpleName() + ".END bucket=" + bucket);
+                            done = true;
+                        } catch (TransientException ex) {
+                            log.error(InventoryValidator.class.getSimpleName() + ".FAIL bucket=" + bucket, ex);
+                            retries++;
+                        } catch (IllegalArgumentException ex) {
+                            log.error(InventoryValidator.class.getSimpleName() + ".FAIL bucket=" + bucket, ex);
+                            throw ex;
+                        } catch (RuntimeException ex) {
+                            // TODO: probably not a great idea to retry on these...
+                            log.error(InventoryValidator.class.getSimpleName() + ".FAIL bucket=" + bucket, ex);
+                            retries++;
+                        } catch (Exception ex) {
+                            log.error(InventoryValidator.class.getSimpleName() + ".FAIL bucket=" + bucket, ex);
+                            throw ex;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private void iterateBucket(TransactionManager transactionManager,
+                               DeletedStorageLocationEventDAO deletedStorageLocationEventDAO,
+                               Namespace namespace, String bucket) {
+        try (final ResourceIterator<Artifact> artifactIterator = this.artifactIteratorDAO.iterator(namespace, bucket, false)) {
             while (artifactIterator.hasNext()) {
-                Artifact deselectorArtifact = artifactIterator.next();
-                log.debug("START: Process Artifact " + deselectorArtifact.getID() + " " + deselectorArtifact.getURI());
+                Artifact artifact = artifactIterator.next();
+                log.debug("START: Process Artifact " + artifact.getID() + " " + artifact.getURI());
 
                 try {
                     transactionManager.startTransaction();
 
-                    Artifact cur = this.artifactDAO.lock(deselectorArtifact);
+                    Artifact cur = this.artifactDAO.lock(artifact);
                     if (cur != null) {
                         DeletedStorageLocationEvent deletedStorageLocationEvent = new DeletedStorageLocationEvent(cur.getID());
                         deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
-                        
+
                         this.artifactDAO.delete(cur.getID());
-                        
+
                         transactionManager.commitTransaction();
                         log.info("DELETE: Artifact " + cur.getID() + " " + cur.getURI());
                     } else {
                         transactionManager.rollbackTransaction();
                         log.debug("Artifact not found");
                     }
-                    
-                    log.debug("END: Process Artifact " + deselectorArtifact.getID() + " "
-                                  + deselectorArtifact.getURI());
+
+                    log.debug("END: Process Artifact " + artifact.getID() + " "
+                            + artifact.getURI());
                 } catch (Exception exception) {
                     if (transactionManager.isOpen()) {
                         log.error("Exception in transaction.  Rolling back...");
@@ -164,4 +205,5 @@ public class InventoryValidator implements Runnable {
             log.error("Error closing iterator: " + e.getMessage());
         }
     }
+
 }

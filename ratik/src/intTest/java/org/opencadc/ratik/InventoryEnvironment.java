@@ -78,7 +78,7 @@ import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
 import org.opencadc.inventory.db.SQLGenerator;
 import org.opencadc.inventory.db.StorageSiteDAO;
-import org.opencadc.inventory.db.version.InitDatabase;
+import org.opencadc.inventory.db.version.InitDatabaseSI;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 public class InventoryEnvironment {
@@ -101,7 +101,8 @@ public class InventoryEnvironment {
 
         daoConfig.put(SQLGenerator.class.getName(), SQLGenerator.class);
         daoConfig.put("database", TestUtil.INVENTORY_DATABASE);
-        daoConfig.put("schema", TestUtil.INVENTORY_SCHEMA);
+        daoConfig.put("invSchema", TestUtil.INVENTORY_SCHEMA);
+        daoConfig.put("genSchema", TestUtil.INVENTORY_SCHEMA);
         daoConfig.put("jndiDataSourceName", jndiPath);
         
         storageSiteDAO.setConfig(daoConfig);
@@ -110,9 +111,9 @@ public class InventoryEnvironment {
         deletedArtifactEventDAO.setConfig(daoConfig);
         deletedStorageLocationEventDAO.setConfig(daoConfig);
 
-        new InitDatabase(DBUtil.findJNDIDataSource(jndiPath),
+        new InitDatabaseSI(DBUtil.findJNDIDataSource(jndiPath),
                          (String) daoConfig.get("database"),
-                         (String) daoConfig.get("schema")).doInit();
+                         (String) daoConfig.get("invSchema")).doInit();
         
         daoConfig.remove("jndiDataSourceName");
     }

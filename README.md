@@ -46,6 +46,10 @@ local artifact selection policy. This is used if the new fenwick policy excludes
 This is an implementation of the **file-validate** process that compares the inventory database against 
 the back end storage at a storage site.
 
+## vault
+UNDER DEVELOPMENT: This is an implementation of an <a href="https://www.ivoa.net/documents/TAP/">IVOA VOSpace</a> 
+service that uses storage-inventory as the back end storage mechanism.
+
 ## cadc-*
 These are libraries used in multiple services and applications.
 

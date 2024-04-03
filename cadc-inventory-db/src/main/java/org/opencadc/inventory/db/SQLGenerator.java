@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2022.                            (c) 2022.
+*  (c) 2024.                            (c) 2024.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -89,16 +89,25 @@ import java.util.TreeSet;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
+import org.opencadc.gms.GroupURI;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.DeletedStorageLocationEvent;
-import org.opencadc.inventory.Entity;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.ObsoleteStorageLocation;
+import org.opencadc.inventory.PreauthKeyPair;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.StorageLocationEvent;
 import org.opencadc.inventory.StorageSite;
+import org.opencadc.persist.Entity;
+import org.opencadc.vospace.ContainerNode;
+import org.opencadc.vospace.DataNode;
+import org.opencadc.vospace.DeletedNodeEvent;
+import org.opencadc.vospace.LinkNode;
+import org.opencadc.vospace.Node;
+import org.opencadc.vospace.NodeProperty;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.ResultSetExtractor;
@@ -111,43 +120,57 @@ import org.springframework.jdbc.core.RowMapper;
 public class SQLGenerator {
     private static final Logger log = Logger.getLogger(SQLGenerator.class);
 
-    private final Map<Class,String> tableMap = new TreeMap<Class,String>(new ClassComp());
-    private final Map<Class,String[]> columnMap = new TreeMap<Class,String[]>(new ClassComp());
+    private final Map<Class,String> tableMap = new TreeMap<>(new ClassComp());
+    private final Map<Class,String[]> columnMap = new TreeMap<>(new ClassComp());
     
     protected final String database; // currently not used in SQL
-    protected final String schema; // may be null
+    protected final String invSchema;
+    protected final String genSchema;
+    protected final String vosSchema;
     
     /**
      * Constructor. The database name is currently not used in any generated SQL; code assumes
      * that the DataSource is connected to the right database already and cross-database statements
-     * are not supported. The schema name is used to qualify table names (if set). The optional table
-     * name prefix is pre-pended to the table name (after the optional {schema}.) and is provided as
-     * a work around in shared (usually test) databases where schema name is a username and table 
-     * names may collide with other content. Normal "production" use would specify the schema only.
+     * are not supported.
      * 
-     * @param database database name (may be null)
-     * @param schema schema name (may be null)
+     * @param database database name: not used; future-proof
+     * @param invSchema inventory schema name (required, implies genSchema = invSchema)
+     * @param genSchema generic schema name for internal tables (PreauthKeys, HarvestState) - optional
      */
-    public SQLGenerator(String database, String schema) { 
+    public SQLGenerator(String database, String invSchema, String genSchema) { 
+        this(database, invSchema, genSchema, null);
+    }
+    
+    /**
+     * Constructor. The database name is currently not used in any generated SQL; code assumes
+     * that the DataSource is connected to the right database already and cross-database statements
+     * are not supported. The genSchema is optional (required for HarvestState and PreauthKeyPair).
+     * The vosSchema is optional (used for Node and DeletedNodeEvent).
+     * 
+     * @param database database name: not used; future-proof
+     * @param invSchema inventory schema name - required
+     * @param genSchema generic schema name - optional
+     * @param vosSchema vospace schema name - optional
+     */
+    public SQLGenerator(String database, String invSchema, String genSchema, String vosSchema) { 
         this.database = database;
-        this.schema = schema;
+        InventoryUtil.assertNotNull(SQLGenerator.class, "invSchema", invSchema); // required for all uses
+        this.invSchema = invSchema;
+        InventoryUtil.assertNotNull(SQLGenerator.class, "genSchema", genSchema); // required for correct init
+        this.genSchema = genSchema;
+        this.vosSchema = vosSchema; // only required for vospace
         init();
     }
     
     protected void init() {
-        String pref = "";
-        if (schema != null) {
-            pref = schema + ".";
-        }
         // inventory model
-        this.tableMap.put(Artifact.class, pref + Artifact.class.getSimpleName());
-        this.tableMap.put(StorageSite.class, pref + StorageSite.class.getSimpleName());
-        this.tableMap.put(DeletedArtifactEvent.class, pref + DeletedArtifactEvent.class.getSimpleName());
-        this.tableMap.put(DeletedStorageLocationEvent.class, pref + DeletedStorageLocationEvent.class.getSimpleName());
-        this.tableMap.put(StorageLocationEvent.class, pref + StorageLocationEvent.class.getSimpleName());
+        this.tableMap.put(Artifact.class, invSchema + "." + Artifact.class.getSimpleName());
+        this.tableMap.put(StorageSite.class, invSchema + "." + StorageSite.class.getSimpleName());
+        this.tableMap.put(DeletedArtifactEvent.class, invSchema + "." + DeletedArtifactEvent.class.getSimpleName());
+        this.tableMap.put(DeletedStorageLocationEvent.class, invSchema + "." + DeletedStorageLocationEvent.class.getSimpleName());
+        this.tableMap.put(StorageLocationEvent.class, invSchema + "." + StorageLocationEvent.class.getSimpleName());
         // internal
-        this.tableMap.put(ObsoleteStorageLocation.class, pref + ObsoleteStorageLocation.class.getSimpleName());
-        this.tableMap.put(HarvestState.class, pref + HarvestState.class.getSimpleName());
+        this.tableMap.put(ObsoleteStorageLocation.class, invSchema + "." + ObsoleteStorageLocation.class.getSimpleName());
         
         String[] cols = new String[] {
             "uri", // first column is logical key
@@ -193,16 +216,71 @@ public class SQLGenerator {
         };
         this.columnMap.put(ObsoleteStorageLocation.class, cols);
         
-        cols = new String[] {
-            "name",
-            "resourceID",
-            "curLastModified",
-            "curID",
-            "lastModified",
-            "metaChecksum",
-            "id" // last column is always PK
-        };
-        this.columnMap.put(HarvestState.class, cols);
+        log.debug("genSchema: " + genSchema);
+        if (genSchema != null) {
+            // generic support
+            this.tableMap.put(HarvestState.class, genSchema + "." + HarvestState.class.getSimpleName());
+            this.tableMap.put(PreauthKeyPair.class, genSchema + "." + PreauthKeyPair.class.getSimpleName());
+            cols = new String[] {
+                "name",
+                "resourceID",
+                "curLastModified",
+                "curID",
+                "instanceID",
+                "lastModified",
+                "metaChecksum",
+                "id" // last column is always PK
+            };
+            this.columnMap.put(HarvestState.class, cols);
+        
+            cols = new String[] {
+                "name",
+                "publicKey",
+                "privateKey",
+                "lastModified",
+                "metaChecksum",
+                "id" // last column is always PK
+            };
+            this.columnMap.put(PreauthKeyPair.class, cols);
+        }
+        
+        // optional vospace
+        log.debug("vosSchema: " + vosSchema);
+        if (vosSchema != null) {
+            tableMap.put(Node.class, vosSchema + "." + Node.class.getSimpleName());
+            tableMap.put(DeletedNodeEvent.class, vosSchema + "." + DeletedNodeEvent.class.getSimpleName());
+            
+            cols = new String[] {
+                "parentID",
+                "name",
+                "nodeType",
+                "ownerID",
+                "isPublic",
+                "isLocked",
+                "readOnlyGroups",
+                "readWriteGroups",
+                "properties",
+                "inheritPermissions",
+                "bytesUsed",
+                "busy",
+                "storageID",
+                "storageBucket",
+                "target",
+                "lastModified",
+                "metaChecksum",
+                "id" // last column is always PK
+            };
+            this.columnMap.put(Node.class, cols);
+            
+            cols = new String[] {
+                "nodeType",
+                "storageID",
+                "lastModified",
+                "metaChecksum",
+                "id" // last column is always PK
+            };
+            this.columnMap.put(DeletedNodeEvent.class, cols);
+        }
     }
     
     private static class ClassComp implements Comparator<Class> {
@@ -218,9 +296,28 @@ public class SQLGenerator {
         return "SELECT now()";
     }
     
-    // test usage
-    String getTable(Class c) {
-        return tableMap.get(c);
+    public String getTable(Class c) {
+        Class targetClass = c;
+        String ret = tableMap.get(targetClass);
+        if (ret == null) {
+            // enable finding a common table that stores subclass instances
+            targetClass = targetClass.getSuperclass();
+            ret = tableMap.get(targetClass);
+        }
+        log.debug("table: " + c.getSimpleName() + " -> " + targetClass.getSimpleName() + " -> " + ret);
+        return ret;
+    }
+    
+    private String[] getColumns(Class c) {
+        Class targetClass = c;
+        String[] ret = columnMap.get(targetClass);
+        if (ret == null) {
+            // enable finding a common table that stores subclass instances
+            targetClass = targetClass.getSuperclass();
+            ret = columnMap.get(targetClass);
+        }
+        log.debug("columns: " + c.getSimpleName() + " -> " + targetClass.getSimpleName() + " -> " + (ret == null ? null : ret.length));
+        return ret;
     }
     
     public EntityGet<? extends Entity> getEntityGet(Class c) {
@@ -234,11 +331,18 @@ public class SQLGenerator {
         if (StorageSite.class.equals(c)) {
             return new StorageSiteGet(forUpdate);
         }
+        if (PreauthKeyPair.class.equals(c)) {
+            return new KeyPairGet(forUpdate);
+        }
+        if (Node.class.equals(c)) {
+            return new NodeGet(forUpdate);
+        }
         
         if (forUpdate) {
             throw new UnsupportedOperationException("entity-get + forUpdate: " + c.getSimpleName());
         }
         
+        // raw events are never locked for update
         if (DeletedArtifactEvent.class.equals(c)) {
             return new DeletedArtifactEventGet();
         }
@@ -251,29 +355,58 @@ public class SQLGenerator {
         if (ObsoleteStorageLocation.class.equals(c)) {
             return new ObsoleteStorageLocationGet();
         }
+        
+        if (DeletedNodeEvent.class.equals(c)) {
+            //return new DeletedNodeGet();
+        }
+        
         if (HarvestState.class.equals(c)) {
             return new HarvestStateGet();
         }
+        
+        
+        
         throw new UnsupportedOperationException("entity-get: " + c.getName());
+    }
+    
+    public NodeCount getNodeCount() {
+        return new NodeCount();
+    }
+    
+    public class NodeCount {
+        private UUID id;
+        
+        public void setID(UUID id) {
+            this.id = id;
+        }
+        
+        public int execute(JdbcTemplate jdbc) {
+            StringBuilder sb = new StringBuilder();
+            sb.append("SELECT count(*) FROM ").append(getTable(Node.class));
+            sb.append(" WHERE parentID = '").append(id.toString()).append("'");
+            String sql = sb.toString();
+            log.debug("NodeCount: " + sql);
+            int ret = jdbc.queryForObject(sql, Integer.class);
+            return ret;
+        }
     }
     
     public EntityIteratorQuery getEntityIteratorQuery(Class c) {
         if (Artifact.class.equals(c)) {
             return new ArtifactIteratorQuery();
         }
-        throw new UnsupportedOperationException("entity-list: " + c.getName());
+        if (Node.class.equals(c)) {
+            return new NodeIteratorQuery();
+        }
+        throw new UnsupportedOperationException("entity-iterator: " + c.getName());
     }
     
     public EntityList getEntityList(Class c) {
         if (StorageSite.class.equals(c)) {
             return new StorageSiteList();
         }
-        throw new UnsupportedOperationException("entity-list: " + c.getName());
-    }
-    
-    public EntityLock getEntityLock(Class c) {
-        if (Artifact.class.equals(c)) {
-            return new EntityLockImpl(c);
+        if (PreauthKeyPair.class.equals(c)) {
+            return new KeyPairList();
         }
         throw new UnsupportedOperationException("entity-list: " + c.getName());
     }
@@ -305,6 +438,15 @@ public class SQLGenerator {
         if (HarvestState.class.equals(c)) {
             return new HarvestStatePut(update);
         }
+        if (PreauthKeyPair.class.equals(c)) {
+            return new KeyPairPut(update);
+        }
+        if (Node.class.isAssignableFrom(c)) {
+            return new NodePut(update);
+        }
+        if (DeletedNodeEvent.class.equals(c)) {
+            //return new DeletedNodePut(update);
+        }
         throw new UnsupportedOperationException("entity-put: " + c.getName());
     }
     
@@ -312,41 +454,6 @@ public class SQLGenerator {
         return new EntityDeleteImpl(c);
     }
     
-    private class EntityLockImpl implements EntityLock<Entity> {
-        private final Calendar utc = Calendar.getInstance(DateUtil.UTC);
-        private final Class entityClass;
-        private UUID id;
-        
-        EntityLockImpl(Class entityClass) {
-            this.entityClass = entityClass;
-        }
-
-        @Override
-        public void setID(UUID id) {
-            this.id = id;
-        }
-        
-        @Override
-        public void execute(JdbcTemplate jdbc) throws EntityNotFoundException {
-            int n = jdbc.update(this);
-            if (n == 0) {
-                throw new EntityNotFoundException("not found: " + id);
-            }
-        }
-        
-        @Override
-        public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
-            String sql = getLockSQL(entityClass);
-            log.debug("EntityLockImpl: " + sql);
-            PreparedStatement prep = conn.prepareStatement(sql);
-            int col = 1;
-            prep.setObject(col++, id);
-            prep.setObject(col++, id);
-            
-            return prep;
-        }
-    }
-
     private class SkeletonGet implements EntityGet<Entity> {
         private UUID id;
         private final Class entityClass;
@@ -428,7 +535,7 @@ public class SQLGenerator {
         
         @Override
         public ObsoleteStorageLocation execute(JdbcTemplate jdbc) {
-            return (ObsoleteStorageLocation) jdbc.query(this, new ObsoleteStorageLocationExtractor());
+            return jdbc.query(this, new ObsoleteStorageLocationExtractor());
         }
         
         @Override
@@ -443,7 +550,7 @@ public class SQLGenerator {
                 String col = getKeyColumn(ObsoleteStorageLocation.class, true);
                 sb.append(col).append(" = ?");
             } else {
-                String[] cols = columnMap.get(ObsoleteStorageLocation.class);
+                String[] cols = getColumns(ObsoleteStorageLocation.class);
                 sb.append(cols[0]).append(" = ?");
                 sb.append(" AND ");
                 if (loc.storageBucket != null) {
@@ -500,7 +607,7 @@ public class SQLGenerator {
                 String col = getKeyColumn(HarvestState.class, true);
                 sb.append(col).append(" = ?");
             } else {
-                String[] cols = columnMap.get(HarvestState.class);
+                String[] cols = getColumns(HarvestState.class);
                 sb.append(cols[0]).append(" = ?");
                 sb.append(" AND ");
                 sb.append(cols[1]).append(" = ?");
@@ -571,10 +678,15 @@ public class SQLGenerator {
     class ArtifactIteratorQuery implements EntityIteratorQuery<Artifact> {
 
         private Boolean storageLocationRequired;
-        private String prefix;
+        private String storageBucket;
+        
         private UUID siteID;
-        private String whereClause;
+        private String uriBucket;
+        private Namespace namespace;
+        private Date minLastModified;
         private boolean ordered;
+        
+        private final Calendar utc = Calendar.getInstance(DateUtil.UTC);
 
         public ArtifactIteratorQuery() {
         }
@@ -590,20 +702,28 @@ public class SQLGenerator {
             this.storageLocationRequired = slr;
         }
         
-        public void setPrefix(String prefix) {
+        public void setStorageBucket(String prefix) {
             if (StringUtil.hasText(prefix)) {
-                this.prefix = prefix.trim();
+                this.storageBucket = prefix.trim();
             } else {
-                this.prefix = null;
+                this.storageBucket = null;
             }
         }
 
-        public void setCriteria(String whereClause) {
-            if (StringUtil.hasText(whereClause)) {
-                this.whereClause = whereClause.trim();
+        public void setUriBucket(String uriBucket) {
+            if (StringUtil.hasText(uriBucket)) {
+                this.uriBucket = uriBucket.trim();
             } else {
-                this.whereClause = null;
+                uriBucket = null;
             }
+        }
+
+        public void setNamespace(Namespace namespace) {
+            this.namespace = namespace;
+        }
+
+        public void setMinLastModified(Date minLastModified) {
+            this.minLastModified = minLastModified;
         }
 
         public void setOrderedOutput(boolean ordered) {
@@ -616,13 +736,14 @@ public class SQLGenerator {
         
         @Override
         public ResourceIterator<Artifact> query(DataSource ds) {
-            
-            StringBuilder sb = getSelectFromSQL(Artifact.class, false);
-            sb.append(" WHERE");
-            
+            StringBuilder sb = new StringBuilder();
+            boolean where = false;
             if (storageLocationRequired != null && storageLocationRequired) {
                 // ArtifactDAO.storedIterator
-                if (StringUtil.hasText(prefix)) {
+                sb.append(" WHERE");
+                where = true;
+                if (storageBucket != null) {
+                    
                     sb.append(" storageLocation_storageBucket LIKE ? AND");
                 }
                 sb.append(" storageLocation_storageID IS NOT NULL");
@@ -636,42 +757,64 @@ public class SQLGenerator {
                 }
             } else if (storageLocationRequired != null && !storageLocationRequired) {
                 // ArtifactDAO.unstoredIterator
-                if (StringUtil.hasText(prefix)) {
-                    sb.append(" uriBucket LIKE ? AND");
-                }
+                sb.append(" WHERE");
+                where = true;
                 sb.append(" storageLocation_storageID IS NULL");
-                if (ordered) {
-                    sb.append(" ORDER BY uri");
-                }
-            } else if (siteID != null) {
-                if (prefix != null && siteID != null) {
-                    sb.append(" uriBucket LIKE ? AND ").append("siteLocations @> ARRAY[?]");
-                } else {
-                    sb.append(" siteLocations @> ARRAY[?]");
-                }
-                if (ordered) {
-                    sb.append(" ORDER BY uri");
-                }
-            } else if (whereClause != null) {
-                if (prefix != null && whereClause != null) {
-                    sb.append(" uriBucket LIKE ? AND ( ").append(whereClause).append(" )");
-                } else {
-                    sb.append(" (").append(whereClause).append(" )");
-                }
-                if (ordered) {
-                    sb.append(" ORDER BY uri");
-                }
-            } else if (prefix != null) {
-                sb.append(" uriBucket LIKE ?");
-                if (ordered) {
-                    sb.append(" ORDER BY uri");
-                }
-            } else {
-                // trim off " WHERE"
-                sb.delete(sb.length() - 6, sb.length());
             }
             
-            String sql = sb.toString();
+            // optional params:
+            // uriBucket
+            // siteID
+            // namespace
+            // minLastModified
+            if (uriBucket != null) {
+                if (where) {
+                    sb.append(" AND");
+                } else {
+                    sb.append(" WHERE");
+                    where = true;
+                }
+                sb.append(" uriBucket LIKE ?");
+            }
+            if (siteID != null) {
+                // ArtifactDAO.iterator(UUID, ...)
+                if (where) {
+                    sb.append(" AND");
+                } else {
+                    sb.append(" WHERE");
+                    where = true;
+                }
+                sb.append(" siteLocations @> ARRAY[?]");
+            } 
+            if (namespace != null) {
+                if (where) {
+                    sb.append(" AND");
+                } else {
+                    sb.append(" WHERE");
+                    where = true;
+                }
+                sb.append(" uri LIKE ?");
+            }
+            if (minLastModified != null) {
+                if (where) {
+                    sb.append(" AND");
+                } else {
+                    sb.append(" WHERE");
+                    where = true;
+                }
+                sb.append(" lastModified >= ?");
+            }
+            if (ordered && !(storageLocationRequired != null && storageLocationRequired)) {
+                if (minLastModified != null) {
+                    sb.append(" ORDER BY lastModified ASC");
+                } else {
+                    sb.append(" ORDER BY uri");
+                }
+            }
+            
+            StringBuilder select = getSelectFromSQL(Artifact.class, false);
+            select.append(sb.toString());
+            String sql = select.toString();
             log.debug("sql: " + sql);
             
             try {
@@ -683,15 +826,29 @@ public class SQLGenerator {
                 ps.setFetchSize(1000);
                 ps.setFetchDirection(ResultSet.FETCH_FORWARD);
                 int col = 1;
-                if (prefix != null) {
-                    String val = prefix + "%";
+                if (storageBucket != null) {
+                    String val = storageBucket + "%";
+                    log.debug("bucket prefix: " + val);
+                    ps.setString(col++, val);
+                } else if (uriBucket != null) {
+                    String val = uriBucket + "%";
                     log.debug("bucket prefix: " + val);
                     ps.setString(col++, val);
                 }
                 if (siteID != null) {
                     log.debug("siteID: " + siteID);
                     ps.setObject(col++, siteID);
+                } 
+                if (namespace != null) {
+                    String val = namespace.getNamespace() + "%";
+                    log.debug("namespace prefix: " + val);
+                    ps.setString(col++, val);
                 }
+                if (minLastModified != null) {
+                    log.debug("min lastModified: " + minLastModified);
+                    ps.setTimestamp(col++, new Timestamp(minLastModified.getTime()), utc);
+                }
+                
                 ResultSet rs = ps.executeQuery();
                 
                 return new ArtifactResultSetIterator(con, rs);
@@ -704,7 +861,6 @@ public class SQLGenerator {
     
     private class StorageSiteGet implements EntityGet<StorageSite> {
         private UUID id;
-        private URI uri;
         private final boolean forUpdate;
 
         public StorageSiteGet(boolean forUpdate) {
@@ -730,6 +886,9 @@ public class SQLGenerator {
                 sb.append(col).append(" = ?");
             } else {
                 throw new IllegalStateException("primary key is null");
+            }
+            if (forUpdate) {
+                sb.append(" FOR UPDATE");
             }
             String sql = sb.toString();
             log.debug("StorageSiteGet: " + sql);
@@ -759,6 +918,228 @@ public class SQLGenerator {
         }
     }
     
+    class KeyPairGet implements EntityGet<PreauthKeyPair> {
+        private UUID id;
+        private String name;
+        private final boolean forUpdate;
+
+        public KeyPairGet(boolean forUpdate) {
+            this.forUpdate = forUpdate;
+        }
+        
+        @Override
+        public void setID(UUID id) {
+            this.id = id;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        @Override
+        public PreauthKeyPair execute(JdbcTemplate jdbc) {
+            return (PreauthKeyPair) jdbc.query(this, new KeyPairExtractor());
+        }
+
+        @Override
+        public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
+            StringBuilder sb = getSelectFromSQL(PreauthKeyPair.class, false);
+            sb.append(" WHERE ");
+            if (id != null) {
+                String col = getKeyColumn(PreauthKeyPair.class, true);
+                sb.append(col).append(" = ?");
+            } else if (name != null) {
+                sb.append("name = ?");
+            } else {
+                throw new IllegalStateException("primary key and name are both null");
+            }
+            if (forUpdate) {
+                sb.append(" FOR UPDATE");
+            }
+            String sql = sb.toString();
+            log.debug("KeyPairGet: " + sql);
+            PreparedStatement prep = conn.prepareStatement(sql);
+            if (id != null) {
+                prep.setObject(1, id);
+            } else {
+                prep.setString(1, name);
+            }
+            return prep;
+        }
+    }
+
+    private class KeyPairList implements EntityList<PreauthKeyPair> {
+
+        @Override
+        public Set<PreauthKeyPair> query(JdbcTemplate jdbc) {
+            List<PreauthKeyPair> keys = (List<PreauthKeyPair>) jdbc.query(this, new KeyPairRowMapper());
+            Set<PreauthKeyPair> ret = new TreeSet<>();
+            ret.addAll(keys);
+            return ret;
+        }
+
+        @Override
+        public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
+            StringBuilder sb = getSelectFromSQL(PreauthKeyPair.class, false);
+            String sql = sb.toString();
+            log.debug("KeyPairList: " + sql);
+            PreparedStatement prep = conn.prepareStatement(sql);
+            return prep;
+        }
+    }
+
+    public class NodeGet implements EntityGet<Node> {
+        private UUID id;
+        private ContainerNode parent;
+        private String name;
+        private URI storageID;
+        private final boolean forUpdate;
+
+        public NodeGet(boolean forUpdate) {
+            this.forUpdate = forUpdate;
+        }
+        
+        @Override
+        public void setID(UUID id) {
+            this.id = id;
+        }
+
+        public void setPath(ContainerNode parent, String name) {
+            this.parent = parent;
+            this.name = name;
+        }
+
+        public void setStorageID(URI storageID) {
+            this.storageID = storageID;
+        }
+        
+        @Override
+        public Node execute(JdbcTemplate jdbc) {
+            return (Node) jdbc.query(this, new NodeExtractor(parent));
+        }
+
+        @Override
+        public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
+            StringBuilder sb = getSelectFromSQL(Node.class, false);
+            sb.append(" WHERE ");
+            if (id != null) {
+                String col = getKeyColumn(Node.class, true);
+                sb.append(col).append(" = ?");
+            } else if (storageID != null) {
+                String col = "storageID";
+                sb.append(col).append(" = ?");
+            } else if (parent != null && name != null) {
+                String pidCol = "parentID";
+                String nameCol = "name";
+                sb.append(pidCol).append(" = ? and ").append(nameCol).append(" = ?");
+            } else {
+                throw new IllegalStateException("primary key is null");
+            }
+            if (forUpdate) {
+                sb.append(" FOR UPDATE");
+            }
+            String sql = sb.toString();
+            log.debug("Node: " + sql);
+            PreparedStatement prep = conn.prepareStatement(sql);
+            if (id != null) {
+                prep.setObject(1, id);
+            } else if (storageID != null) {
+                prep.setObject(1, storageID.toASCIIString());
+            } else {
+                prep.setObject(1, parent.getID());
+                prep.setObject(2, name);
+            }
+            
+            return prep;
+        }
+    }
+    
+    public class NodeIteratorQuery implements EntityIteratorQuery<Node> {
+        private ContainerNode parent;
+        private String start;
+        private Integer limit;
+        
+        public NodeIteratorQuery() {
+        }
+
+        public void setParent(ContainerNode parent) {
+            this.parent = parent;
+        }
+
+        public void setStart(String start) {
+            this.start = start;
+        }
+
+        public void setLimit(Integer limit) {
+            this.limit = limit;
+        }
+        
+        @Override
+        public ResourceIterator<Node> query(DataSource ds) {
+            if (parent == null) {
+                throw new RuntimeException("BUG: cannot query for children with parent==null");
+            }
+            
+            StringBuilder sb = getSelectFromSQL(Node.class, false);
+            sb.append(" WHERE parentID = ?");
+            if (start != null) {
+                sb.append(" AND ? <= name");
+            }
+            sb.append(" ORDER BY name ASC");
+            if (limit != null) {
+                sb.append(" LIMIT ?");
+            }
+            
+            String sql = sb.toString();
+            log.debug("sql: " + sql);
+            
+            try {
+                Connection con = ds.getConnection();
+                log.debug("NodeIteratorQuery: setAutoCommit(false)");
+                con.setAutoCommit(false);
+                // defaults for options: ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY
+                PreparedStatement ps = con.prepareStatement(sql);
+                ps.setFetchSize(1000);
+                ps.setFetchDirection(ResultSet.FETCH_FORWARD);
+                int col = 1;
+                
+                ps.setObject(col++, parent.getID());
+                log.debug("parentID = " + parent.getID());
+                if (start != null) {
+                    ps.setString(col++, start);
+                    log.debug("start = " + start);
+                }
+                if (limit != null) {
+                    ps.setInt(col++, limit);
+                    log.debug("limit = " + limit);
+                }
+                ResultSet rs = ps.executeQuery();
+                
+                return new NodeResultSetIterator(con, rs, parent);
+            } catch (SQLException ex) {
+                throw new RuntimeException("BUG: artifact iterator query failed", ex);
+            }
+            
+        }
+    }
+    
+    private void safeSetBoolean(PreparedStatement prep, int col, Boolean value) throws SQLException {
+        log.debug("safeSetBoolean: " + col + " " + value);
+        if (value != null) {
+            prep.setBoolean(col, value);
+        } else {
+            prep.setNull(col, Types.BOOLEAN);
+        }
+    }
+    
+    private void safeSetString(PreparedStatement prep, int col, URI value) throws SQLException {
+        String v = null;
+        if (value != null) {
+            v = value.toASCIIString();
+        }
+        safeSetString(prep, col, v);
+    }
+    
     private void safeSetString(PreparedStatement prep, int col, String value) throws SQLException {
         log.debug("safeSetString: " + col + " " + value);
         if (value != null) {
@@ -786,6 +1167,24 @@ public class SQLGenerator {
         }
     }
     
+    private void safeSetArray(PreparedStatement prep, int col, Set<GroupURI> values) throws SQLException {
+        
+        if (values != null && !values.isEmpty()) {
+            log.debug("safeSetArray: " + col + " " + values.size());
+            String[] array1d = new String[values.size()];
+            int i = 0;
+            for (GroupURI u : values) {
+                array1d[i] = u.getURI().toASCIIString();
+                i++;
+            }
+            java.sql.Array arr = prep.getConnection().createArrayOf("text", array1d);
+            prep.setObject(col, arr);
+        } else {
+            log.debug("safeSetArray: " + col + " null");
+            prep.setNull(col, Types.ARRAY);
+        }
+    }
+    
     private void safeSetArray(PreparedStatement prep, int col, UUID[] value) throws SQLException {
         
         if (value != null) {
@@ -794,6 +1193,25 @@ public class SQLGenerator {
             prep.setObject(col, arr);
         } else {
             log.debug("safeSetArray: " + col + " " + value);
+            prep.setNull(col, Types.ARRAY);
+        }
+    }
+    
+    private void safeSetProps(PreparedStatement prep, int col, Set<NodeProperty> values) throws SQLException {
+        
+        if (values != null && !values.isEmpty()) {
+            log.debug("safeSetProps: " + col + " " + values.size());
+            String[][] array2d = new String[values.size()][2]; // TODO: w-h or h-w??
+            int i = 0;
+            for (NodeProperty np : values) {
+                array2d[i][0] = np.getKey().toASCIIString();
+                array2d[i][1] = np.getValue();
+                i++;
+            }
+            java.sql.Array arr = prep.getConnection().createArrayOf("text", array2d);
+            prep.setObject(col, arr);
+        } else {
+            log.debug("safeSetProps: " + col + " = null");
             prep.setNull(col, Types.ARRAY);
         }
     }
@@ -852,8 +1270,8 @@ public class SQLGenerator {
                 safeSetString(prep, col++, value.storageLocation.getStorageID().toASCIIString());
                 safeSetString(prep, col++, value.storageLocation.storageBucket);
             } else {
-                safeSetString(prep, col++, null); // storageLocation.storageID
-                safeSetString(prep, col++, null); // storageLocation.storageBucket
+                safeSetString(prep, col++, (URI) null); // storageLocation.storageID
+                safeSetString(prep, col++, (URI) null); // storageLocation.storageBucket
             }
             
             safeSetTimestamp(prep, col++, new Timestamp(value.getLastModified().getTime()), utc);
@@ -948,7 +1366,7 @@ public class SQLGenerator {
             if (value.getLocation().storageBucket != null) {
                 safeSetString(prep, col++, value.getLocation().storageBucket);
             } else {
-                safeSetString(prep, col++, null);
+                safeSetString(prep, col++, (String) null);
             }
             
             prep.setTimestamp(col++, new Timestamp(value.getLastModified().getTime()), utc);
@@ -1004,6 +1422,11 @@ public class SQLGenerator {
             } else {
                 prep.setNull(col++, Types.OTHER);
             }
+            if (value.instanceID != null) {
+                prep.setObject(col++, value.instanceID);
+            } else {
+                prep.setNull(col++, Types.OTHER);
+            }
             
             prep.setTimestamp(col++, new Timestamp(value.getLastModified().getTime()), utc);
             prep.setString(col++, value.getMetaChecksum().toASCIIString());
@@ -1012,6 +1435,149 @@ public class SQLGenerator {
             return prep;
         }
         
+    }
+    
+    private class KeyPairPut implements EntityPut<PreauthKeyPair> {
+        private final Calendar utc = Calendar.getInstance(DateUtil.UTC);
+        private final boolean update;
+        private PreauthKeyPair value;
+        
+        KeyPairPut(boolean update) {
+            this.update = update;
+        }
+
+        @Override
+        public void setValue(PreauthKeyPair value) {
+            this.value = value;
+        }
+        
+        @Override
+        public void execute(JdbcTemplate jdbc) {
+            jdbc.update(this);
+        }
+        
+        @Override
+        public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
+            String sql = null;
+            if (update) {
+                sql = getUpdateSQL(PreauthKeyPair.class);
+                       
+            } else {
+                sql = getInsertSQL(PreauthKeyPair.class);
+            }
+            log.debug("KeyPairPut: " + sql);
+            PreparedStatement prep = conn.prepareStatement(sql);
+            int col = 1;
+            
+            prep.setString(col++, value.getName());
+            prep.setBytes(col++, value.getPublicKey());
+            prep.setBytes(col++, value.getPrivateKey());
+
+            prep.setTimestamp(col++, new Timestamp(value.getLastModified().getTime()), utc);
+            prep.setString(col++, value.getMetaChecksum().toASCIIString());
+            prep.setObject(col++, value.getID());
+            
+            return prep;
+        }
+    }
+    
+    private class NodePut implements EntityPut<Node> {
+        private final Calendar utc = Calendar.getInstance(DateUtil.UTC);
+        private final boolean update;
+        private Node value;
+        
+        NodePut(boolean update) {
+            this.update = update;
+        }
+
+        @Override
+        public void setValue(Node value) {
+            this.value = value;
+        }
+        
+        @Override
+        public void execute(JdbcTemplate jdbc) {
+            jdbc.update(this);
+        }
+        
+        @Override
+        public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
+            String sql = null;
+            if (update) {
+                sql = getUpdateSQL(Node.class);
+                       
+            } else {
+                sql = getInsertSQL(Node.class);
+            }
+            log.debug("NodePut: " + sql);
+            PreparedStatement prep = conn.prepareStatement(sql);
+            int col = 1;
+            
+            if (value.parentID == null) {
+                throw new RuntimeException("BUG: cannot put Node without a parentID: " + value);
+            }
+            prep.setObject(col++, value.parentID);
+            prep.setString(col++, value.getName());
+            prep.setString(col++, value.getClass().getSimpleName().substring(0, 1)); // HACK
+            if (value.ownerID == null) {
+                throw new RuntimeException("BUG: cannot put Node without an ownerID: " + value);
+            }
+            prep.setString(col++, value.ownerID.toString());
+            safeSetBoolean(prep, col++, value.isPublic);
+            safeSetBoolean(prep, col++, value.isLocked);
+            safeSetArray(prep, col++, value.getReadOnlyGroup());
+            safeSetArray(prep, col++, value.getReadWriteGroup());
+            safeSetProps(prep, col++, value.getProperties());
+
+            // ContainerNode-specific fields
+            if (value instanceof ContainerNode) {
+                ContainerNode cn = (ContainerNode) value;
+                safeSetBoolean(prep, col++, cn.inheritPermissions);
+            } else {
+                safeSetBoolean(prep, col++, null);
+            } 
+            
+            // bytesUsed is in between CN and DN specific columns
+            if (value instanceof ContainerNode) {
+                ContainerNode cn = (ContainerNode) value;
+                safeSetLong(prep, col++, cn.bytesUsed);
+            } else if (value instanceof DataNode) {
+                DataNode dn = (DataNode) value;
+                safeSetLong(prep, col++, dn.bytesUsed);
+            } else {
+                safeSetLong(prep, col++, null);
+            }
+            
+            // DataNode specific fields
+            if (value instanceof DataNode) {
+                DataNode dn = (DataNode) value;
+                if (dn.storageID == null) {
+                    throw new RuntimeException("BUG: cannot put DataNode without a storageID: " + value);
+                }
+                safeSetBoolean(prep, col++, dn.busy);
+                safeSetString(prep, col++, dn.storageID);
+                safeSetString(prep, col++, InventoryUtil.computeBucket(dn.storageID, 5)); // same as Artifact
+            } else {
+                safeSetBoolean(prep, col++, null);
+                safeSetString(prep, col++, (URI) null);
+                safeSetString(prep, col++, (URI) null);
+            }
+
+            // LinkNode-specific fields
+            if (value instanceof LinkNode) {
+                LinkNode ln = (LinkNode) value;
+                prep.setString(col++, ln.getTarget().toASCIIString());
+            } else {
+                safeSetString(prep, col++, (URI) null);
+            }
+            
+            // Entity fields
+            prep.setTimestamp(col++, new Timestamp(value.getLastModified().getTime()), utc);
+            prep.setString(col++, value.getMetaChecksum().toASCIIString());
+            prep.setObject(col++, value.getID());
+            
+            return prep;
+        }
     }
     
     private class EntityEventPut implements EntityPut<Entity> {
@@ -1083,11 +1649,13 @@ public class SQLGenerator {
     }
     
     private StringBuilder getSelectFromSQL(Class c, boolean entityCols) {
-        String tab = tableMap.get(c);
-        String[] cols = columnMap.get(c);
+        String tab = getTable(c);
+        Class targetClass = c;
         if (entityCols) {
-            cols = columnMap.get(Entity.class);
+            targetClass = Entity.class;
         }
+        String[] cols = getColumns(targetClass);
+        
         if (tab == null || cols == null) {
             throw new IllegalArgumentException("BUG: no table/columns for class " + c.getName());
         }
@@ -1106,21 +1674,13 @@ public class SQLGenerator {
         return sb;
     }
     
-    private String getLockSQL(Class c) {
-        StringBuilder sb = new StringBuilder();
-        String pk = getKeyColumn(c, true);
-        sb.append("UPDATE ");
-        sb.append(tableMap.get(c));
-        sb.append(" SET ").append(pk).append(" = ? WHERE ").append(pk).append(" = ?");
-        return sb.toString();
-    }
-    
     private String getUpdateSQL(Class c) {
         StringBuilder sb = new StringBuilder();
+        String tab = getTable(c);
         sb.append("UPDATE ");
-        sb.append(tableMap.get(c));
+        sb.append(tab);
         sb.append(" SET ");
-        String[] cols = columnMap.get(c);
+        String[] cols = getColumns(c);
         for (int i = 0; i < cols.length - 1; i++) { // PK is last
             if (i > 0) {
                 sb.append(",");
@@ -1137,10 +1697,11 @@ public class SQLGenerator {
     
     private String getInsertSQL(Class c) {
         StringBuilder sb = new StringBuilder();
+        String tab = getTable(c);
         sb.append("INSERT INTO ");
-        sb.append(tableMap.get(c));
+        sb.append(tab);
         sb.append(" (");
-        String[] cols = columnMap.get(c);
+        String[] cols = getColumns(c);
         for (int i = 0; i < cols.length; i++) {
             if (i > 0) {
                 sb.append(",");
@@ -1161,14 +1722,15 @@ public class SQLGenerator {
     
     private String getDeleteSQL(Class c) {
         StringBuilder sb = new StringBuilder();
+        String tab = getTable(c);
         sb.append("DELETE FROM ");
-        sb.append(tableMap.get(c));
+        sb.append(tab);
         sb.append(" WHERE id = ?");
         return sb.toString();
     }
     
     private String getKeyColumn(Class c, boolean pk) {
-        String[] cols = columnMap.get(c);
+        String[] cols = getColumns(c);
         if (cols == null) {
             throw new IllegalArgumentException("BUG: no table/columns for class " + c.getName());
         }
@@ -1226,6 +1788,7 @@ public class SQLGenerator {
         private final Connection con;
         private final ResultSet rs;
         boolean hasRow;
+        boolean closeWhenDone = true; // return to pool | assume close suppressed for static connections
         
         ArtifactResultSetIterator(Connection con, ResultSet rs) throws SQLException {
             this.con = con;
@@ -1234,7 +1797,14 @@ public class SQLGenerator {
             log.debug("ArtifactResultSetIterator: " + super.toString() + " ctor " + hasRow);
             if (!hasRow) {
                 log.debug("ArtifactResultSetIterator:  " + super.toString() + " ctor - setAutoCommit(true)");
-                con.setAutoCommit(true);
+                try {
+                    con.setAutoCommit(true); // commit txn
+                    if (closeWhenDone) {
+                        con.close(); // return to pool
+                    }
+                } catch (SQLException unexpected) {
+                    log.error("Connection.setAutoCommit(true) & close() failed", unexpected);
+                }
             }
         }
 
@@ -1243,10 +1813,13 @@ public class SQLGenerator {
             if (hasRow) {
                 log.debug("ArtifactResultSetIterator:  " + super.toString() + " ctor - setAutoCommit(true)");
                 try {
-                    con.setAutoCommit(true);
-                    hasRow = false;
-                } catch (SQLException ex) {
-                    throw new RuntimeException("BUG: artifact list query failed during close()", ex);
+                    con.setAutoCommit(true); // commit txn
+                    if (closeWhenDone) {
+                        con.close(); // return to pool
+                    }
+                    hasRow = false; 
+                } catch (SQLException unexpected) {
+                    log.error("Connection.setAutoCommit(true) & close() failed", unexpected);
                 }
             }
         }
@@ -1263,20 +1836,107 @@ public class SQLGenerator {
                 hasRow = rs.next();
                 if (!hasRow) {
                     log.debug("ArtifactResultSetIterator:  " + super.toString() + " DONE - setAutoCommit(true)");
-                    con.setAutoCommit(true);
+                    try {
+                        con.setAutoCommit(true); // commit txn
+                        if (closeWhenDone) {
+                            con.close(); // return to pool
+                        }
+                    } catch (SQLException unexpected) {
+                        log.error("Connection.setAutoCommit(true) & close() failed", unexpected);
+                    }
                 }
                 return ret;
             } catch (Exception ex) {
                 if (hasRow) {
                     log.debug("ArtifactResultSetIterator:  " + super.toString() + " ResultSet.next() FAILED - setAutoCommit(true)");
                     try {
-                        close();
+                        con.setAutoCommit(true); // commit txn
+                        if (closeWhenDone) {
+                            con.close(); // return to pool
+                        }
                         hasRow = false;
-                    } catch (IOException unexpected) {
-                        log.debug("BUG: unexpected IOException from close", unexpected);
+                    } catch (SQLException unexpected) {
+                        log.error("Connection.setAutoCommit(true) & close() failed", unexpected);
                     }
                 }
                 throw new RuntimeException("BUG: artifact list query failed while iterating", ex);
+            }
+        }
+    }
+    
+    private class NodeResultSetIterator implements ResourceIterator<Node> {
+        final Calendar utc = Calendar.getInstance(DateUtil.UTC);
+        private final Connection con;
+        private final ResultSet rs;
+        boolean hasRow;
+        
+        ContainerNode parent;
+
+        public NodeResultSetIterator(Connection con, ResultSet rs, ContainerNode parent) throws SQLException {
+            this.con = con;
+            this.rs = rs;
+            this.parent = parent;
+            hasRow = rs.next();
+            log.debug("NodeResultSetIterator: " + super.toString() + " ctor " + hasRow);
+            if (!hasRow) {
+                log.debug("NodeResultSetIterator:  " + super.toString() + " ctor - setAutoCommit(true)");
+                
+                try {
+                    con.setAutoCommit(true); // commit txn
+                    con.close(); // return to pool
+                } catch (SQLException ignore) {
+                    log.error("Connection.setAutoCommit(true) & close() failed", ignore);
+                }
+            }
+        }
+        
+        @Override
+        public void close() throws IOException {
+            if (hasRow) {
+                log.debug("NodeResultSetIterator:  " + super.toString() + " close - setAutoCommit(true)");
+                try {
+                    con.setAutoCommit(true); // commit txn
+                    con.close(); // return to pool
+                    hasRow = false;
+                } catch (SQLException ignore) {
+                    log.error("Connection.setAutoCommit(true) & close() failed", ignore);
+                }
+            }
+        }
+        
+        @Override
+        public boolean hasNext() {
+            return hasRow;
+        }
+        
+        @Override
+        public Node next() {
+            try {
+                Node ret = mapRowToNode(rs, utc, parent);
+                hasRow = rs.next();
+                if (!hasRow) {
+                    log.debug("NodeResultSetIterator:  " + super.toString() + " DONE - setAutoCommit(true)");
+                    try {
+                        con.setAutoCommit(true); // commit txn
+                        con.close(); // return to pool
+                        hasRow = false;
+                    } catch (SQLException ignore) {
+                        log.error("Connection.setAutoCommit(true) & close() failed", ignore);
+                    }
+                }
+                return ret;
+            } catch (Exception ex) {
+                if (hasRow) {
+                    log.debug("NodeResultSetIterator:  " + super.toString() + " ResultSet.next() FAILED - setAutoCommit(true)");
+                    try {
+                        con.setAutoCommit(true); // commit txn
+                        con.close(); // return to pool
+                        hasRow = false;
+                    } catch (SQLException ignore) {
+                        log.error("Connection.setAutoCommit(true) & close() failed", ignore);
+                    }
+                }
+                throw new RuntimeException("BUG: node list query failed while iterating", ex);
             }
         }
     }
@@ -1314,12 +1974,70 @@ public class SQLGenerator {
         return a;
     }
     
-    private class ObsoleteStorageLocationExtractor implements ResultSetExtractor {
+    private Node mapRowToNode(ResultSet rs, Calendar utc, ContainerNode parent) throws SQLException {
+        int col = 1;
+        final UUID parentID = Util.getUUID(rs, col++);
+        final String name = rs.getString(col++);
+        final String nodeType = rs.getString(col++);
+        final String ownerID = rs.getString(col++);
+        final Boolean isPublic = Util.getBoolean(rs, col++);
+        final Boolean isLocked = Util.getBoolean(rs, col++);
+        final String rawROG = rs.getString(col++);
+        final String rawRWG = rs.getString(col++);
+        final String rawProps = rs.getString(col++);
+        final Boolean inheritPermissions = Util.getBoolean(rs, col++);
+        final Long bytesUsed = Util.getLong(rs, col++);
+        final Boolean busy = Util.getBoolean(rs, col++);
+        final URI storageID = Util.getURI(rs, col++);
+        final String storageBucket = rs.getString(col++);
+        // TODO: return this somehow or just use in DataNode iterator?
+        final URI linkTarget = Util.getURI(rs, col++);
+        final Date lastModified = Util.getDate(rs, col++, utc);
+        final URI metaChecksum = Util.getURI(rs, col++);
+        final UUID id = Util.getUUID(rs, col++);
+
+        Node ret;
+        if (nodeType.equals("C")) {
+            ContainerNode cn = new ContainerNode(id, name);
+            cn.inheritPermissions = inheritPermissions;
+            cn.bytesUsed = bytesUsed;
+            ret = cn;
+        } else if (nodeType.equals("D")) {
+            DataNode dn = new DataNode(id, name, storageID);
+            dn.bytesUsed = bytesUsed;
+            ret = dn;
+        } else if (nodeType.equals("L")) {
+            ret = new LinkNode(id, name, linkTarget);
+        } else {
+            throw new RuntimeException("BUG: unexpected node type code: " + nodeType);
+        }
+        ret.parentID = parentID;
+        ret.ownerID = ownerID;
+        ret.isPublic = isPublic;
+        ret.isLocked = isLocked;
+
+        if (rawROG != null) {
+            Util.parseArrayGroupURI(rawROG, ret.getReadOnlyGroup());
+        }
+        if (rawRWG != null) {
+            Util.parseArrayGroupURI(rawRWG, ret.getReadWriteGroup());
+        }
+        if (rawProps != null) {
+            Util.parseArrayProps(rawProps, ret.getProperties());
+        }
+
+        InventoryUtil.assignLastModified(ret, lastModified);
+        InventoryUtil.assignMetaChecksum(ret, metaChecksum);
+
+        return ret;
+    }
+    
+    private class ObsoleteStorageLocationExtractor implements ResultSetExtractor<ObsoleteStorageLocation> {
 
         final Calendar utc = Calendar.getInstance(DateUtil.UTC);
         
         @Override
-        public Object extractData(ResultSet rs) throws SQLException, DataAccessException {
+        public ObsoleteStorageLocation extractData(ResultSet rs) throws SQLException, DataAccessException {
             if (!rs.next()) {
                 return null;
             }
@@ -1332,7 +2050,7 @@ public class SQLGenerator {
             
             StorageLocation s = new StorageLocation(storLoc);
             s.storageBucket = storBucket;
-            Entity ret = new ObsoleteStorageLocation(id, s);
+            ObsoleteStorageLocation ret = new ObsoleteStorageLocation(id, s);
             InventoryUtil.assignLastModified(ret, lastModified);
             InventoryUtil.assignMetaChecksum(ret, metaChecksum);
             return ret;
@@ -1352,6 +2070,7 @@ public class SQLGenerator {
             final URI resourecID = Util.getURI(rs, col++);
             final Date curLastModified = Util.getDate(rs, col++, utc);
             final UUID curID = Util.getUUID(rs, col++);
+            final UUID instanceID = Util.getUUID(rs, col++);
             
             final Date lastModified = Util.getDate(rs, col++, utc);
             final URI metaChecksum = Util.getURI(rs, col++);
@@ -1360,6 +2079,7 @@ public class SQLGenerator {
             HarvestState ret = new HarvestState(id, name, resourecID);
             ret.curLastModified = curLastModified;
             ret.curID = curID;
+            ret.instanceID = instanceID;
             InventoryUtil.assignLastModified(ret, lastModified);
             InventoryUtil.assignMetaChecksum(ret, metaChecksum);
             return ret;
@@ -1397,6 +2117,40 @@ public class SQLGenerator {
                 return null;
             }
             StorageSiteRowMapper m = new StorageSiteRowMapper();
+            return m.mapRow(rs, 1);
+        }
+    }
+    
+    private class KeyPairRowMapper implements RowMapper<PreauthKeyPair> {
+        Calendar utc = Calendar.getInstance(DateUtil.UTC);
+
+        @Override
+        public PreauthKeyPair mapRow(ResultSet rs, int i) throws SQLException {
+            int col = 1;
+            final String name = rs.getString(col++);
+            final byte[] pub = rs.getBytes(col++);
+            final byte[] priv = rs.getBytes(col++);
+
+            final Date lastModified = Util.getDate(rs, col++, utc);
+            final URI metaChecksum = Util.getURI(rs, col++);
+            final UUID id = Util.getUUID(rs, col++);
+            
+            PreauthKeyPair s = new PreauthKeyPair(id, name, pub, priv);
+            InventoryUtil.assignLastModified(s, lastModified);
+            InventoryUtil.assignMetaChecksum(s, metaChecksum);
+            return s;
+        }
+    }
+    
+    private class KeyPairExtractor implements ResultSetExtractor<PreauthKeyPair> {
+        final Calendar utc = Calendar.getInstance(DateUtil.UTC);
+        
+        @Override
+        public PreauthKeyPair extractData(ResultSet rs) throws SQLException, DataAccessException {
+            if (!rs.next()) {
+                return null;
+            }
+            KeyPairRowMapper m = new KeyPairRowMapper();
             return m.mapRow(rs, 1);
         }
     }
@@ -1463,6 +2217,24 @@ public class SQLGenerator {
             InventoryUtil.assignLastModified(ret, lastModified);
             InventoryUtil.assignMetaChecksum(ret, metaChecksum);
             return ret;
+        }
+    }
+    
+    private class NodeExtractor implements ResultSetExtractor<Node> {
+        private ContainerNode parent;
+        final Calendar utc = Calendar.getInstance(DateUtil.UTC);
+
+        public NodeExtractor(ContainerNode parent) {
+            this.parent = parent; // optional
+        }
+        
+        @Override
+        public Node extractData(ResultSet rs) throws SQLException, DataAccessException {
+            if (!rs.next()) {
+                return null;
+            }
+            
+            return mapRowToNode(rs, utc, parent);
         }
     }
 }

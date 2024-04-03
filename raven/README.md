@@ -11,14 +11,23 @@ Runtime configuration must be made available via the `/config` directory.
 When running raven.war in tomcat, parameters of the connection pool in META-INF/context.xml need
 to be configured in catalina.properties:
 ```
-# database connection pools
+# query pool for user requests
 org.opencadc.raven.query.maxActive={max connections for query pool}
 org.opencadc.raven.query.username={database username for query pool}
 org.opencadc.raven.query.password={database password for query pool}
 org.opencadc.raven.query.url=jdbc:postgresql://{server}/{database}
 
+# admin pool for setup
+org.opencadc.raven.inventory.maxActive={max connections for query pool}
+org.opencadc.raven.inventory.username={database username for query pool}
+org.opencadc.raven.inventory.password={database password for query pool}
+org.opencadc.raven.inventory.url=jdbc:postgresql://{server}/{database}
 ```
-The _query_ pool is used to query inventory for the requested Artifact.
+The _query_ account is used to query inventory for the requested Artifact; this pool can be
+configured with a read-only database account.
+
+The _inventory_ account owns and manages (create, alter, drop) inventory database objects and 
+(optional) URL signing keys (see _keys.preauth_ below).
 
 ### cadc-registry.properties
 
@@ -34,28 +43,30 @@ org.opencadc.raven.inventory.schema={schema}
 # consistency settings
 org.opencadc.raven.consistency.preventNotFound=true|false
 ```
-`raven` can be configured prevent artifact-not-found errors that might result due to the eventual consistency nature of
-the system by directly checking for the artifact at the sites (`preventNotFound=true`). This however introduces an
-overhead for the genuine not-found cases.
+The _preventNotFound_ key can be used to configure `raven` to prevent artifact-not-found errors that might 
+result due to the eventual consistency nature of the system by directly checking for the artifact at 
+_all known_ sites. This feature introduces an overhead for the genuine not-found cases.
+
+
 
 The following optional keys configure raven to use external service(s) to obtain grant information in order
-to perform authorization checks:
+to perform authorization checks and generate signed URLs:
 ```
-# keys to generate pre-auth URLs to minoc
-org.opencadc.raven.publicKeyFile={public key file name}
-org.opencadc.raven.privateKeyFile={private key file name}
-
 org.opencadc.raven.readGrantProvider={resourceID of a permission granting service}
 org.opencadc.raven.writeGrantProvider={resourceID of a permission granting service}
-```
-The optional _privateKeyFile_ is used to sign pre-auth URLs (one-time token included in URL) so that a `minoc` service does not
-have to repeat permission checks. The _publicKeyFile_ is not currently used but may be required in future (either exported via URL
-or used to check if `minoc` services have the right key before generating pre-auth URLs: TBD).
 
+# url signing key usage
+org.opencadc.raven.keys.preauth={true|false}
+```
 The optional _readGrantProvider_ and _writeGrantProvider_ keys configure minoc to call other services to get grants (permissions) for 
 operations. Multiple values of the permission granting service resourceID(s) may be provided by including multiple property 
 settings. All services will be consulted but a single positive result is sufficient to grant permission for an 
 action.
+
+The _keys.preauth_ key (default: false) configures `raven` to use URL-signing. When enabled, `raven` can generate a signed token
+and embed it into the URL; `minoc` services that are configured to trust a `raven` service will download the public key and can 
+validate the token and grant access without further permission checks. With transfer negotiation, the signed URL gets added as 
+an additional "anonymous" URL.
 
 The following optional keys configure raven to prioritize sites returned in transfer negotiation, with higher priority
 sites first in the list of transfer URL's. Multiple values of _namespace_ may be specified for a single _resourceID_. 
@@ -97,6 +108,13 @@ org.opencadc.raven.authenticateOnly=true
 When _authenticateOnly_ is `true`, any authenticated user will be able to read/write/delete files and anonymous users
 will be able to read files.
 
+### cadc-log.properties (optional)
+See <a href="https://github.com/opencadc/core/tree/master/cadc-log">cadc-log</a> for common 
+dynamic logging control.
+
+### cadc-vosi.properties (optional)
+See <a href="https://github.com/opencadc/reg/tree/master/cadc-vosi">cadc-vosi</a> for common 
+service state control.
 
 ### cadcproxy.pem (optional)
 This client certificate is used to make authenticated server-to-server calls for system-level A&A purposes.

@@ -21,8 +21,8 @@ mainClassName = 'org.opencadc.tantar.Main'
 dependencies {
     compile 'org.opencadc:cadc-util:[1.10.2,2.0)'
     compile 'org.opencadc:cadc-log:[1.1.2,2.0)'
-    compile 'org.opencadc:cadc-inventory:[0.9.4,2.0)'
-    compile 'org.opencadc:cadc-inventory-db:[0.14.5,1.0)'
+    compile 'org.opencadc:cadc-inventory:[1.0.0,2.0)'
+    compile 'org.opencadc:cadc-inventory-db:[1.0.0,2.0)'
     compile 'org.opencadc:cadc-inventory-util:[0.1.8,1.0)'
     compile 'org.opencadc:cadc-storage-adapter:[0.11.1,1.0)'
 

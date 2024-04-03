@@ -66,19 +66,10 @@ jobs:
       
     - name: java build -- raven
       run: cd raven && ../gradlew --info clean build javadoc checkstyleMain
-      
-    - name: java build -- ringhold
-      run: cd ringhold && ../gradlew --info clean build javadoc checkstyleMain
 
     - name: java build -- ratik
       run: cd ratik && ../gradlew --info clean build javadoc checkstyleMain
 
-## TODO: docker build depends on cadc-tomcat base image from docker-base.git
-#    - name: docker build -- baldur
-#      run: cd baldur && docker build . --file Dockerfile --tag baldur:$(date +%s)
-#    - name: docker build -- minoc
-#      run: cd minoc && docker build . --file Dockerfile --tag minoc:$(date +%s)
-#    - name: docker build -- luskan
-#      run: cd luskan && docker build . --file Dockerfile --tag luskan:$(date +%s)
-#    - name: docker build -- raven
-#      run: cd raven && docker build . --file Dockerfile --tag raven:$(date +%s)
+    - name: java build -- ringhold
+      run: cd ringhold && ../gradlew --info clean build javadoc checkstyleMain
+

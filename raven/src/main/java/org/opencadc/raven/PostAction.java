@@ -70,11 +70,6 @@ package org.opencadc.raven;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.rest.InlineContentException;
 import ca.nrc.cadc.rest.InlineContentHandler;
-import ca.nrc.cadc.vos.Direction;
-import ca.nrc.cadc.vos.Transfer;
-import ca.nrc.cadc.vos.TransferReader;
-import ca.nrc.cadc.vos.TransferWriter;
-import ca.nrc.cadc.vos.VOS;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -82,6 +77,12 @@ import java.util.ArrayList;
 import java.util.List;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
+import org.opencadc.inventory.transfer.ProtocolsGenerator;
+import org.opencadc.vospace.VOS;
+import org.opencadc.vospace.transfer.Direction;
+import org.opencadc.vospace.transfer.Transfer;
+import org.opencadc.vospace.transfer.TransferReader;
+import org.opencadc.vospace.transfer.TransferWriter;
 
 /**
  * Given a transfer request object return a transfer response object with all
@@ -159,9 +160,11 @@ public class PostAction extends ArtifactAction {
     public void doAction() throws Exception {
         initAndAuthorize();
 
-        ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.publicKeyFile, this.privateKeyFile,
-                                                       this.user, this.siteAvailabilities, this.siteRules,
-                                                       this.preventNotFound, this.storageResolver);
+        ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.siteAvailabilities, this.siteRules);
+        pg.tokenGen = this.tokenGen;
+        pg.user = this.user;
+        pg.preventNotFound = this.preventNotFound;
+        pg.storageResolver = this.storageResolver;
         Transfer ret = new Transfer(artifactURI, transfer.getDirection());
         // TODO: change from pg.getProtocols(transfer) to pg.getResolvedTransfer(transfer)??
         ret.getProtocols().addAll(pg.getProtocols(transfer));

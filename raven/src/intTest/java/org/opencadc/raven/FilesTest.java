@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2022.                            (c) 2022.
+ *  (c) 2023.                            (c) 2023.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -76,10 +76,6 @@ import ca.nrc.cadc.net.HttpUpload;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.util.Log4jInit;
-import ca.nrc.cadc.vos.Direction;
-import ca.nrc.cadc.vos.Protocol;
-import ca.nrc.cadc.vos.Transfer;
-import ca.nrc.cadc.vos.VOS;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -104,7 +100,12 @@ import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
-import org.opencadc.inventory.db.version.InitDatabase;
+import org.opencadc.inventory.db.version.InitDatabaseSI;
+import org.opencadc.inventory.transfer.ProtocolsGenerator;
+import org.opencadc.vospace.VOS;
+import org.opencadc.vospace.transfer.Direction;
+import org.opencadc.vospace.transfer.Protocol;
+import org.opencadc.vospace.transfer.Transfer;
 
 /**
  * Test files endpoint.
@@ -132,7 +133,7 @@ public class FilesTest extends RavenTest {
         artifactDAO.setConfig(config);
         this.siteDAO = new StorageSiteDAO(artifactDAO);
         
-        InitDatabase init = new InitDatabase(artifactDAO.getDataSource(), DATABASE, SCHEMA);
+        InitDatabaseSI init = new InitDatabaseSI(artifactDAO.getDataSource(), DATABASE, SCHEMA);
         init.doInit();
     }
     
@@ -413,7 +414,7 @@ public class FilesTest extends RavenTest {
         Assert.assertEquals("HEAD response code", 200, request.getResponseCode());
         Assert.assertEquals("File length", size, Long.valueOf(request.getResponseHeader("Content-Length")).longValue());
         Assert.assertNotNull("File last-modified", request.getResponseHeader("Last-Modified"));
-        Assert.assertEquals("File name", "attachment; filename=\"" + InventoryUtil.computeArtifactFilename(artifactURI) + "\"",
+        Assert.assertEquals("File name", "inline; filename=\"" + InventoryUtil.computeArtifactFilename(artifactURI) + "\"",
                 request.getResponseHeader("Content-Disposition"));
         Assert.assertEquals("File digest", checksum, request.getDigest());
         Assert.assertEquals("File type", contentType, request.getResponseHeader("Content-Type"));

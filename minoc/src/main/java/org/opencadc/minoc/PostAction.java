@@ -97,6 +97,7 @@ public class PostAction extends ArtifactAction {
      */
     @Override
     public void initAction() throws Exception {
+        super.initAction();
         checkWritable();
         initAndAuthorize(WriteGrant.class);
         initDAO();
@@ -192,7 +193,7 @@ public class PostAction extends ArtifactAction {
             log.debug("commit txn: OK");
             
             syncOutput.setCode(202); // Accepted
-            HeadAction.setHeaders(existing, syncOutput);
+            HeadAction.setHeaders(existing, null, syncOutput);
             syncOutput.setHeader("content-length", 0);
         } catch (Exception e) {
             log.error("failed to persist " + artifactURI, e);

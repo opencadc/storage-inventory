@@ -79,10 +79,11 @@ import org.apache.log4j.Logger;
 public class TestUtil {
     private static final Logger log = Logger.getLogger(TestUtil.class);
 
-    static String SERVER = "INVENTORY_TEST";
-    static String DATABASE = "cadctest";
-    static String SCHEMA = "inventory";
-    static String TABLE_PREFIX = null;
+    public static String SERVER = "INVENTORY_TEST";
+    public static String DATABASE = "cadctest";
+    public static String SCHEMA = "inventory";
+    public static String VOS_SCHEMA = "vospace";
+    public static String TABLE_PREFIX = null;
     
     static {
         try {
@@ -102,12 +103,17 @@ public class TestUtil {
                 if (s != null) {
                     SCHEMA = s.trim();
                 }
+                s = props.getProperty("vos_schema");
+                if (s != null) {
+                    VOS_SCHEMA = s.trim();
+                }
                 s = props.getProperty("tablePrefix");
                 if (s != null) {
                     TABLE_PREFIX = s.trim();
                 }
             }
-            log.info("intTest database config: " + SERVER + " " + DATABASE + " " + SCHEMA + " " + TABLE_PREFIX);
+            log.info("intTest database config: " + SERVER + " " + DATABASE + " " + SCHEMA + " " + VOS_SCHEMA
+                + " tablePrefix=" + TABLE_PREFIX);
         } catch (Exception oops) {
             log.debug("failed to load/read optional db config", oops);
         }
