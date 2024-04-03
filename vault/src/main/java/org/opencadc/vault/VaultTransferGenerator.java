@@ -117,7 +117,8 @@ public class VaultTransferGenerator implements TransferGenerator {
     private final Map<URI, Availability> siteAvailabilities;
     
     @SuppressWarnings("unchecked")
-    public VaultTransferGenerator(NodePersistenceImpl nodePersistence, ArtifactDAO artifactDAO, TokenTool tokenTool, boolean preventNotFound) {
+    public VaultTransferGenerator(NodePersistenceImpl nodePersistence, String appName, 
+            ArtifactDAO artifactDAO, TokenTool tokenTool, boolean preventNotFound) {
         this.nodePersistence = nodePersistence;
         this.authorizer = new VOSpaceAuthorizer(nodePersistence);
         this.artifactDAO = artifactDAO;
@@ -125,7 +126,7 @@ public class VaultTransferGenerator implements TransferGenerator {
         this.preventNotFound = preventNotFound;
         
         // TODO: get appname from ???
-        String siteAvailabilitiesKey = "vault" + "-" + StorageSiteAvailabilityCheck.class.getName();
+        String siteAvailabilitiesKey = appName + "-" + StorageSiteAvailabilityCheck.class.getName();
         log.debug("siteAvailabilitiesKey: " + siteAvailabilitiesKey);
         try {
             Context initContext = new InitialContext();

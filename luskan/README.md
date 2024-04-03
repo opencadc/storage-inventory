@@ -104,6 +104,10 @@ Assuming instances are restarted regularly, this would cause rollover approximat
 See <a href="https://github.com/opencadc/core/tree/master/cadc-log">cadc-log</a> for common 
 dynamic logging control.
 
+### cadc-vosi.properties (optional)
+See <a href="https://github.com/opencadc/reg/tree/master/cadc-vosi">cadc-vosi</a> for common 
+service state control.
+
 ### cadcproxy.pem (optional)
 This client certificate is used to make authenticated server-to-server calls for system-level A&A purposes.
 

@@ -80,7 +80,7 @@ public class InitDatabaseSI extends InitDatabase {
     private static final Logger log = Logger.getLogger(InitDatabaseSI.class);
     
     public static final String MODEL_NAME = "storage-inventory";
-    public static final String MODEL_VERSION = "0.15";
+    public static final String MODEL_VERSION = "1.0.0";
     public static final String PREV_MODEL_VERSION = "0.14";
     //public static final String PREV_MODEL_VERSION = "DO-NOT_UPGRADE-BY-ACCIDENT";
 
@@ -98,7 +98,7 @@ public class InitDatabaseSI extends InitDatabase {
     };
     
     static String[] UPGRADE_SQL = new String[] {
-        "inventory.upgrade-0.15.sql",
+        "inventory.upgrade-1.0.0.sql",
         "generic.PreauthKeyPair.sql",
         "generic.permissions.sql"
     };
