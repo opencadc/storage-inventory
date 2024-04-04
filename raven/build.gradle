@@ -35,7 +35,7 @@ dependencies {
     compile 'org.opencadc:cadc-gms:[1.0.4,)'
     compile 'org.opencadc:cadc-inventory:[1.0,2.0)'
     compile 'org.opencadc:cadc-inventory-db:[1.0,2.0)'
-    compile 'org.opencadc:cadc-inventory-server:[0.3.0,)'
+    compile 'org.opencadc:cadc-inventory-server:[0.3.0,1.0)'
     compile 'org.opencadc:cadc-permissions:[0.3.5,)'
     compile 'org.opencadc:cadc-permissions-client:[0.3,)'
     compile 'org.opencadc:cadc-vos:[1.2,2.0)'
