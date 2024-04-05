@@ -61,8 +61,8 @@ storage sites.
 Official docker image: `images.opencadc.org/storage-inventory/ratik:$VER`
 
 ## ringhold
-This is an implementation of part of the **metadata-validate** process that cleans up after a change in 
-local artifact selection policy. This is used if the new fenwick policy excludes artifacts previously synced.
+This is an implementation of a simplified part of the **metadata-validate** process that can be used 
+to remove the local copy of artifacts from a site (file cleanup is done by `tantar`).
 
 Official docker image: `images.opencadc.org/storage-inventory/ringhold:$VER`
 

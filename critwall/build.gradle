@@ -19,7 +19,7 @@ group = 'org.opencadc'
 mainClassName = 'org.opencadc.critwall.Main'
 
 dependencies {
-    compile 'org.opencadc:cadc-storage-adapter:[0.8,1.0)'
+    compile 'org.opencadc:cadc-storage-adapter:[1.0,)'
     compile 'org.opencadc:cadc-util:[1.10.2,2.0)'
     compile 'org.opencadc:cadc-inventory:[1.0,2.0)'
     compile 'org.opencadc:cadc-inventory-db:[1.0,2.0)'
