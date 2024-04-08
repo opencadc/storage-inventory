@@ -110,10 +110,14 @@ public class MinocInitAction extends InitAction {
 
     @Override
     public void doInit() {
-        initConfig();
-        initDatabase();
-        initStorageSite();
-        initStorageAdapter();
+        try {
+            initConfig();
+            initDatabase();
+            initStorageSite();
+            initStorageAdapter();
+        } catch (Throwable ex) {
+            log.error("init fail", ex);
+        }
     }
 
     @Override
