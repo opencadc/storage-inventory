@@ -132,10 +132,10 @@ public class HeadAction extends RestAction {
 
     @Override
     public void doAction() throws Exception {
-        resolveAndSetMetadata();
+        resolveAndSetMetadata(true);
     }
 
-    DataNode resolveAndSetMetadata() throws Exception {
+    DataNode resolveAndSetMetadata(boolean includeContentLength) throws Exception {
         PathResolver pathResolver = new PathResolver(nodePersistence, voSpaceAuthorizer);
         String filePath = syncInput.getPath();
         Node node = pathResolver.getNode(filePath, true);
@@ -151,7 +151,9 @@ public class HeadAction extends RestAction {
         log.debug("node path resolved: " + node.getName() + " type: " + node.getClass().getName());
 
         DataNode dn = (DataNode) node;
-        syncOutput.setHeader("Content-Length", dn.bytesUsed);
+        if (includeContentLength) {
+            syncOutput.setHeader("Content-Length", dn.bytesUsed);
+        }
         syncOutput.setHeader("Content-Disposition", "inline; filename=\"" + node.getName() + "\"");
         syncOutput.setHeader("Content-Type", node.getPropertyValue(VOS.PROPERTY_URI_TYPE));
         syncOutput.setHeader("Content-Encoding", node.getPropertyValue(VOS.PROPERTY_URI_CONTENTENCODING));

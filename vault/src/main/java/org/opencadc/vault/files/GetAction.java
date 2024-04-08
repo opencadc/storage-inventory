@@ -96,7 +96,8 @@ public class GetAction extends HeadAction {
 
     @Override
     public void doAction() throws Exception {
-        DataNode node = resolveAndSetMetadata();
+        // don't set content-length header since we plan to redirect
+        DataNode node = resolveAndSetMetadata(false);
 
         Subject caller = AuthenticationUtil.getCurrentSubject();
         if (!voSpaceAuthorizer.hasSingleNodeReadPermission(node, caller)) {
@@ -126,5 +127,4 @@ public class GetAction extends HeadAction {
         syncOutput.setHeader("Location", loc);
         syncOutput.setCode(HttpURLConnection.HTTP_SEE_OTHER);
     }
-
 }
