@@ -52,7 +52,7 @@ dependencies {
 
     runtime 'org.opencadc:cadc-access-control-identity:[1.2.1,2.0)'
     runtime 'org.opencadc:cadc-storage-adapter-fs:[0.9.3,)'
-    runtime 'org.opencadc:cadc-storage-adapter-ad:[0.6.2,)'
+    runtime 'org.opencadc:cadc-storage-adapter-ad:[0.7.0,)'
     runtime 'org.opencadc:cadc-storage-adapter-swift:[0.8.7,)'
 }
 

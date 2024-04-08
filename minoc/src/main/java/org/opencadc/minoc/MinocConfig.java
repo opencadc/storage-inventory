@@ -414,9 +414,6 @@ public class MinocConfig {
     public StorageAdapter getStorageAdapter() {
         String cname = configProperties.getFirstPropertyValue(MinocConfig.SA_KEY);
         StorageAdapter storageAdapter = InventoryUtil.loadPlugin(cname);
-        for (Namespace ns : recoverableNamespaces) {
-            log.info("initStorageAdapter: recoverableNamespace  = " + ns.getNamespace());
-        }
         storageAdapter.setRecoverableNamespaces(recoverableNamespaces);
         return storageAdapter;
     }
@@ -430,8 +427,6 @@ public class MinocConfig {
             ret.put("jndiDataSourceName", JNDI_DATASOURCE);
             ret.put("invSchema", configProperties.getFirstPropertyValue(SCHEMA_KEY));
             ret.put("genSchema", configProperties.getFirstPropertyValue(SCHEMA_KEY));
-            //config.put("vosSchema", null);
-            //config.put("database", null);
             return ret;
         } catch (ClassNotFoundException ex) {
             throw new IllegalStateException("invalid config: failed to load SQLGenerator: " + cname);
