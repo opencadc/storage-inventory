@@ -152,8 +152,8 @@ public class DataNodeSizeWorker implements Runnable {
             while (iter.hasNext()) {
                 Artifact artifact = iter.next();
                 DataNode node = nodeDAO.getDataNode(artifact.getURI());
-                log.debug(artifact.getURI() + " len=" + artifact.getContentLength() + " -> " + node.getName());
                 if (node != null  && !artifact.getContentLength().equals(node.bytesUsed)) {
+                    log.debug(artifact.getURI() + " len=" + artifact.getContentLength() + " -> " + node.getName());
                     tm.startTransaction();
                     try {
                         node = (DataNode)nodeDAO.lock(node);
