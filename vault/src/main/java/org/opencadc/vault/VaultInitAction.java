@@ -120,6 +120,7 @@ public class VaultInitAction extends InitAction {
     private static final String VAULT_KEY = "org.opencadc.vault";
     static final String RESOURCE_ID_KEY = VAULT_KEY + ".resourceID";
     static final String PREVENT_NOT_FOUND_KEY = VAULT_KEY + ".consistency.preventNotFound";
+    static final String IS_STORAGE_SITE_KEY = VAULT_KEY + ".inventory.isStorageSite";
     static final String INVENTORY_SCHEMA_KEY = VAULT_KEY + ".inventory.schema";
     static final String VOSPACE_SCHEMA_KEY = VAULT_KEY + ".vospace.schema";
     static final String SINGLE_POOL_KEY = VAULT_KEY + ".singlePool";
@@ -195,6 +196,15 @@ public class VaultInitAction extends InitAction {
         String rid = mvp.getFirstPropertyValue(RESOURCE_ID_KEY);
         sb.append("\n\t" + RESOURCE_ID_KEY + ": ");
         if (rid == null) {
+            sb.append("MISSING");
+            ok = false;
+        } else {
+            sb.append("OK");
+        }
+        
+        String iss = mvp.getFirstPropertyValue(IS_STORAGE_SITE_KEY);
+        sb.append("\n\t" + IS_STORAGE_SITE_KEY + ": ");
+        if (iss == null) {
             sb.append("MISSING");
             ok = false;
         } else {
@@ -479,8 +489,10 @@ public class VaultInitAction extends InitAction {
                 offline = true;
             }
 
+            boolean isStorageSite = Boolean.parseBoolean(props.getFirstPropertyValue(IS_STORAGE_SITE_KEY));
+            
             terminateBackgroundWorkers();
-            DataNodeSizeSync async = new DataNodeSizeSync(hsDAO, artifactDAO, storageNamespace);
+            DataNodeSizeSync async = new DataNodeSizeSync(hsDAO, artifactDAO, storageNamespace, isStorageSite);
             async.setOffline(offline);
             this.dataNodeSizeSyncThread = new Thread(async);
             dataNodeSizeSyncThread.setDaemon(true);

@@ -99,6 +99,7 @@ public class DataNodeSizeWorker implements Runnable {
     private final ArtifactDAO artifactDAO;
     private final HarvestStateDAO harvestStateDAO;
     private final Namespace storageNamespace;
+    private boolean isStorageSite;
     
     private long numArtifactsProcessed;
 
@@ -111,12 +112,13 @@ public class DataNodeSizeWorker implements Runnable {
      * @param namespace artifact namespace
      */
     public DataNodeSizeWorker(HarvestStateDAO harvestStateDAO, HarvestState harvestState, 
-            ArtifactDAO artifactDAO, Namespace namespace) {
+            ArtifactDAO artifactDAO, Namespace namespace, boolean isStorageSite) {
         this.harvestState = harvestState;
         this.harvestStateDAO = harvestStateDAO;
         this.nodeDAO = new NodeDAO(harvestStateDAO);
         this.artifactDAO = artifactDAO;
         this.storageNamespace = namespace;
+        this.isStorageSite = isStorageSite;
     }
 
     public long getNumArtifactsProcessed() {
@@ -147,7 +149,7 @@ public class DataNodeSizeWorker implements Runnable {
         }
 
         String uriBucket = null; // process all artifacts in a single thread
-        try (final ResourceIterator<Artifact> iter = artifactDAO.iterator(storageNamespace, uriBucket, startTime, true)) {
+        try (final ResourceIterator<Artifact> iter = artifactDAO.iterator(storageNamespace, uriBucket, startTime, true, isStorageSite)) {
             TransactionManager tm = nodeDAO.getTransactionManager();
             while (iter.hasNext()) {
                 Artifact artifact = iter.next();

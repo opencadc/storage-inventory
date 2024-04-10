@@ -86,6 +86,7 @@ import org.junit.Test;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.vospace.db.DataNodeSizeWorker;
 import org.opencadc.inventory.Namespace;
+import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.HarvestState;
 import org.opencadc.inventory.db.HarvestStateDAO;
@@ -106,7 +107,7 @@ public class DataNodeSizeWorkerTest {
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.inventory.db", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.inventory.db", Level.DEBUG);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
         Log4jInit.setLevel("org.opencadc.vospace", Level.INFO);
         Log4jInit.setLevel("org.opencadc.vospace.db", Level.INFO);
@@ -180,7 +181,16 @@ public class DataNodeSizeWorkerTest {
     }
     
     @Test
-    public void testSyncArtifact() throws Exception {
+    public void testSyncArtifactSite() throws Exception {
+        testSyncArtifact(true);
+    }
+    
+    @Test
+    public void testSyncArtifactGlobal() throws Exception {
+        testSyncArtifact(false);
+    }
+
+    private void testSyncArtifact(boolean isStorageSite) throws Exception {
         UUID rootID = new UUID(0L, 0L);
         ContainerNode root = new ContainerNode(rootID, "root");
 
@@ -206,11 +216,15 @@ public class DataNodeSizeWorkerTest {
                 URI.create("md5:d41d8cd98f00b204e9800998ecf8427e"),
                 new Date(),
                 666L);
+        if (isStorageSite) {
+            expected.storageLocation = new StorageLocation(URI.create("id:" + UUID.randomUUID().toString()));
+            expected.storageLocation.storageBucket = "X";
+        }
         log.info("expected: " + expected);
 
         artifactDAO.put(expected);
         Artifact actualArtifact = artifactDAO.get(expected.getID());
-        Assert.assertNotNull(actual);
+        Assert.assertNotNull(actualArtifact);
         Assert.assertEquals(expected.getContentLength(), actualArtifact.getContentLength());
 
         String hsName = "ArtifactSize";
@@ -219,25 +233,36 @@ public class DataNodeSizeWorkerTest {
         harvestStateDAO.put(hs);
         hs = harvestStateDAO.get(hsName, resourceID);
 
-        DataNodeSizeWorker asWorker = new DataNodeSizeWorker(harvestStateDAO, hs, artifactDAO, siNamespace);
+        DataNodeSizeWorker asWorker = new DataNodeSizeWorker(harvestStateDAO, hs, artifactDAO, siNamespace, isStorageSite);
+        log.info("*** DataNodeSizeWorker START");
         asWorker.run();
+        log.info("*** DataNodeSizeWorker DONE");
 
         actual = (DataNode)nodeDAO.get(orig.getID());
         Assert.assertNotNull(actual);
         log.info("found: "  + actual.getID() + " aka " + actual);
         Assert.assertEquals(expected.getContentLength(), actual.bytesUsed);
 
+        Thread.sleep(100L);
+        
         // update the artifact only
         artifactDAO.delete(actualArtifact.getID());
-        expected = new Artifact(expected.getURI(), expected.getMetaChecksum(), new Date(), 333L);
-        artifactDAO.put(expected);
+        Artifact modified = new Artifact(expected.getURI(), expected.getMetaChecksum(), new Date(), 333L);
+        if (isStorageSite) {
+            modified.storageLocation = new StorageLocation(URI.create("id:" + UUID.randomUUID().toString()));
+            modified.storageLocation.storageBucket = "X";
+        }
+        artifactDAO.put(modified);
         actual = (DataNode)nodeDAO.get(orig.getID());
-        Assert.assertNotEquals(expected.getContentLength(), actual.bytesUsed);
+        Assert.assertNotEquals(modified.getContentLength(), actual.bytesUsed);
 
         // run the update
+        log.info("*** DataNodeSizeWorker START");
         asWorker.run();
+        log.info("*** DataNodeSizeWorker DONE");
+        
         actual = (DataNode)nodeDAO.get(orig.getID());
-        Assert.assertEquals(expected.getContentLength(), actual.bytesUsed);
+        Assert.assertEquals(modified.getContentLength(), actual.bytesUsed);
 
     }
 

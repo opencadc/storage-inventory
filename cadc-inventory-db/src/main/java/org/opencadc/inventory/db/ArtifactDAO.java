@@ -193,7 +193,7 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
             SQLGenerator.ArtifactIteratorQuery iter = (SQLGenerator.ArtifactIteratorQuery) gen.getEntityIteratorQuery(Artifact.class);
             iter.setStorageLocationRequired(true);
             iter.setStorageBucket(storageBucketPrefix);
-            iter.setOrderedOutput(true);
+            iter.setOrderByStorageLocation(true);
             return iter.query(dataSource);
         } catch (BadSqlGrammarException ex) {
             handleInternalFail(ex);
@@ -250,7 +250,7 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
      * conditions on fields of the Artifact using the field names for column references.
      * Example: <code>uri like 'ad:bar/%'</code>. The result is currently not ordered.
      * 
-     * <p>Use case: local cleanup by arbitrary criteria
+     * <p>Use case: local cleanup by ringhold
      * 
      * @param ns namespace for selecting artifacts
      * @param uriBucketPrefix null, prefix, or complete Artifact.uriBucket string
@@ -258,23 +258,25 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
      * @return iterator over artifacts matching criteria
      */
     public ResourceIterator<Artifact> iterator(Namespace ns, String uriBucketPrefix, boolean ordered) {
-        return iterator(ns, uriBucketPrefix, null, ordered);
+        return iterator(ns, uriBucketPrefix, null, ordered, null);
     }
     
     /**
-     * Iterate over artifacts that match criteria. This method adds an optional Date argument to
+     * Iterate over artifacts in a specific namespace.This method adds an optional Date argument to
      * support incremental processing. In this case, ordered will be in timestamp order rather than
      * uri order.
      * 
-     * <p>Use case: process artifact events directly in the database
+     * <p>Use case: process artifact events directly in the database (DataNodeSizeWorker)
      * 
      * @param ns namespace for selecting artifacts
      * @param uriBucketPrefix null, prefix, or complete Artifact.uriBucket string
-     * @param minLastModified minimum Artifact.lastModified to consider (incremental mode)
-     * @param ordered order by Artifact.uri (true) or not ordered (false)
-     * @return iterator over artifacts matching criteria
+     * @param minLastModified minimum Artifact.lastModified to consider (incremental mode), null for all
+     * @param ordered order by Artifact.lastModified (true) or not ordered (false)
+     * @param isStored true to select stored artifacts, false for unstored, null for all
+     * @return iterator over artifacts
      */
-    public ResourceIterator<Artifact> iterator(Namespace ns, String uriBucketPrefix, Date minLastModified, boolean ordered) {
+    public ResourceIterator<Artifact> iterator(Namespace ns, String uriBucketPrefix, 
+            Date minLastModified, boolean ordered, Boolean isStored) {
         checkInit();
         long t = System.currentTimeMillis();
 
@@ -284,6 +286,7 @@ public class ArtifactDAO extends AbstractDAO<Artifact> {
             iter.setNamespace(ns);
             iter.setMinLastModified(minLastModified);
             iter.setOrderedOutput(ordered);
+            iter.setStorageLocationRequired(isStored);
             return iter.query(dataSource);
         } catch (BadSqlGrammarException ex) {
             handleInternalFail(ex);

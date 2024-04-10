@@ -5,10 +5,11 @@ specification designed to co-exist with other storage-inventory components. It p
 organization layer on top of the storage management of storage-inventory.
 
 The simplest configuration would be to deploy `vault` with `minoc` with a single metadata database and single
-back end storage system. Details: TBD.
+back end storage system. This is _isStoragerSite = true_ below.
 
 The other option would be to deploy `vault` with `raven` and `luskan` in a global inventory database and make
-use of one or more of the network of known storage sites to store files. Details: TBD.
+use of one or more of the network of known storage sites to store files. This is _isStoragerSite = false_ below. 
+Details: TBD.
 
 ## deployment
 
@@ -78,6 +79,9 @@ A vault.properties file in /config is required to run this service.  The followi
 # service identity
 org.opencadc.vault.resourceID = ivo://{authority}/{name}
 
+# associated inventory type
+org.opencadc.vault.inventory.isStorageSite = true|false
+
 # consistency settings
 org.opencadc.vault.consistency.preventNotFound=true|false
 
@@ -97,11 +101,16 @@ org.opencadc.vault.storage.namespace = {a storage inventory namespace to use}
 ```
 The vault _resourceID_ is the resourceID of _this_ vault service.
 
+the _isStorageSite_ key tells `vault` whether the associated inventory database is a storage
+site or a global database. This effects the behaviour and performance of the background thread that
+syncs Artifact.contentLength values to the DataNode.bytesUsed field.
+
 The _preventNotFound_ key can be used to configure `vault` to prevent artifact-not-found errors that might 
 result due to the eventual consistency nature of the storage system by directly checking for the artifact at 
-_all known_ sites. It only makes sense to enable this when `vault` is running in a global inventory (along with
-`raven` and/or `fenwick` instances syncing artifact metadata. This feature introduces an overhead for the 
-genuine not-found cases: transfer negotiation to GET the file that was never PUT.
+_all known_ sites. It makes sense to enable this when `vault` is running in a global inventory (along with
+`raven` and/or `fenwick` instances syncing artifact metadata, but even in a single _storage site_ deployment
+this also helps hide some temporary inconsistencies. This feature introduces an overhead for the 
+genuine not-found cases: trying to GET the file that was never successfuly PUT but the DataNode was created.
 
 The _allocationParent_ is a path to a container node (directory) which contains space allocations. An allocation
 is owned by a user (usually different from the _rootOwner_ admin user) who is responsible for the allocation
