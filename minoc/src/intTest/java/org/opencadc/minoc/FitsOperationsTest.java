@@ -71,6 +71,7 @@ package org.opencadc.minoc;
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.net.HttpDelete;
 import ca.nrc.cadc.net.HttpGet;
+import ca.nrc.cadc.net.HttpPost;
 import ca.nrc.cadc.net.HttpTransfer;
 import ca.nrc.cadc.net.HttpUpload;
 import ca.nrc.cadc.net.NetUtil;
@@ -99,6 +100,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.PrivilegedExceptionAction;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * Integration test to pull existing test FITS files from VOSpace (Vault) into a local directory, then PUT them into
@@ -117,6 +121,9 @@ public class FitsOperationsTest extends MinocTest {
                                                            + "/.config/test-data").toPath();
 
     protected URL filesVaultURL;
+    
+    // normally true except for one test
+    private boolean setContentType = true;
 
     static {
         Log4jInit.setLevel("org.opencadc.minoc", Level.INFO);
@@ -190,6 +197,27 @@ public class FitsOperationsTest extends MinocTest {
         };
 
         uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
+        
+        LOGGER.info("unset content-type and try again: rely on filename extension only...");
+        final URI noclArtifactURI = URI.create("cadc:TEST/" + testFilePrefix + "-nocl." + testFileExtension);
+        final URL noclArtifactURL = new URL(filesURL + "/" + noclArtifactURI.toString());
+        LOGGER.info("no content-length: " + noclArtifactURL);
+        
+        try {
+            setContentType = false;
+            uploadAndCompareCutout(noclArtifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
+        } finally {
+            setContentType = true;
+        }
+        
+        Subject.doAs(userSubject, (PrivilegedExceptionAction<Object>) () -> {
+            HttpGet head = new HttpGet(noclArtifactURL, false);
+            head.setHeadOnly(true);
+            head.prepare();
+            Assert.assertNull("no content type", head.getResponseHeader("content-type"));
+            return null;
+        });
+        
     }
 
     @Test
@@ -462,7 +490,9 @@ public class FitsOperationsTest extends MinocTest {
                 final HttpUpload upload = new HttpUpload(fileInputStream, artifactURL);
                 upload.setRequestProperty("X-Test-Method", fileName);
                 upload.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString(localFile.length()));
-                upload.setRequestProperty(HttpTransfer.CONTENT_TYPE, "application/fits");
+                if (setContentType) {
+                    upload.setRequestProperty(HttpTransfer.CONTENT_TYPE, "application/fits");
+                }
                 upload.run();
                 LOGGER.info("response code: " + upload.getResponseCode() + " " + upload.getThrowable());
                 Assert.assertNull("Upload contains error.", upload.getThrowable());
