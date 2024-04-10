@@ -685,6 +685,7 @@ public class SQLGenerator {
         private Namespace namespace;
         private Date minLastModified;
         private boolean ordered;
+        private boolean orderByStorageLocation;
         
         private final Calendar utc = Calendar.getInstance(DateUtil.UTC);
 
@@ -730,6 +731,10 @@ public class SQLGenerator {
             this.ordered = ordered;
         }
 
+        public void setOrderByStorageLocation(boolean obsl) {
+            this.orderByStorageLocation = obsl;
+        }
+
         public void setSiteID(UUID siteID) {
             this.siteID = siteID;
         }
@@ -752,7 +757,7 @@ public class SQLGenerator {
                 // null storageBucket to come after non-null
                 // postgresql: the default order is equivalent to explicitly specifying ASC NULLS LAST
                 // default behaviour may not be db-agnostic
-                if (ordered) {
+                if (orderByStorageLocation) {
                     sb.append(" ORDER BY storageLocation_storageBucket, storageLocation_storageID");
                 }
             } else if (storageLocationRequired != null && !storageLocationRequired) {

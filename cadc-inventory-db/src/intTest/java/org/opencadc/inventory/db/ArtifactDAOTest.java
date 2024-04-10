@@ -1106,7 +1106,7 @@ public class ArtifactDAOTest {
             log.info("count vs Namespace incremental from start...");
             DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
             count = 0;
-            try (ResourceIterator<Artifact> iter = originDAO.iterator(ns, null, startDate, true)) {
+            try (ResourceIterator<Artifact> iter = originDAO.iterator(ns, null, startDate, true, null)) {
                 while (iter.hasNext()) {
                     Artifact actual = iter.next();
                     count++;
@@ -1118,7 +1118,7 @@ public class ArtifactDAOTest {
             
             log.info("count vs Namespace incremental from mid...");
             count = 0;
-            try (ResourceIterator<Artifact> iter = originDAO.iterator(ns, null, midDate, true)) {
+            try (ResourceIterator<Artifact> iter = originDAO.iterator(ns, null, midDate, true, null)) {
                 while (iter.hasNext()) {
                     Artifact actual = iter.next();
                     count++;
@@ -1130,7 +1130,7 @@ public class ArtifactDAOTest {
             
             log.info("count vs Namespace incremental from end...");
             count = 0;
-            try (ResourceIterator<Artifact> iter = originDAO.iterator(ns, null, endDate, true)) {
+            try (ResourceIterator<Artifact> iter = originDAO.iterator(ns, null, endDate, true, null)) {
                 while (iter.hasNext()) {
                     Artifact actual = iter.next();
                     count++;

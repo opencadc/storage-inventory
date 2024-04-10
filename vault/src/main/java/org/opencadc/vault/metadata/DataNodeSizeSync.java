@@ -98,13 +98,15 @@ public class DataNodeSizeSync implements Runnable {
     private final HarvestStateDAO stateDAO;
     private final ArtifactDAO artifactDAO;
     private final Namespace artifactNamespace;
+    private final boolean isStorageSite;
     
     private boolean offline = false;
     
-    public DataNodeSizeSync(HarvestStateDAO stateDAO, ArtifactDAO artifactDAO, Namespace artifactNamespace) { 
+    public DataNodeSizeSync(HarvestStateDAO stateDAO, ArtifactDAO artifactDAO, Namespace artifactNamespace, boolean isStorageSite) { 
         this.stateDAO = stateDAO;
         this.artifactDAO = artifactDAO;
         this.artifactNamespace = artifactNamespace;
+        this.isStorageSite = isStorageSite;
         
         // we need continuous timestamp updates to retain leader status, so only schedule maintenance
         stateDAO.setUpdateBufferCount(0);
@@ -153,7 +155,7 @@ public class DataNodeSizeSync implements Runnable {
                     boolean fail = false;
                     log.info(logInfo.start());
                     try {
-                        DataNodeSizeWorker worker = new DataNodeSizeWorker(stateDAO, state, artifactDAO, artifactNamespace);
+                        DataNodeSizeWorker worker = new DataNodeSizeWorker(stateDAO, state, artifactDAO, artifactNamespace, isStorageSite);
                         worker.run();
                         logInfo.setLastModified(state.curLastModified);
                         logInfo.processed = worker.getNumArtifactsProcessed();
