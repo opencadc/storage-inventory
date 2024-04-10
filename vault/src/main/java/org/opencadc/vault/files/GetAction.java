@@ -73,12 +73,12 @@ import java.net.HttpURLConnection;
 import java.util.List;
 import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
+import org.opencadc.vault.VaultTransferGenerator;
 import org.opencadc.vospace.DataNode;
 import org.opencadc.vospace.VOS;
 import org.opencadc.vospace.VOSURI;
 import org.opencadc.vospace.server.NodeFault;
 import org.opencadc.vospace.server.Utils;
-import org.opencadc.vospace.server.transfers.TransferGenerator;
 import org.opencadc.vospace.transfer.Direction;
 import org.opencadc.vospace.transfer.Protocol;
 import org.opencadc.vospace.transfer.Transfer;
@@ -97,7 +97,8 @@ public class GetAction extends HeadAction {
     @Override
     public void doAction() throws Exception {
         // don't set content-length header since we plan to redirect
-        DataNode node = resolveAndSetMetadata(false);
+        ResolvedNode rn = resolveAndSetMetadata(false);
+        DataNode node = rn.node;
 
         Subject caller = AuthenticationUtil.getCurrentSubject();
         if (!voSpaceAuthorizer.hasSingleNodeReadPermission(node, caller)) {
@@ -105,23 +106,29 @@ public class GetAction extends HeadAction {
             throw NodeFault.PermissionDenied.getStatus(syncInput.getPath());
         }
             
-        if (node.bytesUsed == null || node.bytesUsed == 0L) {
-            // empty file
+        boolean noArtifact = node.bytesUsed == null || node.bytesUsed == 0L;
+        noArtifact = noArtifact && nodePersistence.preventNotFound && rn.artifact == null;
+        if (noArtifact) {
+            // no file
             syncOutput.setCode(HttpURLConnection.HTTP_NO_CONTENT);
             return;
         }
 
-        VOSURI targetURI = localServiceURI.getURI(node);
-        Transfer pullTransfer = new Transfer(targetURI.getURI(), Direction.pullFromVoSpace);
-        pullTransfer.version = VOS.VOSPACE_21;
-        pullTransfer.getProtocols().add(new Protocol(VOS.PROTOCOL_HTTPS_GET)); // anon, preauth
+        if (rn.protos == null) {
+            VOSURI targetURI = localServiceURI.getURI(node);
+            Transfer pullTransfer = new Transfer(targetURI.getURI(), Direction.pullFromVoSpace);
+            pullTransfer.version = VOS.VOSPACE_21;
+            pullTransfer.getProtocols().add(new Protocol(VOS.PROTOCOL_HTTPS_GET)); // anon, preauth
 
-        TransferGenerator tg = nodePersistence.getTransferGenerator();
-        List<Protocol> protos = tg.getEndpoints(targetURI, pullTransfer, null);
-        if (protos.isEmpty()) {
+            VaultTransferGenerator tg = nodePersistence.getTransferGenerator();
+            rn.protos = tg.getEndpoints(targetURI, pullTransfer, null);
+            rn.artifact = tg.resolvedArtifact; // currently unused at this point
+        }
+        
+        if (rn.protos.isEmpty()) {
             throw new TransientException("No location found for file " + Utils.getPath(node));
         }
-        Protocol proto = protos.get(0);
+        Protocol proto = rn.protos.get(0);
         String loc = proto.getEndpoint();
         log.debug("Location: " + loc);
         syncOutput.setHeader("Location", loc);
