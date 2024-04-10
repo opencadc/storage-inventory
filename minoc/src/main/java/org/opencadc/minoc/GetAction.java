@@ -115,11 +115,18 @@ public class GetAction extends ArtifactAction {
     private static final String CONTENT_DISPOSITION = "content-disposition";
     private static final String CONTENT_RANGE = "content-range";
     private static final String CONTENT_LENGTH = "content-length";
+    
+    private static final String FITS_CONTENT_TYPE = "application/fits";
     private static final String[] FITS_CONTENT_TYPES = new String[] {
-        "application/fits", "image/fits"
+        FITS_CONTENT_TYPE, 
+        "image/fits" // alternative
     };
-
-    private static final SodaParamValidator SODA_PARAM_VALIDATOR = new SodaParamValidator();
+    private static final String[] FITS_EXTENSIONS = new String[] {
+        ".fits", 
+        ".fz"
+    };
+            
+    private final SodaParamValidator sodaParamValidator = new SodaParamValidator();
 
     // constructor for unit tests with no config/init
     GetAction(boolean init) {
@@ -271,7 +278,7 @@ public class GetAction extends ArtifactAction {
             log.debug("SUB supplied");
             final Map<String, List<String>> parameterMap = new TreeMap<>(new CaseInsensitiveStringComparator());
             parameterMap.put(SodaParamValidator.SUB, sodaCutout.requestedSubs);
-            final List<ExtensionSlice> slices = SODA_PARAM_VALIDATOR.validateSUB(parameterMap);
+            final List<ExtensionSlice> slices = sodaParamValidator.validateSUB(parameterMap);
             final Cutout cutout = new Cutout();
             cutout.pixelCutouts = slices;
 
@@ -296,7 +303,7 @@ public class GetAction extends ArtifactAction {
                 final Map<String, List<String>> parameterMap =
                         new TreeMap<>(new CaseInsensitiveStringComparator());
                 parameterMap.put(SodaParamValidator.CIRCLE, sodaCutout.requestedCircles);
-                final List<Circle> validCircles = SODA_PARAM_VALIDATOR.validateCircle(parameterMap);
+                final List<Circle> validCircles = sodaParamValidator.validateCircle(parameterMap);
 
                 cutout.pos = assertSingleWCS(SodaParamValidator.CIRCLE, validCircles);
             }
@@ -306,7 +313,7 @@ public class GetAction extends ArtifactAction {
                 final Map<String, List<String>> parameterMap =
                         new TreeMap<>(new CaseInsensitiveStringComparator());
                 parameterMap.put(SodaParamValidator.POLYGON, sodaCutout.requestedPolygons);
-                final List<Polygon> validPolygons = SODA_PARAM_VALIDATOR.validatePolygon(parameterMap);
+                final List<Polygon> validPolygons = sodaParamValidator.validatePolygon(parameterMap);
 
                 cutout.pos = assertSingleWCS(SodaParamValidator.POLYGON, validPolygons);
             }
@@ -316,7 +323,7 @@ public class GetAction extends ArtifactAction {
                 final Map<String, List<String>> parameterMap =
                         new TreeMap<>(new CaseInsensitiveStringComparator());
                 parameterMap.put(SodaParamValidator.POS, sodaCutout.requestedPOSs);
-                final List<Shape> validShapes = SODA_PARAM_VALIDATOR.validatePOS(parameterMap);
+                final List<Shape> validShapes = sodaParamValidator.validatePOS(parameterMap);
 
                 cutout.pos = assertSingleWCS(SodaParamValidator.POS, validShapes);
             }
@@ -326,7 +333,7 @@ public class GetAction extends ArtifactAction {
                 final Map<String, List<String>> parameterMap =
                         new TreeMap<>(new CaseInsensitiveStringComparator());
                 parameterMap.put(SodaParamValidator.BAND, sodaCutout.requestedBands);
-                final List<Interval> validBandIntervals = SODA_PARAM_VALIDATOR.validateBAND(parameterMap);
+                final List<Interval> validBandIntervals = sodaParamValidator.validateBAND(parameterMap);
 
                 cutout.band = assertSingleWCS(SodaParamValidator.BAND, validBandIntervals);
             }
@@ -336,7 +343,7 @@ public class GetAction extends ArtifactAction {
                 final Map<String, List<String>> parameterMap =
                         new TreeMap<>(new CaseInsensitiveStringComparator());
                 parameterMap.put(SodaParamValidator.TIME, sodaCutout.requestedTimes);
-                final List<Interval> validTimeIntervals = SODA_PARAM_VALIDATOR.validateTIME(parameterMap);
+                final List<Interval> validTimeIntervals = sodaParamValidator.validateTIME(parameterMap);
 
                 cutout.time = assertSingleWCS(SodaParamValidator.TIME, validTimeIntervals);
             }
@@ -346,7 +353,7 @@ public class GetAction extends ArtifactAction {
                 final Map<String, List<String>> parameterMap =
                         new TreeMap<>(new CaseInsensitiveStringComparator());
                 parameterMap.put(SodaParamValidator.POL, sodaCutout.requestedPOLs);
-                cutout.pol = SODA_PARAM_VALIDATOR.validatePOL(parameterMap);
+                cutout.pol = sodaParamValidator.validatePOL(parameterMap);
 
                 if (cutout.pol.size() != sodaCutout.requestedPOLs.size()) {
                     log.debug("Accepted " + cutout.pol + " valid POL states but " + sodaCutout.requestedPOLs
@@ -381,8 +388,19 @@ public class GetAction extends ArtifactAction {
     }
 
     private boolean isFITS(final Artifact artifact) {
-        return StringUtil.hasText(artifact.contentType)
-               && Arrays.stream(FITS_CONTENT_TYPES).anyMatch(s -> s.equals(artifact.contentType));
+        final String contentType = (artifact.contentType != null 
+                ? artifact.contentType : getContentTypeFromFilename(artifact.getURI().getSchemeSpecificPart()));
+        return StringUtil.hasText(contentType)
+               && Arrays.stream(FITS_CONTENT_TYPES).anyMatch(s -> s.equals(contentType));
+    }
+
+    private String getContentTypeFromFilename(String filename) {
+        for (String ext : FITS_EXTENSIONS) {
+            if (filename.endsWith(ext)) {
+                return FITS_CONTENT_TYPE;
+            }
+        }
+        return null;
     }
 
     /**
