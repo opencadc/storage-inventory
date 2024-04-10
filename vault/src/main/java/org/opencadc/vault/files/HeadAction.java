@@ -74,9 +74,13 @@ import ca.nrc.cadc.rest.Version;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Date;
+import java.util.List;
 import javax.naming.Context;
 import javax.naming.InitialContext;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.Artifact;
+import org.opencadc.vault.NodePersistenceImpl;
+import org.opencadc.vault.VaultTransferGenerator;
 import org.opencadc.vospace.DataNode;
 import org.opencadc.vospace.Node;
 import org.opencadc.vospace.VOS;
@@ -87,6 +91,9 @@ import org.opencadc.vospace.server.NodePersistence;
 import org.opencadc.vospace.server.PathResolver;
 import org.opencadc.vospace.server.Utils;
 import org.opencadc.vospace.server.auth.VOSpaceAuthorizer;
+import org.opencadc.vospace.transfer.Direction;
+import org.opencadc.vospace.transfer.Protocol;
+import org.opencadc.vospace.transfer.Transfer;
 
 /**
  * Class to handle a HEAD request to a DataNode
@@ -96,11 +103,17 @@ public class HeadAction extends RestAction {
     protected static Logger log = Logger.getLogger(HeadAction.class);
 
     protected VOSpaceAuthorizer voSpaceAuthorizer;
-    protected NodePersistence nodePersistence;
+    protected NodePersistenceImpl nodePersistence; // need impl in GetAction
     protected LocalServiceURI localServiceURI;
 
     public HeadAction() {
         super();
+    }
+
+    protected class ResolvedNode {
+        DataNode node;
+        Artifact artifact;
+        List<Protocol> protos;
     }
 
     @Override
@@ -120,7 +133,7 @@ public class HeadAction extends RestAction {
         String jndiNodePersistence = super.appName + "-" + NodePersistence.class.getName();
         try {
             Context ctx = new InitialContext();
-            this.nodePersistence = ((NodePersistence) ctx.lookup(jndiNodePersistence));
+            this.nodePersistence = ((NodePersistenceImpl) ctx.lookup(jndiNodePersistence));
             this.voSpaceAuthorizer = new VOSpaceAuthorizer(nodePersistence);
             localServiceURI = new LocalServiceURI(nodePersistence.getResourceID());
         } catch (Exception oops) {
@@ -135,7 +148,7 @@ public class HeadAction extends RestAction {
         resolveAndSetMetadata(true);
     }
 
-    DataNode resolveAndSetMetadata(boolean includeContentLength) throws Exception {
+    ResolvedNode resolveAndSetMetadata(boolean includeContentLength) throws Exception {
         PathResolver pathResolver = new PathResolver(nodePersistence, voSpaceAuthorizer);
         String filePath = syncInput.getPath();
         Node node = pathResolver.getNode(filePath, true);
@@ -150,29 +163,70 @@ public class HeadAction extends RestAction {
         
         log.debug("node path resolved: " + node.getName() + " type: " + node.getClass().getName());
 
-        DataNode dn = (DataNode) node;
-        if (includeContentLength) {
-            syncOutput.setHeader("Content-Length", dn.bytesUsed);
-        }
         syncOutput.setHeader("Content-Disposition", "inline; filename=\"" + node.getName() + "\"");
-        syncOutput.setHeader("Content-Type", node.getPropertyValue(VOS.PROPERTY_URI_TYPE));
-        syncOutput.setHeader("Content-Encoding", node.getPropertyValue(VOS.PROPERTY_URI_CONTENTENCODING));
-        if (node.getPropertyValue(VOS.PROPERTY_URI_DATE) != null) {
-            Date lastMod = NodeWriter.getDateFormat().parse(node.getPropertyValue(VOS.PROPERTY_URI_DATE));
-            syncOutput.setLastModified(lastMod);
-        }
+        
+        ResolvedNode ret = new ResolvedNode();
+        ret.node = (DataNode) node;
+        DataNode dn = ret.node;
+        
+        // determine if data node is up to date or we need to find artifact
+        if (nodePersistence.preventNotFound && (dn.bytesUsed == null || dn.bytesUsed == 0)) {
+            VOSURI targetURI = localServiceURI.getURI(node);
+            Transfer pullTransfer = new Transfer(targetURI.getURI(), Direction.pullFromVoSpace);
+            pullTransfer.version = VOS.VOSPACE_21;
+            pullTransfer.getProtocols().add(new Protocol(VOS.PROTOCOL_HTTPS_GET)); // anon, preauth
 
+            VaultTransferGenerator tg = nodePersistence.getTransferGenerator();
+            ret.protos = tg.getEndpoints(targetURI, pullTransfer, null);
+            ret.artifact = tg.resolvedArtifact;
+        }
+        
+        URI contentChecksum = null;
         String contentMD5 = node.getPropertyValue(VOS.PROPERTY_URI_CONTENTMD5);
         if (contentMD5 != null) {
-            try {
-                URI md5 = new URI("md5:" + contentMD5);
-                syncOutput.setDigest(md5);
-            } catch (URISyntaxException ex) {
-                throw new RuntimeException("BUG: invalid " + VOS.PROPERTY_URI_CONTENTMD5 + " value " + contentMD5);
-            }
+            contentChecksum = URI.create("md5:" + contentMD5);
         }
+        String contentLength = null;
+        if (dn.bytesUsed != null) {
+            contentLength = dn.bytesUsed.toString();
+        }
+        String contentType = node.getPropertyValue(VOS.PROPERTY_URI_TYPE);
+        String contentEncoding = node.getPropertyValue(VOS.PROPERTY_URI_CONTENTENCODING);
+        String clm = node.getPropertyValue(VOS.PROPERTY_URI_CONTENTDATE); // use if present
+        if (clm == null) {
+            clm = node.getPropertyValue(VOS.PROPERTY_URI_DATE);
+        }
+        Date contentLastModified = null;
+        if (clm != null) {
+            contentLastModified = NodeWriter.getDateFormat().parse(clm);
+        }
+        if (ret.artifact != null) {
+            // preventNotFound
+            contentChecksum = ret.artifact.getContentChecksum();
+            contentLength = ret.artifact.getContentLength().toString();
+            contentLastModified = ret.artifact.getContentLastModified();
+            contentType = ret.artifact.contentType;
+            contentEncoding = ret.artifact.contentEncoding;
+        }
+        
+        if (includeContentLength && contentLength != null) {
+            syncOutput.setHeader("Content-Length", contentLength);
+        }
+        if (contentType != null) {
+            syncOutput.setHeader("Content-Type", contentType);
+        }
+        if (contentEncoding != null) {
+            syncOutput.setHeader("Content-Encoding", contentEncoding);
+        }
+        if (contentLastModified != null) {
+            syncOutput.setLastModified(contentLastModified);
+        }
+        if (contentChecksum != null) {
+            syncOutput.setDigest(contentChecksum);
+        }
+
         syncOutput.setCode(200);
-        return dn;
+        return ret;
     }
 
 }

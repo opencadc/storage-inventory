@@ -85,6 +85,7 @@ import javax.naming.InitialContext;
 import javax.naming.NamingException;
 import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.transfer.ProtocolsGenerator;
 import org.opencadc.inventory.transfer.StorageSiteAvailabilityCheck;
@@ -115,6 +116,8 @@ public class VaultTransferGenerator implements TransferGenerator {
     
     private final Map<URI, StorageSiteRule> siteRules = new HashMap<>();
     private final Map<URI, Availability> siteAvailabilities;
+    
+    public Artifact resolvedArtifact;
     
     @SuppressWarnings("unchecked")
     public VaultTransferGenerator(NodePersistenceImpl nodePersistence, String appName, 
@@ -205,6 +208,7 @@ public class VaultTransferGenerator implements TransferGenerator {
             for (Protocol p : ret) {
                 log.debug(p.getEndpoint() + " using " + p.getSecurityMethod());
             }
+            this.resolvedArtifact = pg.resolvedArtifact;
             return ret;
         } catch (ResourceNotFoundException ex) {
             return new ArrayList<>();

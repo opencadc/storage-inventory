@@ -167,7 +167,7 @@ public class NodePersistenceImpl implements NodePersistence {
     
     private final boolean localGroupsOnly;
     private final URI resourceID;
-    private final boolean preventNotFound;
+    public final boolean preventNotFound; // GetAction needs to see this
     
     final String appName; // access by VaultTransferGenerator
     
@@ -258,7 +258,7 @@ public class NodePersistenceImpl implements NodePersistence {
     }
 
     @Override
-    public TransferGenerator getTransferGenerator() {
+    public VaultTransferGenerator getTransferGenerator() {
         PreauthKeyPairDAO keyDAO = new PreauthKeyPairDAO();
         keyDAO.setConfig(kpDaoConfig);
         PreauthKeyPair kp = keyDAO.get(VaultInitAction.KEY_PAIR_NAME);

@@ -159,6 +159,11 @@ public class ProtocolsGenerator {
     
     // for use by FilesAction subclasses to enhance logging
     boolean storageResolverAdded = false;
+    
+    /**
+     * The resolved Artifact from the database or due to preventNotFound actions.
+     */
+    public Artifact resolvedArtifact;
 
     public ProtocolsGenerator(ArtifactDAO artifactDAO, Map<URI, Availability> siteAvailabilities, Map<URI, StorageSiteRule> siteRules) {
         this.artifactDAO = artifactDAO;
@@ -241,7 +246,9 @@ public class ProtocolsGenerator {
                                 URL pa = new URL(sb.toString() + "/" + authToken + "/" + artifactURI.toASCIIString());
                                 urls.add(pa);
                             }
-                            urls.add(new URL(sb.append(artifactURI.toASCIIString()).toString()));
+                            if (!requirePreauthAnon) {
+                                urls.add(new URL(sb.append(artifactURI.toASCIIString()).toString()));
+                            }
                         } catch (MalformedURLException ex) {
                             throw new RuntimeException("BUG: Malformed URL to the site", ex);
                         }
@@ -277,7 +284,8 @@ public class ProtocolsGenerator {
         try {
             HttpGet head = new HttpGet(location, true);
             head.setHeadOnly(true);
-            head.setReadTimeout(10000);
+            head.setConnectionTimeout(6000);
+            head.setReadTimeout(9000);
             head.run();
             if (head.getResponseCode() != 200) {
                 // caught at the end of the method
@@ -348,6 +356,7 @@ public class ProtocolsGenerator {
             }
         }
         log.debug(artifactURI + " found: " + artifact);
+        this.resolvedArtifact = artifact;
         
         List<StorageSite> storageSites = new ArrayList<>();
         if (artifact != null) {
@@ -411,7 +420,7 @@ public class ProtocolsGenerator {
                             log.debug("added: " + p);
 
                             // add a plain anon URL
-                            if (authToken != null && !requirePreauthAnon && Standards.SECURITY_METHOD_ANON.equals(sec)) {
+                            if (!requirePreauthAnon && Standards.SECURITY_METHOD_ANON.equals(sec)) {
                                 sb = new StringBuilder();
                                 sb.append(baseURL.toExternalForm()).append("/");
                                 sb.append(artifactURI.toASCIIString());
