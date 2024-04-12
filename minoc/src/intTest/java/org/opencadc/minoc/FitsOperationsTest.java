@@ -134,7 +134,7 @@ public class FitsOperationsTest extends MinocTest {
         super();
 
         final RegistryClient regClient = new RegistryClient();
-        filesVaultURL = new URL(regClient.getServiceURL(VOSPACE_URI, Standards.VOSPACE_FILES_20, AuthMethod.ANON)
+        filesVaultURL = new URL(regClient.getServiceURL(VOSPACE_URI, Standards.VOSPACE_FILES, AuthMethod.ANON)
                                 + "/CADC/test-data/cutouts");
         DEFAULT_DATA_PATH.toFile().mkdirs();
     }
@@ -149,6 +149,26 @@ public class FitsOperationsTest extends MinocTest {
         };
 
         uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
+        
+        LOGGER.info("unset content-type and try again: rely on filename extension only...");
+        final URI noclArtifactURI = URI.create("cadc:TEST/" + testFilePrefix + "-nocl." + testFileExtension);
+        final URL noclArtifactURL = new URL(filesURL + "/" + noclArtifactURI.toString());
+        LOGGER.info("no content-length: " + noclArtifactURL);
+        
+        try {
+            setContentType = false;
+            uploadAndCompareCutout(noclArtifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
+        } finally {
+            setContentType = true;
+        }
+        
+        Subject.doAs(userSubject, (PrivilegedExceptionAction<Object>) () -> {
+            HttpGet head = new HttpGet(noclArtifactURL, false);
+            head.setHeadOnly(true);
+            head.prepare();
+            Assert.assertNull("no content type", head.getResponseHeader("content-type"));
+            return null;
+        });
     }
 
     @Test
