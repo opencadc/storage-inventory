@@ -71,7 +71,6 @@ import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.profiler.Profiler;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.db.EntityNotFoundException;
 import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.permissions.WriteGrant;
@@ -85,16 +84,10 @@ public class PostAction extends ArtifactAction {
     
     private static final Logger log = Logger.getLogger(PostAction.class);
 
-    /**
-     * Default, no-arg constructor.
-     */
     public PostAction() {
         super();
     }
     
-    /**
-     * Perform auth checks and initialize resources.
-     */
     @Override
     public void initAction() throws Exception {
         super.initAction();
@@ -104,9 +97,6 @@ public class PostAction extends ArtifactAction {
         initStorageAdapter();
     }
 
-    /**
-     * Update artifact metadata.
-     */
     @Override
     public void doAction() throws Exception {
         
@@ -116,6 +106,7 @@ public class PostAction extends ArtifactAction {
         log.debug("new uri: " + newURI);
         log.debug("new contentType: " + newContentType);
         log.debug("new contentEncoding: " + newContentEncoding);
+        newContentType = validateContentType(newContentType);
         
         String txnID = syncInput.getHeader(PUT_TXN_ID);
         String txnOP = syncInput.getHeader(PUT_TXN_OP);

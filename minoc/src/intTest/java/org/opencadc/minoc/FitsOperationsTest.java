@@ -71,7 +71,6 @@ package org.opencadc.minoc;
 import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.net.HttpDelete;
 import ca.nrc.cadc.net.HttpGet;
-import ca.nrc.cadc.net.HttpPost;
 import ca.nrc.cadc.net.HttpTransfer;
 import ca.nrc.cadc.net.HttpUpload;
 import ca.nrc.cadc.net.NetUtil;
@@ -80,16 +79,6 @@ import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.StringUtil;
-import nom.tam.fits.Fits;
-import nom.tam.util.RandomAccessFileIO;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
-import org.junit.Assert;
-import org.junit.Test;
-import org.opencadc.fits.RandomAccessStorageObject;
-import org.opencadc.soda.SodaParamValidator;
-
-import javax.security.auth.Subject;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -100,9 +89,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.PrivilegedExceptionAction;
 import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
+import javax.security.auth.Subject;
+import nom.tam.fits.Fits;
+import nom.tam.util.RandomAccessFileIO;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+import org.junit.Assert;
+import org.junit.Test;
+import org.opencadc.fits.RandomAccessStorageObject;
+import org.opencadc.soda.SodaParamValidator;
 
 /**
  * Integration test to pull existing test FITS files from VOSpace (Vault) into a local directory, then PUT them into
@@ -122,8 +117,7 @@ public class FitsOperationsTest extends MinocTest {
 
     protected URL filesVaultURL;
     
-    // normally true except for one test
-    private boolean setContentType = true;
+    private String putContentType = "application/fits";
 
     static {
         Log4jInit.setLevel("org.opencadc.minoc", Level.INFO);
@@ -134,7 +128,7 @@ public class FitsOperationsTest extends MinocTest {
         super();
 
         final RegistryClient regClient = new RegistryClient();
-        filesVaultURL = new URL(regClient.getServiceURL(VOSPACE_URI, Standards.VOSPACE_FILES_20, AuthMethod.ANON)
+        filesVaultURL = new URL(regClient.getServiceURL(VOSPACE_URI, Standards.VOSPACE_FILES, AuthMethod.ANON)
                                 + "/CADC/test-data/cutouts");
         DEFAULT_DATA_PATH.toFile().mkdirs();
     }
@@ -149,6 +143,26 @@ public class FitsOperationsTest extends MinocTest {
         };
 
         uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
+        
+        LOGGER.info("unset content-type and try again: rely on filename extension only...");
+        final URI noclArtifactURI = URI.create("cadc:TEST/" + testFilePrefix + "-nocl." + testFileExtension);
+        final URL noclArtifactURL = new URL(filesURL + "/" + noclArtifactURI.toString());
+        LOGGER.info("no content-length: " + noclArtifactURL);
+        
+        try {
+            putContentType = null;
+            uploadAndCompareCutout(noclArtifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
+        } finally {
+            putContentType = "application/fits";
+        }
+        
+        Subject.doAs(userSubject, (PrivilegedExceptionAction<Object>) () -> {
+            HttpGet head = new HttpGet(noclArtifactURL, false);
+            head.setHeadOnly(true);
+            head.prepare();
+            Assert.assertNull("no content type", head.getResponseHeader("content-type"));
+            return null;
+        });
     }
 
     @Test
@@ -204,20 +218,36 @@ public class FitsOperationsTest extends MinocTest {
         LOGGER.info("no content-length: " + noclArtifactURL);
         
         try {
-            setContentType = false;
+            putContentType = null;
             uploadAndCompareCutout(noclArtifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
         } finally {
-            setContentType = true;
+            putContentType = "application/fits";
         }
         
         Subject.doAs(userSubject, (PrivilegedExceptionAction<Object>) () -> {
             HttpGet head = new HttpGet(noclArtifactURL, false);
             head.setHeadOnly(true);
             head.prepare();
+            LOGGER.info("null content-type test: " + head.getContentType());
             Assert.assertNull("no content type", head.getResponseHeader("content-type"));
             return null;
         });
         
+        try {
+            putContentType = "application/octet-stream";
+            uploadAndCompareCutout(noclArtifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
+        } finally {
+            putContentType = "application/fits";
+        }
+        
+        Subject.doAs(userSubject, (PrivilegedExceptionAction<Object>) () -> {
+            HttpGet head = new HttpGet(noclArtifactURL, false);
+            head.setHeadOnly(true);
+            head.prepare();
+            LOGGER.info("useless content-type test: " + head.getContentType());
+            Assert.assertEquals("content type", "application/octet-stream", head.getResponseHeader("content-type"));
+            return null;
+        });
     }
 
     @Test
@@ -490,8 +520,8 @@ public class FitsOperationsTest extends MinocTest {
                 final HttpUpload upload = new HttpUpload(fileInputStream, artifactURL);
                 upload.setRequestProperty("X-Test-Method", fileName);
                 upload.setRequestProperty(HttpTransfer.CONTENT_LENGTH, Long.toString(localFile.length()));
-                if (setContentType) {
-                    upload.setRequestProperty(HttpTransfer.CONTENT_TYPE, "application/fits");
+                if (putContentType != null) {
+                    upload.setRequestProperty(HttpTransfer.CONTENT_TYPE, putContentType);
                 }
                 upload.run();
                 LOGGER.info("response code: " + upload.getResponseCode() + " " + upload.getThrowable());

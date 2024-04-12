@@ -70,6 +70,7 @@ package org.opencadc.minoc;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.HttpPrincipal;
 import ca.nrc.cadc.log.WebServiceLogInfo;
+import ca.nrc.cadc.net.ContentType;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.rest.InlineContentHandler;
@@ -328,5 +329,19 @@ public abstract class ArtifactAction extends RestAction {
             throw new ResourceNotFoundException("not found: " + artifactURI);
         }
         return artifact;
+    }
+
+    // validate and return canonical form
+    public static String validateContentType(String s) {
+        if (s == null) {
+            return null;
+        }
+        ContentType ct = new ContentType(s);
+        String base = ct.getBaseType();
+        String[] mm = base.split("/");
+        if (mm.length != 2) {
+            throw new IllegalArgumentException("invalid content-type: '" + s + "' reason: not of form {type}/{subtype}[;{params}]");
+        }
+        return ct.getValue();
     }
 }

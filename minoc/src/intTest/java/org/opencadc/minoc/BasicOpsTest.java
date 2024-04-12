@@ -134,6 +134,7 @@ public class BasicOpsTest extends MinocTest {
             log.info("headers: " + put.getResponseHeader("content-length") + " " + put.getResponseHeader("digest"));
             Assert.assertNull(put.getThrowable());
             Assert.assertEquals("Created", 201, put.getResponseCode());
+            Assert.assertEquals(0L, put.getContentLength());
 
             // get
             OutputStream out = new ByteArrayOutputStream();
@@ -163,12 +164,22 @@ public class BasicOpsTest extends MinocTest {
             params.put("contentEncoding", newEncoding);
             params.put("contentType", newType);
             HttpPost post = new HttpPost(artifactURL, params, false);
-            post.setDigest(computeChecksumURI(data));
             Subject.doAs(userSubject, new RunnableAction(post));
             log.info("post: " + post.getResponseCode() + " " + post.getThrowable());
-            log.info("headers: " + post.getResponseHeader("content-length") + " " + post.getResponseHeader("digest"));
             Assert.assertNull(post.getThrowable());
             Assert.assertEquals("Accepted", 202, post.getResponseCode());
+            Assert.assertEquals(newEncoding, post.getResponseHeader(HttpTransfer.CONTENT_ENCODING));
+            Assert.assertEquals(newType, post.getResponseHeader(HttpTransfer.CONTENT_TYPE));
+            
+            // invalid update
+            String invalidType = "bogus";
+            params.clear();
+            params.put("contentType", invalidType);
+            post = new HttpPost(artifactURL, params, false);
+            Subject.doAs(userSubject, new RunnableAction(post));
+            log.info("post: " + post.getResponseCode() + " " + post.getThrowable());
+            Assert.assertNotNull(post.getThrowable());
+            Assert.assertEquals("Rejected", 400, post.getResponseCode());
 
             // head
             ByteArrayOutputStream bos = new ByteArrayOutputStream();

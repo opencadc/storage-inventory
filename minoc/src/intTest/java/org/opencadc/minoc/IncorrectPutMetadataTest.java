@@ -109,6 +109,60 @@ public class IncorrectPutMetadataTest extends MinocTest {
     }
     
     @Test
+    public void testUploadInvalidContentType() {
+        try {
+            
+            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+                public Object run() throws Exception {
+            
+                    byte[] bytes = randomData(16384); // 16k
+                    final String incorrectData = "incorrect artifact";
+                    URI artifactURI = URI.create("cadc:TEST/testUploadInvalidContentType");
+                    URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
+                    
+                    // cleanup
+                    HttpDelete del = new HttpDelete(artifactURL, false);
+                    del.run();
+                    // verify
+                    HttpGet head = new HttpGet(artifactURL, false);
+                    head.setHeadOnly(true);
+                    try {
+                        head.prepare();
+                        Assert.fail("cleanup failed -- file exists: " + artifactURI);
+                    } catch (ResourceNotFoundException ok) {
+                        log.info("verify not found: " + artifactURL);
+                    }
+                    
+                    // put file
+                    InputStream in = new ByteArrayInputStream(bytes);
+                    HttpUpload put = new HttpUpload(in, artifactURL);
+                    put.setDigest(computeChecksumURI(incorrectData.getBytes()));
+                    put.setRequestProperty(HttpTransfer.CONTENT_TYPE, "None");
+                    put.run();
+                    log.info("response code: " + put.getResponseCode() + " " + put.getThrowable());
+                    Assert.assertEquals("should be 400", 400, put.getResponseCode());
+            
+                    // verify
+                    head = new HttpGet(artifactURL, false);
+                    head.setHeadOnly(true);
+                    try {
+                        head.prepare();
+                        Assert.fail("put succeeded -- file exists: " + artifactURI);
+                    } catch (ResourceNotFoundException ok) {
+                        log.info("verify not found: " + artifactURL);
+                    }
+            
+                    return null;
+                }
+            });
+            
+        } catch (Exception t) {
+            log.error("unexpected throwable", t);
+            Assert.fail("unexpected throwable: " + t);
+        }
+    }
+    
+    @Test
     public void testUploadContentMD5_Mismatch() {
         try {
             

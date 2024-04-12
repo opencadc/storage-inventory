@@ -74,6 +74,7 @@ import ca.nrc.cadc.dali.Shape;
 import ca.nrc.cadc.io.ByteCountOutputStream;
 import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.WriteException;
+import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpTransfer;
 import ca.nrc.cadc.net.RangeNotSatisfiableException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
@@ -114,16 +115,22 @@ public class GetAction extends ArtifactAction {
     private static final String RANGE = "range";
     private static final String CONTENT_DISPOSITION = "content-disposition";
     private static final String CONTENT_RANGE = "content-range";
-    private static final String CONTENT_LENGTH = "content-length";
+    private static final String CONTENT_LENGTH = HttpTransfer.CONTENT_LENGTH;
     
     private static final String FITS_CONTENT_TYPE = "application/fits";
     private static final String[] FITS_CONTENT_TYPES = new String[] {
         FITS_CONTENT_TYPE, 
         "image/fits" // alternative
     };
+    private static final String[] EFFECTIVE_NULL_TYPES = new String[] {
+        "application/octet-stream",
+        "NULL", // existing bad content
+        "None"  // existing bad content
+    };
     private static final String[] FITS_EXTENSIONS = new String[] {
-        ".fits", 
-        ".fz"
+        ".fits",
+        ".fits.fz",
+        ".fz" //??
     };
             
     private final SodaParamValidator sodaParamValidator = new SodaParamValidator();
@@ -388,10 +395,20 @@ public class GetAction extends ArtifactAction {
     }
 
     private boolean isFITS(final Artifact artifact) {
-        final String contentType = (artifact.contentType != null 
-                ? artifact.contentType : getContentTypeFromFilename(artifact.getURI().getSchemeSpecificPart()));
+        String effectiveType = getEffectiveContentType(artifact.contentType);
+        final String contentType = (effectiveType != null 
+                ? effectiveType : getContentTypeFromFilename(artifact.getURI().getSchemeSpecificPart()));
         return StringUtil.hasText(contentType)
                && Arrays.stream(FITS_CONTENT_TYPES).anyMatch(s -> s.equals(contentType));
+    }
+
+    private String getEffectiveContentType(String s) {
+        for (String en : EFFECTIVE_NULL_TYPES) {
+            if (en.equals(s)) {
+                return null;
+            }
+        }
+        return s;
     }
 
     private String getContentTypeFromFilename(String filename) {
