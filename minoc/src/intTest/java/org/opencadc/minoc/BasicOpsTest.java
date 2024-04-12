@@ -164,7 +164,6 @@ public class BasicOpsTest extends MinocTest {
             params.put("contentEncoding", newEncoding);
             params.put("contentType", newType);
             HttpPost post = new HttpPost(artifactURL, params, false);
-            post.setDigest(computeChecksumURI(data));
             Subject.doAs(userSubject, new RunnableAction(post));
             log.info("post: " + post.getResponseCode() + " " + post.getThrowable());
             Assert.assertNull(post.getThrowable());
@@ -177,7 +176,6 @@ public class BasicOpsTest extends MinocTest {
             params.clear();
             params.put("contentType", invalidType);
             post = new HttpPost(artifactURL, params, false);
-            post.setDigest(computeChecksumURI(data));
             Subject.doAs(userSubject, new RunnableAction(post));
             log.info("post: " + post.getResponseCode() + " " + post.getThrowable());
             Assert.assertNotNull(post.getThrowable());
