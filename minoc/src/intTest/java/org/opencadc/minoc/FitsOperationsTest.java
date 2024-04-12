@@ -118,6 +118,7 @@ public class FitsOperationsTest extends MinocTest {
     protected URL filesVaultURL;
     
     private String putContentType = "application/fits";
+    private String filenameOverridePrefix = null;
 
     static {
         Log4jInit.setLevel("org.opencadc.minoc", Level.INFO);
@@ -216,6 +217,13 @@ public class FitsOperationsTest extends MinocTest {
         final URI noclArtifactURI = URI.create("cadc:TEST/" + testFilePrefix + "-nocl." + testFileExtension);
         final URL noclArtifactURL = new URL(filesURL + "/" + noclArtifactURI.toString());
         LOGGER.info("no content-length: " + noclArtifactURL);
+        
+        try {
+            filenameOverridePrefix = "something-else";
+            uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
+        } finally {
+            filenameOverridePrefix = null;
+        }
         
         try {
             putContentType = null;
@@ -403,14 +411,18 @@ public class FitsOperationsTest extends MinocTest {
 
     private File doCutout(final URI artifactURI, final String queryString, final String testFilePrefix,
                           final String expectedContentType) throws Exception {
-        final URL artifactSUBURL = new URL(filesURL + "/" + artifactURI
+        String auri = artifactURI.toASCIIString();
+        if (filenameOverridePrefix != null) {
+            auri += ":fo/" + filenameOverridePrefix + ".fits";
+        }
+        final URL artifactSUBURL = new URL(filesURL + "/" + auri
                                            + (queryString == null ? "" : "?" + queryString));
         final File outputFile = Files.createTempFile(testFilePrefix + "-", ".fits").toFile();
         LOGGER.debug("Writing cutout to " + outputFile);
 
         // Perform the cutout.
         Subject.doAs(userSubject, (PrivilegedExceptionAction<Boolean>) () -> {
-            LOGGER.debug("Testing cutout with " + artifactSUBURL);
+            LOGGER.info("Testing cutout with " + artifactSUBURL);
             try (final FileOutputStream fileOutputStream = new FileOutputStream(outputFile)) {
                 final HttpGet cutoutClient = new HttpGet(artifactSUBURL, true);
                 cutoutClient.setFollowRedirects(true);
@@ -418,16 +430,20 @@ public class FitsOperationsTest extends MinocTest {
 
                 Assert.assertEquals("Wrong content type.",
                                     expectedContentType, cutoutClient.getResponseHeader(HttpTransfer.CONTENT_TYPE));
-                Assert.assertNotNull("Should include Content-Disposition ("
-                                     + cutoutClient.getResponseHeader("Content-Disposition") + ")",
-                                     cutoutClient.getResponseHeader("Content-Disposition"));
+                String cdisp = cutoutClient.getResponseHeader("Content-Disposition");
+                LOGGER.info("content-disposition: " + cdisp);
+                Assert.assertNotNull("Should include Content-Disposition (" + cdisp + ")", cdisp);
+                if (filenameOverridePrefix != null) {
+                    Assert.assertTrue(cdisp.contains(filenameOverridePrefix));
+                } else {
+                    Assert.assertTrue(cdisp.contains(testFilePrefix));
+                }
 
                 Assert.assertEquals("Should NOT contain " + HttpTransfer.CONTENT_LENGTH, -1L,
                                     cutoutClient.getContentLength());
-                Assert.assertFalse("Should NOT contain " + HttpTransfer.CONTENT_MD5,
-                                   StringUtil.hasText(cutoutClient.getContentMD5()));
-                Assert.assertFalse("Should NOT contain " + HttpTransfer.CONTENT_ENCODING,
-                                   StringUtil.hasText(cutoutClient.getContentEncoding()));
+                Assert.assertNull("Should NOT contain " + HttpTransfer.CONTENT_MD5, cutoutClient.getContentMD5());
+                Assert.assertNull("Should NOT contain " + HttpTransfer.DIGEST, cutoutClient.getDigest());
+                Assert.assertNull("Should NOT contain " + HttpTransfer.CONTENT_ENCODING, cutoutClient.getContentEncoding());
 
                 final byte[] buffer = new byte[64 * 1024];
                 int bytesRead;
