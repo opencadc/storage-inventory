@@ -72,6 +72,7 @@ import ca.nrc.cadc.io.ByteCountInputStream;
 import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.WriteException;
+import ca.nrc.cadc.net.ContentType;
 import ca.nrc.cadc.net.PreconditionFailedException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
@@ -141,7 +142,8 @@ public class PutAction extends ArtifactAction {
         log.debug("Content-Length: " + lengthHeader);
         log.debug("Content-Encoding: " + encodingHeader);
         log.debug("Content-Type: " + typeHeader);
-
+        final String contentType = validateContentType(typeHeader);
+        
         Long contentLength = null;
         if (lengthHeader != null) {
             try {
@@ -258,7 +260,7 @@ public class PutAction extends ArtifactAction {
             artifactURI, artifactMetadata.getContentChecksum(),
             artifactMetadata.getContentLastModified(), artifactMetadata.getContentLength());
         artifact.contentEncoding = encodingHeader;
-        artifact.contentType = typeHeader;
+        artifact.contentType = contentType;
         artifact.storageLocation = artifactMetadata.getStorageLocation();
 
         if (txnID != null) {
