@@ -68,14 +68,11 @@
 package org.opencadc.minoc;
 
 import ca.nrc.cadc.db.TransactionManager;
-import ca.nrc.cadc.net.ContentType;
 import ca.nrc.cadc.profiler.Profiler;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.db.EntityNotFoundException;
 import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageMetadata;
-import static org.opencadc.minoc.ArtifactAction.validateContentType;
 import org.opencadc.permissions.WriteGrant;
 
 /**
