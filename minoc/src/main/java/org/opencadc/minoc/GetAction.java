@@ -185,8 +185,12 @@ public class GetAction extends ArtifactAction {
                     log.debug("Range (" + range + ") ignored in GET with operations");
                 }
                 
-                if (!isFITS(artifact)) {
-                    throw new IllegalArgumentException("not a fits file: " + artifactURI);
+                if (!isFITS(artifact, filenameOverride)) {
+                    String filename = artifactURI.toASCIIString();
+                    if (filenameOverride != null) {
+                        filename += " aka " + filenameOverride; 
+                    }
+                    throw new IllegalArgumentException("not a fits file: " + filename);
                 }
 
                 final List<String> conflicts = sodaCutout.getConflicts();
@@ -270,9 +274,15 @@ public class GetAction extends ArtifactAction {
     private ByteCountOutputStream doOperation(FitsOperations fitsOperations, SodaCutout sodaCutout)
             throws NoOverlapException, ReadException, IOException {
         
+        String filename = InventoryUtil.computeArtifactFilename(artifactURI);
+        if (filenameOverride != null) {
+            filename = filenameOverride;
+        }
+                
         if (sodaCutout.isMETA()) {
             log.debug("META supplied");
-            final String filename = InventoryUtil.computeArtifactFilename(artifactURI) + ".txt";
+            filename += ".txt";
+            
             syncOutput.setHeader(CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"");
             syncOutput.setHeader(HttpTransfer.CONTENT_TYPE, "text/plain");
 
@@ -289,9 +299,7 @@ public class GetAction extends ArtifactAction {
             final Cutout cutout = new Cutout();
             cutout.pixelCutouts = slices;
 
-            final String schemePath = artifactURI.getSchemeSpecificPart();
-            final String fileName = schemePath.substring(schemePath.lastIndexOf("/") + 1);
-            final CutoutFileNameFormat cutoutFileNameFormat = new CutoutFileNameFormat(fileName);
+            final CutoutFileNameFormat cutoutFileNameFormat = new CutoutFileNameFormat(filename);
             syncOutput.setHeader(CONTENT_DISPOSITION, "inline; filename=\""
                                                       + cutoutFileNameFormat.format(cutout) + "\"");
             syncOutput.setHeader(HttpTransfer.CONTENT_TYPE, "application/fits");
@@ -368,9 +376,7 @@ public class GetAction extends ArtifactAction {
                 }
             }
 
-            final String schemePath = artifactURI.getSchemeSpecificPart();
-            final String fileName = schemePath.substring(schemePath.lastIndexOf("/") + 1);
-            final CutoutFileNameFormat cutoutFileNameFormat = new CutoutFileNameFormat(fileName);
+            final CutoutFileNameFormat cutoutFileNameFormat = new CutoutFileNameFormat(filename);
             syncOutput.setHeader(CONTENT_DISPOSITION, "inline; filename=\""
                                                       + cutoutFileNameFormat.format(cutout) + "\"");
             syncOutput.setHeader(HttpTransfer.CONTENT_TYPE, "application/fits");
@@ -394,12 +400,17 @@ public class GetAction extends ArtifactAction {
         }
     }
 
-    private boolean isFITS(final Artifact artifact) {
+    private boolean isFITS(final Artifact artifact, String filenameOverride) {
         String effectiveType = getEffectiveContentType(artifact.contentType);
-        final String contentType = (effectiveType != null 
-                ? effectiveType : getContentTypeFromFilename(artifact.getURI().getSchemeSpecificPart()));
-        return StringUtil.hasText(contentType)
-               && Arrays.stream(FITS_CONTENT_TYPES).anyMatch(s -> s.equals(contentType));
+        if (effectiveType == null) {
+            if (filenameOverride != null) {
+                effectiveType = getContentTypeFromFilename(filenameOverride);
+            } else {
+                effectiveType = getContentTypeFromFilename(artifact.getURI().getSchemeSpecificPart());
+            }
+        }
+        final String contentType = effectiveType;
+        return contentType != null && Arrays.stream(FITS_CONTENT_TYPES).anyMatch(s -> s.equals(contentType));
     }
 
     private String getEffectiveContentType(String s) {
