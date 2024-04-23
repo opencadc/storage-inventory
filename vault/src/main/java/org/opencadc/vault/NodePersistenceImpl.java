@@ -476,6 +476,7 @@ public class NodePersistenceImpl implements NodePersistence {
 
         private final ContainerNode parent;
         private final ResourceIterator<Node> childIter;
+        private boolean closedForException = false;
         
         private final IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
         private final Map<Object, Subject> identCache = new TreeMap<>();
@@ -497,7 +498,7 @@ public class NodePersistenceImpl implements NodePersistence {
         
         @Override
         public boolean hasNext() {
-            return childIter.hasNext();
+            return !closedForException && childIter.hasNext();
         }
 
         @Override
@@ -505,14 +506,25 @@ public class NodePersistenceImpl implements NodePersistence {
             Node ret = childIter.next();
             ret.parent = parent;
 
-            // owner
-            Subject s = identCache.get(ret.ownerID);
-            if (s == null) {
-                s = identityManager.toSubject(ret.ownerID);
-                identCache.put(ret.ownerID, s);
+            try {
+                // owner
+                Subject s = identCache.get(ret.ownerID);
+                if (s == null) {
+                    s = identityManager.toSubject(ret.ownerID);
+                    identCache.put(ret.ownerID, s);
+                }
+                ret.owner = s;
+                ret.ownerDisplay = identityManager.toDisplayString(ret.owner);
+            } catch (RuntimeException ex) {
+                try {
+                    // abort
+                    close();
+                } catch (Exception cex) {
+                    log.error("failed to close iterator", ex);
+                }
+                closedForException = true;
+                throw ex;
             }
-            ret.owner = s;
-            ret.ownerDisplay = identityManager.toDisplayString(ret.owner);
 
             if (ret instanceof DataNode) {
                 DataNode dn = (DataNode) ret;
