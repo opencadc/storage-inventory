@@ -88,6 +88,9 @@ org.opencadc.vault.consistency.preventNotFound=true|false
 # (optional) identify which container nodes are allocations
 org.opencadc.vault.allocationParent = {top level node}
 
+# (optional) enable or disable internal DataNode size sync from inventory (default: true)
+org.opencadc.vault.enableDataNodeSizeWorker = true|false
+
 # vault database settings
 org.opencadc.vault.inventory.schema = {inventory schema name}
 org.opencadc.vault.vospace.schema = {vospace schema name}
@@ -120,6 +123,13 @@ within their allocation. This probably only matters for multi-user projects. Mul
 be configured to organise the top level of the content (e.g. /home and /projects). Paths configured to be 
 _allocationParent_(s) will be automatically created (if necessary), owned by the _rootOwner_, and will be
 anonymously readable (public). Limitation: only a single level of top-level _allocationParent_(s) are supported.
+
+The _enableDataNodeSizeWorker_ key can be used to disable the background thread that syncs inventory 
+Artifact metadata (currently just contentLength) into vospace DataNode instances. This is currently
+done to support correct DataNode size output when listing a ContainerNode. Instances of `vault` cooperate
+to pick a _leader_ to perform the sync (others are idle and occassionally check if they need to take over
+the role of _leader_) so disabling this feature is only needed if deploying a special instance that shares
+the vospace database but should never do this background work (e.g. testing a new image before release).
 
 The _inventory.schema_ name is the name of the database schema used for all inventory database objects. This 
 currently must be "inventory" due to configuration limitations in <a href="../luskan">luskan</a>.
