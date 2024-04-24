@@ -475,7 +475,7 @@ public class NodePersistenceImpl implements NodePersistence {
     private class ChildNodeWrapper implements ResourceIterator<Node> {
 
         private final ContainerNode parent;
-        private final ResourceIterator<Node> childIter;
+        private ResourceIterator<Node> childIter;
         
         private final IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
         private final Map<Object, Subject> identCache = new TreeMap<>();
@@ -525,7 +525,11 @@ public class NodePersistenceImpl implements NodePersistence {
 
         @Override
         public void close() throws IOException {
-            childIter.close();
+            if (childIter != null) {
+                // silently OK to close more than once
+                childIter.close();
+                childIter = null;
+            }
             identCache.clear();
         }
         
