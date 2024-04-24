@@ -70,6 +70,9 @@ jobs:
     - name: java build -- ratik
       run: cd ratik && ../gradlew --info clean build javadoc checkstyleMain
 
+    - name: java build -- vault
+      run: cd vault && ../gradlew --info clean build javadoc checkstyleMain
+
     - name: java build -- ringhold
       run: cd ringhold && ../gradlew --info clean build javadoc checkstyleMain
 
