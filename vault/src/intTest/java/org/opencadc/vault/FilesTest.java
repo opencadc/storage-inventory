@@ -67,10 +67,7 @@
 
 package org.opencadc.vault;
 
-import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
-import java.io.File;
-import java.net.URI;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
@@ -91,5 +88,6 @@ public class FilesTest extends org.opencadc.conformance.vos.FilesTest {
         super(Constants.RESOURCE_ID, Constants.ADMIN_CERT);
         
         enableTestDataNodePermission(Constants.ALT_CERT);
+        enableTestPassthroughParams(true);
     }
 }

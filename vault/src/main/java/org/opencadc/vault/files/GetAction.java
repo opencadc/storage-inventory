@@ -70,7 +70,9 @@ package org.opencadc.vault.files;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.net.TransientException;
 import java.net.HttpURLConnection;
-import java.util.List;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.util.Iterator;
 import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
 import org.opencadc.vault.VaultTransferGenerator;
@@ -129,9 +131,37 @@ public class GetAction extends HeadAction {
             throw new TransientException("No location found for file " + Utils.getPath(node));
         }
         Protocol proto = rn.protos.get(0);
-        String loc = proto.getEndpoint();
+        URI redirect = URI.create(proto.getEndpoint());
+        String loc = appendParams(redirect);
         log.debug("Location: " + loc);
         syncOutput.setHeader("Location", loc);
         syncOutput.setCode(HttpURLConnection.HTTP_SEE_OTHER);
+    }
+    
+    // pass through request params to minoc
+    // TODO: this makes slightly better use of the StringBuilder than the code in raven
+    //       should put this method into cadc-inventory-server, static in ProtocolsGenerator?
+    String appendParams(URI redirect) throws Exception {
+        StringBuilder sb = new StringBuilder();
+        for (String param : syncInput.getParameterNames()) {
+            Iterator<String> values = syncInput.getParameters(param).iterator();
+            while (values.hasNext()) {
+                if (sb.length() > 0) {
+                    sb.append("&");
+                }
+                sb.append(param);
+                sb.append("=");
+                sb.append(URLEncoder.encode(values.next(), "UTF-8"));
+            }
+        }
+        if (sb.length() > 0) {
+            if (redirect.getQuery() != null) {
+                sb.insert(0, "&");
+            } else {
+                sb.insert(0, "?");
+            }
+        }
+        sb.insert(0, redirect.toASCIIString());
+        return sb.toString();
     }
 }
