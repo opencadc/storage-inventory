@@ -476,7 +476,7 @@ public class VaultInitAction extends InitAction {
         if (str != null) {
             boolean enableDataNodeSizeWorker = Boolean.valueOf(str);
             if (!enableDataNodeSizeWorker) {
-                log.info("initBackgroundWorkers: DataNodeSizeWorker disabled");
+                log.info("initBackgroundWorkers: " + DataNodeSizeSync.class.getSimpleName() + " disabled");
                 return;
             }
         }
@@ -505,6 +505,7 @@ public class VaultInitAction extends InitAction {
             async.setOffline(offline);
             this.dataNodeSizeSyncThread = new Thread(async);
             dataNodeSizeSyncThread.setDaemon(true);
+            dataNodeSizeSyncThread.setName(DataNodeSizeSync.class.getSimpleName());
             dataNodeSizeSyncThread.start();
 
             // store in JNDI so availability can set offline
@@ -513,10 +514,10 @@ public class VaultInitAction extends InitAction {
             try {
                 ctx.unbind(jndiDataNodeSizeSync);
             } catch (NamingException ignore) {
-                log.debug("unbind previous JNDI key (" + jndiPreauthKeys + ") failed... ignoring");
+                log.debug("unbind previous JNDI key (" + jndiDataNodeSizeSync + ") failed... ignoring");
             }
             ctx.bind(jndiDataNodeSizeSync, async);
-            log.info("initBackgroundWorkers: created JNDI key: " + jndiDataNodeSizeSync);
+            log.info("initBackgroundWorkers: " + DataNodeSizeSync.class.getSimpleName() + " enabled; created JNDI key: " + jndiDataNodeSizeSync);
         } catch (Exception ex) {
             throw new RuntimeException("check/init ArtifactSync failed", ex);
         }
