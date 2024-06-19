@@ -10,11 +10,11 @@ repositories {
     mavenLocal()
 }
 
-sourceCompatibility = 1.8
+sourceCompatibility = 11
 
 group = 'org.opencadc'
 
-version = '1.0.1'
+version = '1.0.2'
 
 description = 'OpenCADC Storage Inventory core library'
 def git_url = 'https://github.com/opencadc/storage-inventory'
