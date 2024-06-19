@@ -194,7 +194,7 @@ public class ServiceAvailability implements AvailabilityPlugin {
             URI usersURI = null;
             try {
                 usersURI = localAuthority.getServiceURI(Standards.UMS_USERS_01.toString());
-                URL url = reg.getServiceURL(credURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
+                URL url = reg.getServiceURL(usersURI, Standards.VOSI_AVAILABILITY, AuthMethod.ANON);
                 if (url != null) {
                     CheckResource checkResource = new CheckWebService(url);
                     checkResource.check();
