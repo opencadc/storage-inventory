@@ -1,4 +1,4 @@
-# cadc-storage-adapter-ad
+# cadc-storage-adapter-ad -- OBSOLETE
 AD storage adapter implementation. 
 
 Currently supports GET and Iterator functionality only. 

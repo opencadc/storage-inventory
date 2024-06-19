@@ -10,13 +10,13 @@ repositories {
     mavenLocal()
 }
 
-sourceCompatibility = 1.8
+sourceCompatibility = 11
 
 apply from: '../opencadc.gradle'
 
 group = 'org.opencadc'
 
-version = '0.9.3'
+version = '0.9.4'
 
 description = 'OpenCADC Storage Inventory FileSystem StorageAdapter implementation'
 def git_url = 'https://github.com/opencadc/storage-inventory'

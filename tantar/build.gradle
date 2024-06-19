@@ -12,7 +12,7 @@ repositories {
 
 apply from: '../opencadc.gradle'
 
-sourceCompatibility = 1.8
+sourceCompatibility = 11
 
 group = 'org.opencadc'
 
@@ -27,7 +27,6 @@ dependencies {
     compile 'org.opencadc:cadc-storage-adapter:[1.0,)'
 
     runtime 'org.opencadc:cadc-storage-adapter-fs:[0.9.3,)'
-    runtime 'org.opencadc:cadc-storage-adapter-ad:[0.6.3,)'
     runtime 'org.opencadc:cadc-storage-adapter-swift:[0.8.7,)'
 
     testCompile 'junit:junit:[4.12,5.0)'
