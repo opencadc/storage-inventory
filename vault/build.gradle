@@ -12,7 +12,7 @@ repositories {
 
 apply from: '../opencadc.gradle'
 
-sourceCompatibility = 1.8
+sourceCompatibility = 11
 
 group = 'org.opencadc'
 
@@ -54,7 +54,7 @@ dependencies {
     runtime 'org.opencadc:cadc-gms:[1.0.5,)'
 
     intTestCompile 'org.opencadc:cadc-test-vosi:[1.0.11,)'
-    intTestCompile 'org.opencadc:cadc-test-vos:[2.1.6,)'
+    intTestCompile 'org.opencadc:cadc-test-vos:[2.1.9,)'
 }
 
 configurations {

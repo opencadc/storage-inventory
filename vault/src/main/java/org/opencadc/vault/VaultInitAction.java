@@ -127,6 +127,7 @@ public class VaultInitAction extends InitAction {
     static final String ALLOCATION_PARENT = VAULT_KEY + ".allocationParent";
     static final String ROOT_OWNER = VAULT_KEY + ".root.owner";
     static final String STORAGE_NAMESPACE_KEY = VAULT_KEY + ".storage.namespace";
+    static final String ENABLE_DATANODE_SIZE_WORKER_KEY = VAULT_KEY + ".enableDataNodeSizeWorker";
 
     MultiValuedProperties props;
     private URI resourceID;
@@ -471,13 +472,21 @@ public class VaultInitAction extends InitAction {
     }
     
     private void initBackgroundWorkers() {
+        String str = props.getFirstPropertyValue(ENABLE_DATANODE_SIZE_WORKER_KEY);
+        if (str != null) {
+            boolean enableDataNodeSizeWorker = Boolean.valueOf(str);
+            if (!enableDataNodeSizeWorker) {
+                log.info("initBackgroundWorkers: " + DataNodeSizeSync.class.getSimpleName() + " disabled");
+                return;
+            }
+        }
         try {
             HarvestStateDAO hsDAO = new HarvestStateDAO();
             hsDAO.setConfig(vosDaoConfig);
 
             ArtifactDAO artifactDAO = new ArtifactDAO();
             Map<String,Object> iterprops = getIteratorConfig(props);
-            log.warn("iterator pool: " + iterprops.get("jndiDataSourceName"));
+            log.debug("iterator pool: " + iterprops.get("jndiDataSourceName"));
             artifactDAO.setConfig(iterprops);
             
             // determine startup mode
@@ -496,6 +505,7 @@ public class VaultInitAction extends InitAction {
             async.setOffline(offline);
             this.dataNodeSizeSyncThread = new Thread(async);
             dataNodeSizeSyncThread.setDaemon(true);
+            dataNodeSizeSyncThread.setName(DataNodeSizeSync.class.getSimpleName());
             dataNodeSizeSyncThread.start();
 
             // store in JNDI so availability can set offline
@@ -504,10 +514,10 @@ public class VaultInitAction extends InitAction {
             try {
                 ctx.unbind(jndiDataNodeSizeSync);
             } catch (NamingException ignore) {
-                log.debug("unbind previous JNDI key (" + jndiPreauthKeys + ") failed... ignoring");
+                log.debug("unbind previous JNDI key (" + jndiDataNodeSizeSync + ") failed... ignoring");
             }
             ctx.bind(jndiDataNodeSizeSync, async);
-            log.info("initBackgroundWorkers: created JNDI key: " + jndiDataNodeSizeSync);
+            log.info("initBackgroundWorkers: " + DataNodeSizeSync.class.getSimpleName() + " enabled; created JNDI key: " + jndiDataNodeSizeSync);
         } catch (Exception ex) {
             throw new RuntimeException("check/init ArtifactSync failed", ex);
         }

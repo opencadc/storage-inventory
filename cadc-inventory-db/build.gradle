@@ -13,11 +13,11 @@ repositories {
 
 apply from: '../opencadc.gradle'
 
-sourceCompatibility = 1.8
+sourceCompatibility = 11
 
 group = 'org.opencadc'
 
-version = '1.0.2'
+version = '1.0.3'
 
 description = 'OpenCADC Storage Inventory database library'
 def git_url = 'https://github.com/opencadc/storage-inventory'

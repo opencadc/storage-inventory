@@ -499,10 +499,17 @@ public class NodePersistenceImpl implements NodePersistence {
         @Override
         public boolean hasNext() {
             return !closedForException && childIter.hasNext();
+            //if (childIter != null) {
+            //    return childIter.hasNext();
+            //}
+            //return false;
         }
 
         @Override
         public Node next() {
+            if (childIter == null) {
+                throw new NoSuchElementException("iterator closed");
+            }
             Node ret = childIter.next();
             ret.parent = parent;
 
@@ -537,7 +544,11 @@ public class NodePersistenceImpl implements NodePersistence {
 
         @Override
         public void close() throws IOException {
-            childIter.close();
+            if (childIter != null) {
+                // silently OK to close more than once
+                childIter.close();
+                childIter = null;
+            }
             identCache.clear();
         }
         
