@@ -161,7 +161,7 @@ public class NodePersistenceImpl implements NodePersistence {
     private final Map<String,Object> kpDaoConfig;
     private final boolean singlePool;
     
-    private final ContainerNode root;
+    private ContainerNode root;
     private final List<ContainerNode> allocationParents = new ArrayList<>();
     private final Namespace storageNamespace;
     
@@ -187,52 +187,13 @@ public class NodePersistenceImpl implements NodePersistence {
         this.invDaoConfig = VaultInitAction.getInvConfig(config);
         this.kpDaoConfig = VaultInitAction.getKeyPairConfig(config);
         this.singlePool = nodeDaoConfig.get("jndiDataSourceName").equals(invDaoConfig.get("jndiDataSourceName"));
+        this.localGroupsOnly = false;
         
-        // root node
-        IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
-        UUID rootID = new UUID(0L, 0L);
-        this.root = new ContainerNode(rootID, "");
-        root.owner = getRootOwner(config, identityManager);
-        root.ownerDisplay = identityManager.toDisplayString(root.owner);
-        log.info("ROOT owner: " + root.owner);
-        root.ownerID = identityManager.toOwner(root.owner);
-        root.isPublic = true;
-        root.inheritPermissions = false;
-        
-        // allocations
-        for (String ap : VaultInitAction.getAllocationParents(config)) {
-            if (ap.isEmpty()) {
-                // allocations are in root
-                allocationParents.add(root);
-                log.info("allocationParent: /");
-            } else {
-                try {
-
-                    // simple top-level names only
-                    ContainerNode cn = (ContainerNode) get(root, ap);
-                    String str = "";
-                    if (cn == null) {
-                        cn = new ContainerNode(ap);
-                        cn.parent = root;
-                        str = "created/";
-                    }
-                    cn.isPublic = true;
-                    cn.owner = root.owner;
-                    cn.inheritPermissions = false;
-                    put(cn);
-                    allocationParents.add(cn);
-                    log.info(str + "loaded allocationParent: /" + cn.getName());
-                } catch (NodeNotSupportedException bug) {
-                    throw new RuntimeException("BUG: failed to update isPublic=true on allocationParent " + ap, bug);
-                }
-            }
-        }
+        initRootNode();
 
         String ns = config.getFirstPropertyValue(VaultInitAction.STORAGE_NAMESPACE_KEY);
         this.storageNamespace = new Namespace(ns);
-        
-        this.localGroupsOnly = false;
-        
+
         String pnf = config.getFirstPropertyValue(VaultInitAction.PREVENT_NOT_FOUND_KEY);
         if (pnf != null) {
             this.preventNotFound = Boolean.valueOf(pnf);
@@ -250,6 +211,70 @@ public class NodePersistenceImpl implements NodePersistence {
         Subject ret = new Subject();
         ret.getPrincipals().add(new HttpPrincipal(owner));
         return im.augment(ret);
+    }
+
+    private void initRootNode() {
+        if (root != null) {
+            return;
+        }
+        
+        // if the init from VaultInitAction failed, this could be called by multiple threads in parallel
+        // so let's not make a mess of the state
+        synchronized (this) {
+            // recheck
+            if (root != null) {
+                return;
+            }
+            try {
+                MultiValuedProperties config = VaultInitAction.getConfig();
+                IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
+                UUID rootID = new UUID(0L, 0L);
+                ContainerNode rn = new ContainerNode(rootID, "");
+                rn.owner = getRootOwner(config, identityManager);
+                rn.ownerDisplay = identityManager.toDisplayString(rn.owner);
+                log.info("ROOT owner: " + rn.owner);
+                rn.ownerID = identityManager.toOwner(rn.owner);
+                rn.isPublic = true;
+                rn.inheritPermissions = false;
+
+                // allocations
+                List<ContainerNode> aps = new ArrayList<>();
+                for (String ap : VaultInitAction.getAllocationParents(config)) {
+                    if (ap.isEmpty()) {
+                        // allocations are in root
+                        aps.add(rn);
+                        log.info("allocationParent: /");
+                    } else {
+                        try {
+
+                            // simple top-level names only
+                            ContainerNode cn = (ContainerNode) get(rn, ap);
+                            String str = "";
+                            if (cn == null) {
+                                cn = new ContainerNode(ap);
+                                cn.parent = rn;
+                                cn.isPublic = true;
+                                cn.inheritPermissions = false;
+                                cn.owner = rn.owner;
+                                str = "created/";
+                                put(cn);
+                            }
+                            aps.add(cn);
+                            log.info(str + "loaded allocationParent: /" + cn.getName());
+                        } catch (NodeNotSupportedException bug) {
+                            throw new RuntimeException("BUG: failed to update isPublic=true on allocationParent " + ap, bug);
+                        }
+                    }
+                }
+
+                // success
+                this.root = rn;
+                this.allocationParents.addAll(aps);
+            } catch (Exception ex) {
+                log.error("failed to init ROOT ContainerNode", ex);
+
+            }
+        }
     }
 
     @Override
@@ -298,6 +323,7 @@ public class NodePersistenceImpl implements NodePersistence {
      */
     @Override
     public ContainerNode getRootNode() {
+        initRootNode();
         return root;
     }
 
