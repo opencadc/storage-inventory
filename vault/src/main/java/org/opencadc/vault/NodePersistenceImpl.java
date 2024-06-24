@@ -234,20 +234,20 @@ public class NodePersistenceImpl implements NodePersistence {
             for (String ap : VaultInitAction.getAllocationParents(config)) {
                 if (ap.isEmpty()) {
                     // allocations are in root
-                    aps.add(root);
+                    aps.add(rn);
                     log.info("allocationParent: /");
                 } else {
                     try {
 
                         // simple top-level names only
-                        ContainerNode cn = (ContainerNode) get(root, ap);
+                        ContainerNode cn = (ContainerNode) get(rn, ap);
                         String str = "";
                         if (cn == null) {
                             cn = new ContainerNode(ap);
-                            cn.parent = root;
+                            cn.parent = rn;
                             cn.isPublic = true;
                             cn.inheritPermissions = false;
-                            cn.owner = root.owner;
+                            cn.owner = rn.owner;
                             str = "created/";
                             put(cn);
                         }
