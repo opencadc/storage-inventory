@@ -926,6 +926,16 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             try {
                 String csAttr = getFileAttribute(p, OpaqueFileSystemStorageAdapter.CHECKSUM_ATTR);
                 String aidAttr = getFileAttribute(p, OpaqueFileSystemStorageAdapter.ARTIFACTID_ATTR);
+                if (csAttr == null || aidAttr == null) {
+                    // this could happen if some were to copy files or the whole filesystem to
+                    // a new storage area and not preserve xattrs (eg rsync without -X/--xattrs)
+                    
+                    // for now, just warn and skip so the operator has a chance to correct
+                    log.warn("SKIP invalid: " + sloc + " : missing required attribute(s)"
+                        + " " + OpaqueFileSystemStorageAdapter.CHECKSUM_ATTR + "=" + csAttr
+                        + " " + OpaqueFileSystemStorageAdapter.ARTIFACTID_ATTR + "=" + aidAttr);
+                    return null;
+                }
                 URI contentChecksum = new URI(csAttr);
                 long contentLength = Files.size(p);
                 URI artifactURI = new URI(aidAttr);
