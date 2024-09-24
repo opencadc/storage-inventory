@@ -498,7 +498,7 @@ public class NodePersistenceImpl implements NodePersistence {
     private class ChildNodeWrapper implements ResourceIterator<Node> {
 
         private final ContainerNode parent;
-        private final ResourceIterator<Node> childIter;
+        private ResourceIterator<Node> childIter;
         private boolean closedForException = false;
         
         private final IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
