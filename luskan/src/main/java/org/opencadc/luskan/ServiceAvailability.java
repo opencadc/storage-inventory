@@ -132,7 +132,7 @@ public class ServiceAvailability implements AvailabilityPlugin {
             cr = new CheckDataSource("jdbc/tapadm", TAP_TEST);
             cr.check();
 
-            cr = new CheckDataSource("jdbc/tapadm", UWS_TEST);
+            cr = new CheckDataSource("jdbc/uws", UWS_TEST);
             cr.check();
 
             // check other services we depend on

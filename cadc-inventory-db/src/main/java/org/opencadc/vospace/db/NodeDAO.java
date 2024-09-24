@@ -104,6 +104,11 @@ public class NodeDAO extends AbstractDAO<Node> {
         super.put(val);
     }
 
+    // used by DataNodeWorker
+    public void put(Node val, boolean forceTimestampUdpate) {
+        super.put(val, false, forceTimestampUdpate);
+    }
+    
     @Override
     public Node lock(Node n) {
         if (n == null) {

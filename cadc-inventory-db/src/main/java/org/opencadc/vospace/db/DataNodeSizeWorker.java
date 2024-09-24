@@ -154,7 +154,9 @@ public class DataNodeSizeWorker implements Runnable {
             while (iter.hasNext()) {
                 Artifact artifact = iter.next();
                 DataNode node = nodeDAO.getDataNode(artifact.getURI());
-                if (node != null  && !artifact.getContentLength().equals(node.bytesUsed)) {
+                if (node != null) {
+                    boolean delta = !artifact.getContentLength().equals(node.bytesUsed); // size change
+                    delta = delta || artifact.getLastModified().after(node.getLastModified());
                     log.debug(artifact.getURI() + " len=" + artifact.getContentLength() + " -> " + node.getName());
                     tm.startTransaction();
                     try {
@@ -163,7 +165,7 @@ public class DataNodeSizeWorker implements Runnable {
                             continue; // node gone - race condition
                         }
                         node.bytesUsed = artifact.getContentLength();
-                        nodeDAO.put(node);
+                        nodeDAO.put(node, delta); // delta forces lastModified update
                         tm.commitTransaction();
                         log.debug("ArtifactSyncWorker.updateDataNode id=" + node.getID() 
                                 + " bytesUsed=" + node.bytesUsed + " artifact.lastModified=" + df.format(artifact.getLastModified()));
