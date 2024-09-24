@@ -521,11 +521,7 @@ public class NodePersistenceImpl implements NodePersistence {
         
         @Override
         public boolean hasNext() {
-            return !closedForException && childIter.hasNext();
-            //if (childIter != null) {
-            //    return childIter.hasNext();
-            //}
-            //return false;
+            return !closedForException && childIter != null && childIter.hasNext();
         }
 
         @Override
