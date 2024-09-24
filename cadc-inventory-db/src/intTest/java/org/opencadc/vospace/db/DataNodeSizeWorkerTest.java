@@ -107,7 +107,7 @@ public class DataNodeSizeWorkerTest {
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-        Log4jInit.setLevel("org.opencadc.inventory.db", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.inventory.db", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
         Log4jInit.setLevel("org.opencadc.vospace", Level.INFO);
         Log4jInit.setLevel("org.opencadc.vospace.db", Level.INFO);
@@ -221,11 +221,7 @@ public class DataNodeSizeWorkerTest {
             expected.storageLocation.storageBucket = "X";
         }
         log.info("expected: " + expected);
-
         artifactDAO.put(expected);
-        Artifact actualArtifact = artifactDAO.get(expected.getID());
-        Assert.assertNotNull(actualArtifact);
-        Assert.assertEquals(expected.getContentLength(), actualArtifact.getContentLength());
 
         String hsName = "ArtifactSize";
         URI resourceID = URI.create("ivo://myorg.org/vospace");
@@ -237,6 +233,8 @@ public class DataNodeSizeWorkerTest {
         log.info("*** DataNodeSizeWorker START");
         asWorker.run();
         log.info("*** DataNodeSizeWorker DONE");
+        hs = harvestStateDAO.get(hsName, resourceID);
+        log.info("HarvestState: " + hs.curLastModified.getTime());
 
         actual = (DataNode)nodeDAO.get(orig.getID());
         Assert.assertNotNull(actual);
@@ -246,24 +244,51 @@ public class DataNodeSizeWorkerTest {
         Thread.sleep(100L);
         
         // update the artifact only
-        artifactDAO.delete(actualArtifact.getID());
-        Artifact modified = new Artifact(expected.getURI(), expected.getMetaChecksum(), new Date(), 333L);
+        artifactDAO.delete(expected.getID());
+        Artifact m1 = new Artifact(expected.getURI(), expected.getContentChecksum(), new Date(), 333L);
         if (isStorageSite) {
-            modified.storageLocation = new StorageLocation(URI.create("id:" + UUID.randomUUID().toString()));
-            modified.storageLocation.storageBucket = "X";
+            m1.storageLocation = new StorageLocation(URI.create("id:" + UUID.randomUUID().toString()));
+            m1.storageLocation.storageBucket = "X";
         }
-        artifactDAO.put(modified);
+        artifactDAO.put(m1);
         actual = (DataNode)nodeDAO.get(orig.getID());
-        Assert.assertNotEquals(modified.getContentLength(), actual.bytesUsed);
+        Assert.assertNotEquals(m1.getContentLength(), actual.bytesUsed);
 
         // run the update
         log.info("*** DataNodeSizeWorker START");
         asWorker.run();
         log.info("*** DataNodeSizeWorker DONE");
-        
+        hs = harvestStateDAO.get(hsName, resourceID);
+        log.info("HarvestState: " + hs.curLastModified.getTime());
+
         actual = (DataNode)nodeDAO.get(orig.getID());
-        Assert.assertEquals(modified.getContentLength(), actual.bytesUsed);
+        Assert.assertEquals(m1.getContentLength(), actual.bytesUsed);
+        final Date nodeLastMod = actual.getLastModified();
+        
+        Thread.sleep(100L);
+        
+        // replace the artifact but with the same contentLength to ensure timestamp change
+        artifactDAO.delete(m1.getID());
+        Artifact m2 = new Artifact(expected.getURI(), expected.getContentChecksum(), new Date(), 333L); // same size
+        if (isStorageSite) {
+            m2.storageLocation = new StorageLocation(URI.create("id:" + UUID.randomUUID().toString()));
+            m2.storageLocation.storageBucket = "X";
+        }
+        artifactDAO.put(m2);
+        log.info("replaced artifact: " + m2.getLastModified().getTime());
+        actual = (DataNode)nodeDAO.get(orig.getID());
+        log.info("             node: " + actual.getLastModified().getTime());
+        Assert.assertTrue("no timestamp change", actual.getLastModified().equals(nodeLastMod));
 
+        // run the update
+        log.info("*** DataNodeSizeWorker START");
+        asWorker.run();
+        log.info("*** DataNodeSizeWorker DONE");
+        hs = harvestStateDAO.get(hsName, resourceID);
+        log.info("HarvestState: " + hs.curLastModified.getTime());
+
+        actual = (DataNode)nodeDAO.get(orig.getID());
+        Assert.assertEquals(m2.getContentLength(), actual.bytesUsed);
+        Assert.assertTrue("timestamp change", actual.getLastModified().after(nodeLastMod));
     }
-
 }

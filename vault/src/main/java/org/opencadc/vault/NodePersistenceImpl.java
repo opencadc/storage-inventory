@@ -109,13 +109,10 @@ import org.opencadc.vospace.Node;
 import org.opencadc.vospace.NodeNotSupportedException;
 import org.opencadc.vospace.NodeProperty;
 import org.opencadc.vospace.VOS;
-import org.opencadc.vospace.VOSURI;
 import org.opencadc.vospace.db.NodeDAO;
 import org.opencadc.vospace.io.NodeWriter;
-import org.opencadc.vospace.server.LocalServiceURI;
 import org.opencadc.vospace.server.NodePersistence;
 import org.opencadc.vospace.server.Views;
-import org.opencadc.vospace.server.transfers.TransferGenerator;
 
 /**
  *
@@ -401,7 +398,11 @@ public class NodePersistenceImpl implements NodePersistence {
                 // if DataNode.bytesUsed != Artifact.contentLength we update the cache
                 // this retains put+get consistency in a single-site deployed (with minoc)
                 // and may help hide some inconsistencies in child listing sizes
-                if (!a.getContentLength().equals(dn.bytesUsed)) {
+                
+                // be consistent with DataNodeSizeWorker
+                boolean delta = !a.getContentLength().equals(dn.bytesUsed); // size change
+                delta = delta || a.getLastModified().after(dn.getLastModified());
+                if (delta) {
                     TransactionManager txn = dao.getTransactionManager();
                     try {
                         log.debug("starting node transaction");
@@ -412,7 +413,7 @@ public class NodePersistenceImpl implements NodePersistence {
                         if (locked != null) {
                             dn = locked; // safer than accidentally using the wrong variable
                             dn.bytesUsed = a.getContentLength();
-                            dao.put(dn);
+                            dao.put(dn, delta);
                             ret = dn;
                         }
 
@@ -437,24 +438,20 @@ public class NodePersistenceImpl implements NodePersistence {
                     }
                 }
                 
-                Date d = ret.getLastModified();
-                Date cd = null;
-                if (ret.getLastModified().before(a.getLastModified())) {
-                    d = a.getLastModified();
+                // #date is always Node.lastModified for consistency with container listing
+                // TODO: some props like contentType are set on the artifact so those changes do not
+                //       cause a visible #date change; probably OK
+                ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_DATE, df.format(ret.getLastModified())));
+
+                // #content-date is only output if different from #date
+                if (!ret.getLastModified().equals(a.getContentLastModified())) {
+                    ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTDATE, df.format(a.getContentLastModified())));
                 }
-                if (d.before(a.getContentLastModified())) {
-                    // probably not possible
-                    d = a.getContentLastModified();
-                } else {
-                    cd = a.getContentLastModified();
+
+                // only #md5 in VOSpace spec
+                if (a.getContentChecksum().getScheme().equalsIgnoreCase("md5")) {
+                    ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTMD5, a.getContentChecksum().getSchemeSpecificPart()));
                 }
-                ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_DATE, df.format(d)));
-                if (cd != null) {
-                    ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTDATE, df.format(cd)));
-                }
-                
-                // assume MD5
-                ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTMD5, a.getContentChecksum().getSchemeSpecificPart()));
                 
                 if (a.contentEncoding != null) {
                     ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTENCODING, a.contentEncoding));
@@ -502,6 +499,7 @@ public class NodePersistenceImpl implements NodePersistence {
 
         private final ContainerNode parent;
         private ResourceIterator<Node> childIter;
+        private boolean closedForException = false;
         
         private final IdentityManager identityManager = AuthenticationUtil.getIdentityManager();
         private final Map<Object, Subject> identCache = new TreeMap<>();
@@ -523,10 +521,7 @@ public class NodePersistenceImpl implements NodePersistence {
         
         @Override
         public boolean hasNext() {
-            if (childIter != null) {
-                return childIter.hasNext();
-            }
-            return false;
+            return !closedForException && childIter != null && childIter.hasNext();
         }
 
         @Override
@@ -537,14 +532,25 @@ public class NodePersistenceImpl implements NodePersistence {
             Node ret = childIter.next();
             ret.parent = parent;
 
-            // owner
-            Subject s = identCache.get(ret.ownerID);
-            if (s == null) {
-                s = identityManager.toSubject(ret.ownerID);
-                identCache.put(ret.ownerID, s);
+            try {
+                // owner
+                Subject s = identCache.get(ret.ownerID);
+                if (s == null) {
+                    s = identityManager.toSubject(ret.ownerID);
+                    identCache.put(ret.ownerID, s);
+                }
+                ret.owner = s;
+                ret.ownerDisplay = identityManager.toDisplayString(ret.owner);
+            } catch (RuntimeException ex) {
+                try {
+                    // abort
+                    close();
+                } catch (Exception cex) {
+                    log.error("failed to close iterator", ex);
+                }
+                closedForException = true;
+                throw ex;
             }
-            ret.owner = s;
-            ret.ownerDisplay = identityManager.toDisplayString(ret.owner);
 
             if (ret instanceof DataNode) {
                 DataNode dn = (DataNode) ret;
