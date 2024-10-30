@@ -98,9 +98,11 @@ public class BackgroundLogInfo extends WebServiceLogInfo {
     }
     
     public void setLastModified(Date ts) {
-        DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
-        this.lastmodified = df.format(ts);
+        if (ts != null) {
+            DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+            this.lastmodified = df.format(ts);
+        } else {
+            this.lastmodified = null;
+        }
     }
-    
-    
 }

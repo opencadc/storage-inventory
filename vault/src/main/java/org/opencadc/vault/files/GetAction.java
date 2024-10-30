@@ -111,7 +111,7 @@ public class GetAction extends HeadAction {
         boolean noArtifact = node.bytesUsed == null || node.bytesUsed == 0L;
         noArtifact = noArtifact && nodePersistence.preventNotFound && rn.artifact == null;
         if (noArtifact) {
-            // no file
+            // no artifact found by preventNotFound
             syncOutput.setCode(HttpURLConnection.HTTP_NO_CONTENT);
             return;
         }
@@ -125,6 +125,14 @@ public class GetAction extends HeadAction {
             VaultTransferGenerator tg = nodePersistence.getTransferGenerator();
             rn.protos = tg.getEndpoints(targetURI, pullTransfer, null);
             rn.artifact = tg.resolvedArtifact; // currently unused at this point
+        }
+        // check artifact again (!preventNotFound)
+        noArtifact = node.bytesUsed == null || node.bytesUsed == 0L;
+        noArtifact = noArtifact && rn.artifact == null;
+        if (noArtifact) {
+            // no file
+            syncOutput.setCode(HttpURLConnection.HTTP_NO_CONTENT);
+            return;
         }
         
         if (rn.protos.isEmpty()) {
