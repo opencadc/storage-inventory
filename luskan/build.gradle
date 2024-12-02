@@ -37,7 +37,7 @@ dependencies {
     compile 'org.opencadc:cadc-uws:[1.0.3,)'
     compile 'org.opencadc:cadc-uws-server:[1.2.18,)'
     compile 'org.opencadc:cadc-dali:[1.2.13,)'
-    compile 'org.opencadc:cadc-tap-server:[1.1.20,)'
+    compile 'org.opencadc:cadc-tap-server:[1.1.26,)'
     compile 'org.opencadc:cadc-tap-schema:[1.1.31,)'
     compile 'org.opencadc:cadc-tap-server-pg:[1.0.5,)'
 
