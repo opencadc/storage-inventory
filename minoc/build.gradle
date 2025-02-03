@@ -24,7 +24,7 @@ war {
 }
 
 dependencies {
-    implementation 'org.opencadc:cadc-util:[1.10.2,2.0)'
+    implementation 'org.opencadc:cadc-util:[1.11.6,2.0)'
     implementation 'org.opencadc:cadc-log:[1.1.6,2.0)'
     implementation 'org.opencadc:cadc-registry:[1.7,)'
     implementation 'org.opencadc:cadc-vosi:[1.4.3,2.0)'
