@@ -1,4 +1,5 @@
-FROM images.opencadc.org/library/cadc-tomcat:1
+#FROM images.opencadc.org/library/cadc-tomcat:1
+FROM cadc-tomcat:latest
 
 # wcslib provided by base image now
 
