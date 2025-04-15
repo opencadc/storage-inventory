@@ -1,6 +1,5 @@
 plugins {
     id 'java'
-    id 'maven'
     id 'application'
     id 'checkstyle'
 }
@@ -10,19 +9,18 @@ repositories {
     mavenLocal()
 }
 
+apply from: '../opencadc.gradle'
+
 sourceCompatibility = 11
 
 group = 'org.opencadc'
 
-dependencies {
-    compile 'org.opencadc:cadc-util:[1.6,2.0)'
-    compile 'org.opencadc:cadc-inventory:[1.0,2.0)'
-    compile 'org.opencadc:cadc-inventory-db:[1.0,2.0)'
-
-    testCompile 'junit:junit:[4.12,5.0)'
-}
-
 mainClassName = 'org.opencadc.ringhold.Main'
 
-apply from: '../opencadc.gradle'
+dependencies {
+    implementation 'org.opencadc:cadc-util:[1.6,2.0)'
+    implementation 'org.opencadc:cadc-inventory:[1.0,2.0)'
+    implementation 'org.opencadc:cadc-inventory-db:[1.0,2.0)'
 
+    testImplementation 'junit:junit:[4.12,5.0)'
+}

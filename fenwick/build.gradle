@@ -1,6 +1,5 @@
 plugins {
     id 'java'
-    id 'maven'
     id 'application'
     id 'checkstyle'
 }
@@ -10,22 +9,23 @@ repositories {
     mavenLocal()
 }
 
+apply from: '../opencadc.gradle'
+
 sourceCompatibility = 11
 
 group = 'org.opencadc'
 
-dependencies {
-    compile 'org.opencadc:cadc-util:[1.10.2,2.0)'
-    compile 'org.opencadc:cadc-inventory:[1.0,2.0)'
-    compile 'org.opencadc:cadc-inventory-db:[1.0,2.0)'
-    compile 'org.opencadc:cadc-inventory-util:[0.1.8,1.0)'
-    compile 'org.opencadc:cadc-registry:[1.5,2.0)'
-    compile 'org.opencadc:cadc-tap:[1.1.14,1.2)' // 1.2 upper bound is correct #reasons
-
-    testCompile 'junit:junit:[4.12,5.0)'
-}
-
 mainClassName = 'org.opencadc.fenwick.Main'
 
-apply from: '../opencadc.gradle'
+dependencies {
+    implementation 'org.opencadc:cadc-util:[1.10.2,2.0)'
+    implementation 'org.opencadc:cadc-inventory:[1.0,2.0)'
+    implementation 'org.opencadc:cadc-inventory-db:[1.0,2.0)'
+    implementation 'org.opencadc:cadc-inventory-util:[0.1.8,1.0)'
+    implementation 'org.opencadc:cadc-registry:[1.5,2.0)'
+    implementation 'org.opencadc:cadc-tap:[1.1.14,1.2)' // 1.2 upper bound is correct #reasons
+
+    testImplementation 'junit:junit:[4.12,5.0)'
+}
+
 

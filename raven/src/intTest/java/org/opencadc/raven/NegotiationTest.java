@@ -591,7 +591,7 @@ public class NegotiationTest extends RavenTest {
         URI testSite2ID = URI.create("ivo://negotiation-test-site2");
         URI testSite3ID = URI.create("ivo://negotiation-test-site3");
 
-        // testSite1 is readonly, testSite1&2 are read write
+        // testSite1 is readonly, testSite2&3 are read write
         StorageSite testSite1 = new StorageSite(testSite1ID, "testSite1", true, false);
         StorageSite testSite2 = new StorageSite(testSite2ID, "testSite2", true, true);
         StorageSite testSite3 = new StorageSite(testSite3ID, "testSite3", true, true);
@@ -650,12 +650,12 @@ public class NegotiationTest extends RavenTest {
 
                     } finally {
                         // cleanup sites
-                        siteDAO.delete(testSite1.getID());
-                        siteDAO.delete(testSite2.getID());
-                        siteDAO.delete(testSite3.getID());
+                        //siteDAO.delete(testSite1.getID());
+                        //siteDAO.delete(testSite2.getID());
+                        //siteDAO.delete(testSite3.getID());
                     }
                 }
-           });
+            });
         } catch (Exception e) {
             log.error("unexpected exception", e);
             Assert.fail("unexpected exception: " + e);

@@ -79,6 +79,7 @@ import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 
+import ca.nrc.cadc.util.StringUtil;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -122,6 +123,7 @@ import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.util.fs.XAttrCommandExecutor;
 
 /**
  * An implementation of the StorageAdapter interface on a file system.
@@ -138,6 +140,8 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     public static final String CONFIG_FILE = "cadc-storage-adapter-fs.properties";
     public static final String CONFIG_PROPERTY_ROOT = OpaqueFileSystemStorageAdapter.class.getPackage().getName() + ".baseDir";
     public static final String CONFIG_PROPERTY_BUCKET_LENGTH = OpaqueFileSystemStorageAdapter.class.getName() + ".bucketLength";
+    // undocumented config option in case java user defined attrs don't work as expected
+    public static final String CONFIG_XATTR_EXEC =  OpaqueFileSystemStorageAdapter.class.getName() + ".xattrAlwaysExec";
     public static final int MAX_BUCKET_LENGTH = 7;
             
     static final String ARTIFACTID_ATTR = "artifactID";
@@ -160,9 +164,12 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     
     private static final String DELETED_PRESERVED = "deleted-preserved";
     
+    static boolean XATTR_EXEC;
+    
     final Path txnPath;
     final Path contentPath;
     private final int bucketLength;
+    
     private final List<Namespace> recoverableNamespaces = new ArrayList<>();
     private final List<Namespace> purgeNamespaces = new ArrayList<>();
 
@@ -193,6 +200,11 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             throw new InvalidConfigException(CONFIG_PROPERTY_BUCKET_LENGTH + " must be in [1," + MAX_BUCKET_LENGTH + "], found " + bucketLen);
         }
         this.bucketLength = bucketLen;
+        
+        String exec = props.getFirstPropertyValue(CONFIG_XATTR_EXEC);
+        if (exec != null) {
+            XATTR_EXEC = "true".equals(exec);
+        }
         
         FileSystem fs = FileSystems.getDefault();
         Path root = fs.getPath(rootVal);
@@ -961,16 +973,29 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     
     public static void setFileAttribute(Path path, String attributeKey, String attributeValue) throws IOException {
         log.debug("setFileAttribute: " + path);
+        
+        if (XATTR_EXEC) {
+            String namespace = "user";
+            String key = namespace + "." + attributeKey;
+            if (StringUtil.hasText(attributeValue)) {
+                XAttrCommandExecutor.set(path, key, attributeValue);
+            } else {
+                XAttrCommandExecutor.remove(path, key);
+            }
+            return;
+        }
+        
         UserDefinedFileAttributeView udv = Files.getFileAttributeView(path,
             UserDefinedFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+        String key = attributeKey;
         if (attributeValue != null) {
             attributeValue = attributeValue.trim();
-            log.debug("attribute: " + attributeKey + " = " + attributeValue);
+            log.warn("attribute write: " + key + " = " + attributeValue);
             ByteBuffer buf = ByteBuffer.wrap(attributeValue.getBytes(Charset.forName("UTF-8")));
-            udv.write(attributeKey, buf);
+            udv.write(key, buf);
         } else {
             try {
-                log.debug("attribute: " + attributeKey + " (delete)");
+                log.debug("attribute delete: " + attributeKey);
                 udv.delete(attributeKey);
             } catch (FileSystemException ex) {
                 log.debug("assume no such attr: " + ex);
@@ -978,14 +1003,20 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         }
     }
     
-    static String getFileAttribute(Path path, String attributeName) throws IOException {
+    public static String getFileAttribute(Path path, String attributeKey) throws IOException {
+        if (XATTR_EXEC) {
+            String namespace = "user";
+            String key = namespace + "." + attributeKey;
+            return XAttrCommandExecutor.get(path, key);
+        }
+
         try {
             UserDefinedFileAttributeView udv = Files.getFileAttributeView(path,
                 UserDefinedFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
 
-            int sz = udv.size(attributeName);
+            int sz = udv.size(attributeKey);
             ByteBuffer buf = ByteBuffer.allocate(2 * sz);
-            udv.read(attributeName, buf);
+            udv.read(attributeKey, buf);
             return new String(buf.array(), Charset.forName("UTF-8")).trim();
         } catch (FileSystemException ex) {
             log.debug("assume no such attr: " + ex);

@@ -1,7 +1,5 @@
 plugins {
     id 'java'
-    id 'maven'
-    id 'maven-publish'
     id 'checkstyle'
     id 'war'
 }
@@ -21,22 +19,25 @@ war {
     from(System.getenv('RPS') + '/resources/') {
         include 'swagger-ui/'
     }
+    from('.') { 
+        include 'VERSION'
+    }
 }
 
 dependencies {
-    compile 'org.opencadc:cadc-util:[1.10.2,2.0)'
-    compile 'org.opencadc:cadc-gms:[1.0,2.0)'
-    compile 'org.opencadc:cadc-permissions:[0.2,)'
+    implementation 'org.opencadc:cadc-util:[1.10.2,2.0)'
+    implementation 'org.opencadc:cadc-gms:[1.0,2.0)'
+    implementation 'org.opencadc:cadc-permissions:[0.2,)'
     // there is no cadc-permisssions-server lib because it's too simple 
-    compile 'org.opencadc:cadc-vosi:[1.4.3,2.0)'
-    compile 'org.opencadc:cadc-rest:[1.0,2.0)'
-    compile 'org.opencadc:cadc-registry:[1.7,2.0)'
+    implementation 'org.opencadc:cadc-vosi:[1.4.3,2.0)'
+    implementation 'org.opencadc:cadc-rest:[1.0,2.0)'
+    implementation 'org.opencadc:cadc-registry:[1.7,2.0)'
 
-    runtime 'org.opencadc:cadc-log:[1.1,)'
-    runtime 'org.opencadc:cadc-gms:[1.0.5,2.0)'
-    runtime 'org.opencadc:cadc-access-control-identity:[1.2,2.0)'
+    runtimeOnly 'org.opencadc:cadc-log:[1.1,)'
+    runtimeOnly 'org.opencadc:cadc-gms:[1.0.5,2.0)'
+    runtimeOnly 'org.opencadc:cadc-access-control-identity:[1.2,2.0)'
 
-    testCompile 'junit:junit:[4.0,)'
+    testImplementation 'junit:junit:[4.0,)'
 
-    intTestCompile 'org.opencadc:cadc-test-vosi:[1.0.11,)'
+    intTestImplementation 'org.opencadc:cadc-test-vosi:[1.0.11,)'
 }

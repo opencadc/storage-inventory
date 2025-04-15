@@ -112,13 +112,14 @@ public class OpaqueStorageAdapterTest extends StorageAdapterBasicTest {
         super(new OpaqueFileSystemStorageAdapter(ROOT_DIR, BUCKET_LEN));
         this.ofsAdapter = (OpaqueFileSystemStorageAdapter) super.adapter;
 
-        log.debug("    content path: " + ofsAdapter.contentPath);
-        log.debug("transaction path: " + ofsAdapter.txnPath);
+        log.info("    content path: " + ofsAdapter.contentPath);
+        log.info("transaction path: " + ofsAdapter.txnPath);
         Assert.assertTrue("testInit: contentPath", Files.exists(ofsAdapter.contentPath));
         Assert.assertTrue("testInit: txnPath", Files.exists(ofsAdapter.txnPath));
     }
     
     @Before
+    @Override
     public void cleanupBefore() throws IOException {
         log.info("cleanupBefore: " + ofsAdapter.contentPath.getParent());
         if (Files.exists(ofsAdapter.contentPath)) {
@@ -181,6 +182,45 @@ public class OpaqueStorageAdapterTest extends StorageAdapterBasicTest {
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+
+    @Test
+    public void testSetGetAttributesEXEC() {
+        
+        try {
+            OpaqueFileSystemStorageAdapter.XATTR_EXEC = true;
+
+            String txnID = UUID.randomUUID().toString();
+            Path p = ofsAdapter.txnPath.resolve(txnID);
+            OutputStream  ostream = Files.newOutputStream(p, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW);
+            ostream.close();
+
+            OpaqueFileSystemStorageAdapter.setFileAttribute(p, "foo", "bar");
+            
+            // attr set
+            String val = OpaqueFileSystemStorageAdapter.getFileAttribute(p, "foo");
+            Assert.assertEquals("bar", val);
+
+            // attr not set
+            val = OpaqueFileSystemStorageAdapter.getFileAttribute(p, "no-foo");
+            Assert.assertNull("attr-not-set", val);
+            
+            // delete attr
+            OpaqueFileSystemStorageAdapter.setFileAttribute(p, "foo", null);
+            val = OpaqueFileSystemStorageAdapter.getFileAttribute(p, "foo");
+            Assert.assertNull("deleted", val);
+            
+            // delete not-set attr
+            OpaqueFileSystemStorageAdapter.setFileAttribute(p, "no-foo", null);
+            val = OpaqueFileSystemStorageAdapter.getFileAttribute(p, "no-foo");
+            Assert.assertNull("not-set-deleted", val);
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        } finally {
+            OpaqueFileSystemStorageAdapter.XATTR_EXEC = false;
         }
     }
 }
