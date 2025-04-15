@@ -1,6 +1,5 @@
 plugins {
     id 'java'
-    id 'maven'
     id 'application'
     id 'checkstyle'
 }
@@ -19,24 +18,19 @@ group = 'org.opencadc'
 mainClassName = 'org.opencadc.tantar.Main'
 
 dependencies {
-    compile 'org.opencadc:cadc-util:[1.10.2,2.0)'
-    compile 'org.opencadc:cadc-log:[1.1.2,2.0)'
-    compile 'org.opencadc:cadc-inventory:[1.0.0,2.0)'
-    compile 'org.opencadc:cadc-inventory-db:[1.0.0,2.0)'
-    compile 'org.opencadc:cadc-inventory-util:[0.1.8,1.0)'
-    compile 'org.opencadc:cadc-storage-adapter:[1.0,)'
+    implementation 'org.opencadc:cadc-util:[1.10.2,2.0)'
+    implementation 'org.opencadc:cadc-log:[1.1.2,2.0)'
+    implementation 'org.opencadc:cadc-inventory:[1.0.0,2.0)'
+    implementation 'org.opencadc:cadc-inventory-db:[1.0.0,2.0)'
+    implementation 'org.opencadc:cadc-inventory-util:[0.1.8,1.0)'
+    implementation 'org.opencadc:cadc-storage-adapter:[1.0,)'
 
-    runtime 'org.opencadc:cadc-storage-adapter-fs:[0.9.5,)'
-    runtime 'org.opencadc:cadc-storage-adapter-swift:[0.8.7,)'
+    runtimeOnly 'org.opencadc:cadc-storage-adapter-fs:[0.9.5,)'
+    runtimeOnly 'org.opencadc:cadc-storage-adapter-swift:[0.8.7,)'
 
-    testCompile 'junit:junit:[4.12,5.0)'
+    testImplementation 'junit:junit:[4.12,5.0)'
 
-    intTestCompile 'org.opencadc:cadc-storage-adapter-fs:[0.9.3,)'
+    intTestImplementation 'org.opencadc:cadc-storage-adapter-fs:[0.9.3,)'
 }
-
-configurations {
-  runtime.exclude group: 'org.slf4j', module: 'slf4j-reload4j'
-}
-
 
 
