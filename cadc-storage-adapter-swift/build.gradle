@@ -1,6 +1,5 @@
 plugins {
-    id 'java'
-    id 'maven'
+    id 'java-library'
     id 'maven-publish'
     id 'checkstyle'
 }
@@ -10,47 +9,40 @@ repositories {
     mavenLocal()
 }
 
+apply from: '../opencadc.gradle'
+
 sourceCompatibility = 11
 
 group = 'org.opencadc'
 
 version = '0.8.8'
 
-apply from: '../opencadc.gradle'
-
 description = 'OpenCADC Storage Inventory SwiftStorageAdapter implementation'
 def git_url = 'https://github.com/opencadc/storage-inventory'
 
 dependencies {
-    compile 'org.apache.commons:commons-pool2:[2.9,3.0)'
-    compile 'org.opencadc:cadc-util:[1.6,2.0)'
-    compile 'org.opencadc:cadc-inventory:[0.7,)'
-    compile 'org.opencadc:cadc-storage-adapter:[0.11.2,)'
+    implementation 'org.apache.commons:commons-pool2:[2.9,3.0)'
+    implementation 'org.opencadc:cadc-util:[1.6,2.0)'
+    implementation 'org.opencadc:cadc-inventory:[0.7,)'
+    implementation 'org.opencadc:cadc-storage-adapter:[0.11.2,)'
 
     // swift API
-    compile 'org.opencadc:joss:[0.11.0,)'
-    //compile 'org.javaswift:joss:0.10.4'
+    implementation 'org.opencadc:joss:[0.11.0,)'
+    //implementation 'org.javaswift:joss:0.10.4'
 
-    //runtime 'org.slf4j:slf4j-nop:[1.6,)'
-    runtime 'org.slf4j:slf4j-log4j12:[1.6,2.0)'
-    runtime 'org.apache.logging.log4j:log4j-slf4j-impl:[2.17.2,3.0)'
+    testImplementation 'junit:junit:[4.0,)'
     
-    testCompile 'junit:junit:[4.0,)'
-    
-    intTestCompile 'org.opencadc:cadc-storage-adapter-test:[0.5.2,)'
+    intTestImplementation 'org.opencadc:cadc-storage-adapter-test:[0.5.2,)'
 
     // work around because 1.8.0-beta4 prints exceptions in log, eg:
     // java.lang.NoSuchFieldException: mdc
     //    at java.base/java.lang.Class.getDeclaredField(Class.java:2411)
     //    at org.apache.log4j.MDCFriend.fixForJava9(MDCFriend.java:13)
-    runtime 'org.slf4j:slf4j-api:1.7.36'
-    runtime 'org.slf4j:jcl-over-slf4j:1.7.36'
-    runtime 'org.slf4j:slf4j-log4j12:1.7.36'
+    runtimeOnly 'org.slf4j:slf4j-api:1.7.36'
+    runtimeOnly 'org.slf4j:jcl-over-slf4j:1.7.36'
+    runtimeOnly 'org.slf4j:slf4j-log4j12:1.7.36'
 }
 
 configurations {
-  // slf4j work around to exclude log4j-1.x and use backwards compat api
-  runtime.exclude group: 'log4j'
-  runtime.exclude group: 'org.slf4j', module: 'slf4j-reload4j'
 }
 
