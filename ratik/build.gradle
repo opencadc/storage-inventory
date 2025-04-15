@@ -1,6 +1,5 @@
 plugins {
     id 'java'
-    id 'maven'
     id 'application'
     id 'checkstyle'
 }
@@ -10,9 +9,13 @@ repositories {
     mavenLocal()
 }
 
+apply from: '../opencadc.gradle'
+
 sourceCompatibility = 11
 
 group = 'org.opencadc'
+
+mainClassName = 'org.opencadc.ratik.Main'
 
 dependencies {
     compile 'org.opencadc:cadc-util:[1.10.2,2.0)'
@@ -25,7 +28,5 @@ dependencies {
     testCompile 'junit:junit:[4.12,5.0)'
 }
 
-mainClassName = 'org.opencadc.ratik.Main'
 
-apply from: '../opencadc.gradle'
 

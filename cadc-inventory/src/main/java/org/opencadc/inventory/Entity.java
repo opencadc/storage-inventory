@@ -81,12 +81,13 @@ public abstract class Entity extends org.opencadc.persist.Entity {
     // operationally and the model is not currently vulnerable
     // to "value shifting" bugs so it is still OK
     private static final boolean ENTITY_DIGEST_FIELD_NAMES = false;
+    private static final boolean ENTITY_DFN_LOWER = false;
     
     public Entity() {
-        super(ENTITY_TRUNCATE_DATES, ENTITY_DIGEST_FIELD_NAMES);
+        super(ENTITY_TRUNCATE_DATES, ENTITY_DIGEST_FIELD_NAMES, ENTITY_DFN_LOWER);
     }
 
     public Entity(UUID id) {
-        super(id, ENTITY_TRUNCATE_DATES, ENTITY_DIGEST_FIELD_NAMES);
+        super(id, ENTITY_TRUNCATE_DATES, ENTITY_DIGEST_FIELD_NAMES, ENTITY_DFN_LOWER);
     }
 }

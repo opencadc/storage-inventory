@@ -1,9 +1,7 @@
 plugins {
-    id 'java'
-    id 'maven'
+    id 'java-library'
     id 'maven-publish'
     id 'checkstyle'
-    id 'application'
 }
 
 repositories {
@@ -22,16 +20,14 @@ version = '1.0.4'
 description = 'OpenCADC Storage Inventory database library'
 def git_url = 'https://github.com/opencadc/storage-inventory'
 
-mainClassName = 'org.opencadc.inventory.db.version.Main'
-
 dependencies {
-    compile 'org.opencadc:cadc-util:[1.11.0,2.0)'
-    compile 'org.opencadc:cadc-gms:[1.0.0,)'
-    compile 'org.opencadc:cadc-inventory:[1.0.0,)'
-    compile 'org.opencadc:cadc-vos:[2.0.6,3.0)'
+    implementation 'org.opencadc:cadc-util:[1.11.0,2.0)'
+    implementation 'org.opencadc:cadc-gms:[1.0.0,)'
+    api 'org.opencadc:cadc-inventory:[1.0.0,)'
+    api 'org.opencadc:cadc-vos:[2.0.6,3.0)'
 
-    testCompile 'junit:junit:[4.0,)'
+    testImplementation 'junit:junit:[4.0,)'
     
-    runtime 'org.postgresql:postgresql:[42.2.8,)'
+    runtimeOnly 'org.postgresql:postgresql:[42.2.8,)'
     intTestRuntime 'org.postgresql:postgresql:[42.2.8,)'
 }
