@@ -140,7 +140,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     public static final String CONFIG_FILE = "cadc-storage-adapter-fs.properties";
     public static final String CONFIG_PROPERTY_ROOT = OpaqueFileSystemStorageAdapter.class.getPackage().getName() + ".baseDir";
     public static final String CONFIG_PROPERTY_BUCKET_LENGTH = OpaqueFileSystemStorageAdapter.class.getName() + ".bucketLength";
-    public static final String CONFIG_XATTR_NS =  OpaqueFileSystemStorageAdapter.class.getName() + ".xattrNamespace";
+    // undocumented config option in case java user defined attrs don't work as expected
     public static final String CONFIG_XATTR_EXEC =  OpaqueFileSystemStorageAdapter.class.getName() + ".xattrAlwaysExec";
     public static final int MAX_BUCKET_LENGTH = 7;
             
@@ -164,7 +164,6 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     
     private static final String DELETED_PRESERVED = "deleted-preserved";
     
-    static String XATTR_NAMESPACE;
     static boolean XATTR_EXEC;
     
     final Path txnPath;
@@ -201,12 +200,6 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             throw new InvalidConfigException(CONFIG_PROPERTY_BUCKET_LENGTH + " must be in [1," + MAX_BUCKET_LENGTH + "], found " + bucketLen);
         }
         this.bucketLength = bucketLen;
-        
-        String prefix = props.getFirstPropertyValue(CONFIG_XATTR_NS);
-        if (prefix != null) {
-            XATTR_NAMESPACE = prefix;
-            log.warn("extended attribute namespace: " + XATTR_NAMESPACE);
-        }
         
         String exec = props.getFirstPropertyValue(CONFIG_XATTR_EXEC);
         if (exec != null) {
@@ -983,9 +976,6 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         
         if (XATTR_EXEC) {
             String namespace = "user";
-            if (XATTR_NAMESPACE != null) {
-                namespace = XATTR_NAMESPACE;
-            }
             String key = namespace + "." + attributeKey;
             if (StringUtil.hasText(attributeValue)) {
                 XAttrCommandExecutor.set(path, key, attributeValue);
@@ -998,9 +988,6 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         UserDefinedFileAttributeView udv = Files.getFileAttributeView(path,
             UserDefinedFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
         String key = attributeKey;
-        if (XATTR_NAMESPACE != null) {
-            key = XATTR_NAMESPACE + "." + attributeKey;
-        }
         if (attributeValue != null) {
             attributeValue = attributeValue.trim();
             log.warn("attribute write: " + key + " = " + attributeValue);
@@ -1019,9 +1006,6 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     public static String getFileAttribute(Path path, String attributeKey) throws IOException {
         if (XATTR_EXEC) {
             String namespace = "user";
-            if (XATTR_NAMESPACE != null) {
-                namespace = XATTR_NAMESPACE;
-            }
             String key = namespace + "." + attributeKey;
             return XAttrCommandExecutor.get(path, key);
         }
