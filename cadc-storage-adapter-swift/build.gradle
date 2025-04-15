@@ -15,7 +15,7 @@ sourceCompatibility = 11
 
 group = 'org.opencadc'
 
-version = '0.8.8'
+version = '0.8.9'
 
 description = 'OpenCADC Storage Inventory SwiftStorageAdapter implementation'
 def git_url = 'https://github.com/opencadc/storage-inventory'
@@ -24,7 +24,7 @@ dependencies {
     implementation 'org.apache.commons:commons-pool2:[2.9,3.0)'
     implementation 'org.opencadc:cadc-util:[1.6,2.0)'
     implementation 'org.opencadc:cadc-inventory:[0.7,)'
-    implementation 'org.opencadc:cadc-storage-adapter:[0.11.2,)'
+    implementation 'org.opencadc:cadc-storage-adapter:[1.0.2,)'
 
     // swift API
     implementation 'org.opencadc:joss:[0.11.0,)'
