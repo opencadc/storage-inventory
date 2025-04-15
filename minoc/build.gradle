@@ -45,15 +45,10 @@ dependencies {
     testImplementation 'junit:junit:[4.0,)'
     testImplementation 'org.opencadc:cadc-storage-adapter-fs:[0.9.3,)'
 
-    intTestCompile 'org.opencadc:cadc-test-vosi:[1.0.11,)'
+    intTestImplementation 'org.opencadc:cadc-test-vosi:[1.0.11,)'
 
     runtimeOnly 'org.opencadc:cadc-access-control-identity:[1.2.1,2.0)'
     runtimeOnly 'org.opencadc:cadc-storage-adapter-fs:[0.9.3,)'
     runtimeOnly 'org.opencadc:cadc-storage-adapter-swift:[0.8.7,)'
 }
-
-configurations {
-  runtime.exclude group: 'org.slf4j', module: 'slf4j-reload4j'
-}
-
 

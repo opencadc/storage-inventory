@@ -334,18 +334,20 @@ public class FilesTest extends RavenTest {
         Assert.assertNull(put.getThrowable());
         Assert.assertEquals("Created", 201, put.getResponseCode());
         // at this point the artifact is created on remote but it is unknown to raven
-        final URL anonRavenURL = regClient.getServiceURL(RAVEN_SERVICE_ID, Standards.SI_FILES, AuthMethod.ANON);
+
+        URL ravenFiles = regClient.getServiceURL(RAVEN_SERVICE_ID, Standards.SI_FILES, AuthMethod.ANON);
+        URL globalArtifactURL = new URL(ravenFiles.toExternalForm() + "/" + artifactURI.toASCIIString());
         // anon request
-        Subject.doAs(anonSubject, new PrivilegedExceptionAction<Object>() {
+        Subject.doAs(anonSubject, new PrivilegedExceptionAction<>() {
             public Object run() throws Exception {
-                String au = artifactURI.toASCIIString();
-                URL anonArtifactURL = new URL(anonRavenURL.toString() + "/" + au);
-                HttpGet head = new HttpGet(anonArtifactURL, false);
+                log.info("anon HEAD " + globalArtifactURL);
+                HttpGet head = new HttpGet(globalArtifactURL, false);
                 head.setHeadOnly(true);
                 head.run();
                 checkHeadResult(head, artifactURI, content.length(), expectedChecksum, type, encoding);
 
-                HttpGet get = new HttpGet(anonArtifactURL, true);
+                log.info("anon GET " + globalArtifactURL);
+                HttpGet get = new HttpGet(globalArtifactURL, true);
                 get.run();
                 checkHeadResult(get, artifactURI, content.length(), expectedChecksum, type, encoding);
                 OutputStream out = new ByteArrayOutputStream();
@@ -360,17 +362,16 @@ public class FilesTest extends RavenTest {
             }
         });
         // repeat for auth request
-        final URL certRavenURL = regClient.getServiceURL(RAVEN_SERVICE_ID, Standards.SI_FILES, AuthMethod.CERT);
-        Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+        Subject.doAs(userSubject, new PrivilegedExceptionAction<>() {
             public Object run() throws Exception {
-                String au = artifactURI.toASCIIString();
-                URL certArtifactURL = new URL(certRavenURL.toString() + "/" + au);
-                HttpGet head = new HttpGet(certArtifactURL, false);
+                log.info("auth HEAD " + globalArtifactURL);
+                HttpGet head = new HttpGet(globalArtifactURL, false);
                 head.setHeadOnly(true);
                 head.run();
                 checkHeadResult(head, artifactURI, content.length(), expectedChecksum, type, encoding);
 
-                HttpGet get = new HttpGet(certArtifactURL, true);
+                log.info("auth GET " + globalArtifactURL);
+                HttpGet get = new HttpGet(globalArtifactURL, true);
                 get.run();
                 checkHeadResult(get, artifactURI, content.length(), expectedChecksum, type, encoding);
                 OutputStream out = new ByteArrayOutputStream();
@@ -396,14 +397,12 @@ public class FilesTest extends RavenTest {
         DeletedArtifactEvent dae = new DeletedArtifactEvent(artifactID);
         daeDAO.put(dae);
 
-        String au = artifactURI.toASCIIString();
-        URL anonArtifactURL = new URL(anonRavenURL.toString() + "/" + au);
-        HttpGet globalHead = new HttpGet(anonArtifactURL, false);
+        HttpGet globalHead = new HttpGet(globalArtifactURL, false);
         globalHead.setHeadOnly(true);
         globalHead.run();
         Assert.assertEquals("Not found expected", 404, globalHead.getResponseCode());
 
-        HttpGet globalGet = new HttpGet(anonArtifactURL, true);
+        HttpGet globalGet = new HttpGet(globalArtifactURL, true);
         globalGet.setHeadOnly(false);
         globalGet.run();
         Assert.assertEquals("Not found expected", 404, globalGet.getResponseCode());
