@@ -53,3 +53,12 @@ configurations {
 }
 
 
+
+configurations {
+  // this are provided by tomcat
+  runtimeOnly.exclude group: 'javax.servlet'
+  runtimeOnly.exclude group: 'org.postgresql'
+
+  // pulled by stil,unused, critical CVEs:
+  runtimeOnly.exclude group: 'org.yaml', module: 'snakeyaml'
+}

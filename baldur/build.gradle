@@ -41,3 +41,12 @@ dependencies {
 
     intTestImplementation 'org.opencadc:cadc-test-vosi:[1.0.11,)'
 }
+
+configurations {
+  // this are provided by tomcat
+  runtimeOnly.exclude group: 'javax.servlet'
+  runtimeOnly.exclude group: 'org.postgresql'
+
+  // pulled by stil,unused, critical CVEs:
+  runtimeOnly.exclude group: 'org.yaml', module: 'snakeyaml'
+}
