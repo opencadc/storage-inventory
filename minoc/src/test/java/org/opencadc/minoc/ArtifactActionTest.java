@@ -67,12 +67,8 @@
 
 package org.opencadc.minoc;
 
-import ca.nrc.cadc.rest.SyncInput;
 import ca.nrc.cadc.util.Log4jInit;
-
-import java.io.IOException;
 import java.net.URI;
-
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -86,64 +82,36 @@ public class ArtifactActionTest {
         Log4jInit.setLevel("org.opencadc.minoc", Level.INFO);
     }
     
-    class TestSyncInput extends SyncInput {
-
-        private String path;
-        
-        public TestSyncInput(String path) throws IOException {
-            super(null, null);
-            this.path = path;
-        }
-        
-        public String getPath() {
-            return path;
-        }
-
-        public String getComponentPath() {
-            return "";
-        }
-    }
-    
-    class TestArtifactAction extends ArtifactAction {
-        
-        public TestArtifactAction(String path) {
-            super(false);
-            try {
-                super.syncInput = new TestSyncInput(path);
-            } catch (Throwable t) {
-                throw new RuntimeException(t);
-            }
-        }
-
-        @Override
-        public void doAction() throws Exception {
-        }
-
-    }
-    
     private void assertCorrectPath(String path, String expURI, String expToken) {
         assertCorrectPath(path, expURI, expToken, null);
     }
     
     private void assertCorrectPath(String path, String expURI, String expToken, String expFilenameOverride) {
-        ArtifactAction action = new TestArtifactAction(path);
-        if (expFilenameOverride != null) {
-            action.extractFilenameOverride = true;
-        }
-        action.parsePath();
-        log.info(path + " -> " + action.artifactURI + " - " + action.authToken + " - " + action.filenameOverride);
-        Assert.assertEquals("artifactURI", URI.create(expURI), action.artifactURI);
-        Assert.assertEquals("authToken", expToken, action.authToken);
-        Assert.assertEquals("filenameOverride", expFilenameOverride, action.filenameOverride);
-        if (action.artifactURI == null) {
+        boolean extractFileNameOverride = (expFilenameOverride != null);
+        ArtifactAction.ParsedPath pp = ArtifactAction.parsePath(path, extractFileNameOverride);
+        log.info(path + " -> " + pp.artifactURI + " - " + pp.authToken + " - " + pp.filenameOverride);
+        Assert.assertEquals("artifactURI", URI.create(expURI), pp.artifactURI);
+        Assert.assertEquals("authToken", expToken, pp.authToken);
+        Assert.assertEquals("filenameOverride", expFilenameOverride, pp.filenameOverride);
+        if (pp.artifactURI == null) {
             Assert.fail("Failed to parse legal path: " + path);
         }
     }
     
-    private void assertIllegalPath(String path) {
-        ArtifactAction action = new TestArtifactAction(path);
-        action.parsePath();
-        Assert.assertNull(action.artifactURI);
+    private void assertIllegalPath(String path, boolean expectException) {
+        log.info("assertIllegalPath: " + path);
+        if (expectException) {
+            try {
+                ArtifactAction.ParsedPath pp = ArtifactAction.parsePath(path, false);
+                Assert.fail("expected IllegalArgumentException, got: " + pp);
+            } catch (IllegalArgumentException expected) {
+                log.info("caught expected: " + expected);
+            }
+        } else {
+            ArtifactAction.ParsedPath action = ArtifactAction.parsePath(path, false);
+            Assert.assertNotNull(action);
+            Assert.assertNull(action.artifactURI);
+        }
     }
     
     @Test
@@ -161,18 +129,16 @@ public class ArtifactActionTest {
             assertCorrectPath("cadc:vault/uuid:fo/something.fits", "cadc:vault/uuid", null, "something.fits");
             assertCorrectPath("token/cadc:vault/uuid:fo/something.fits", "cadc:vault/uuid", "token", "something.fits");
             
-            assertIllegalPath(null);
-            assertIllegalPath("");
-            assertIllegalPath("noschemeinuri");
-            assertIllegalPath("token/noschemeinuri");
-            assertIllegalPath("cadc:path#fragment");
-            assertIllegalPath("cadc:path?query");
-            assertIllegalPath("cadc:path#fragment?query");
-            assertIllegalPath("cadc://host/path");
-            assertIllegalPath("cadc://host:port/path");
-            assertIllegalPath("artifacts/token1/token2/cadc:FOO/bar"); // sketchy scheme
-            //assertIllegalPath("cadc:ccda:FOO/bar"); // sketchy extra colons
-            //assertIllegalPath("cadc:vault/uuid:something.fits"); // colon in filename
+            assertIllegalPath(null, false);
+            assertIllegalPath("", false);
+            assertIllegalPath("noschemeinuri", false);
+            assertIllegalPath("token/noschemeinuri", false);
+            assertIllegalPath("cadc:path#fragment", true);
+            assertIllegalPath("cadc:path?query", true);
+            assertIllegalPath("cadc:path#fragment?query", true);
+            assertIllegalPath("cadc://host/path", true);
+            assertIllegalPath("cadc://host:port/path", true);
+            assertIllegalPath("artifacts/token1/token2/cadc:FOO/bar", true); // sketchy scheme
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);

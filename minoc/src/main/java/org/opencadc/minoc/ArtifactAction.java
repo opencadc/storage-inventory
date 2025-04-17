@@ -77,6 +77,7 @@ import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.rest.SyncInput;
 import ca.nrc.cadc.rest.Version;
+import ca.nrc.cadc.util.StringUtil;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -184,7 +185,12 @@ public abstract class ArtifactAction extends RestAction {
     public void setSyncInput(SyncInput syncInput) {
         super.setSyncInput(syncInput);
         this.loggablePath = syncInput.getContextPath() + syncInput.getComponentPath();
-        parsePath();
+        ParsedPath pp = parsePath(syncInput.getPath(), extractFilenameOverride);
+        if (pp != null) {
+            this.artifactURI = pp.artifactURI;
+            this.authToken = pp.authToken;
+            this.filenameOverride = pp.filenameOverride;
+        }
         if (this.artifactURI != null && this.logInfo != null) {
             this.logInfo.setPath(this.loggablePath + "/" + this.artifactURI.toASCIIString());
         }
@@ -287,40 +293,45 @@ public abstract class ArtifactAction extends RestAction {
             this.storageAdapter = config.getStorageAdapter();
         }
     }
-    
-    /**
-     * Parse the request path.
-     */
-    void parsePath() {
-        String path = this.syncInput.getPath();
+
+    // path contains: preauth token, Artifact.uri, filename-override
+    static class ParsedPath {
+        URI artifactURI;
+        String authToken;
+        String filenameOverride;
+    }
+
+    static ParsedPath parsePath(String path, boolean extractFNO) {
         log.debug("path: " + path);
+        ParsedPath ret = new ParsedPath();
         if (path != null) {
+            
             int colon1 = path.indexOf(":");
             int slash1 = path.indexOf("/");
             if (colon1 != -1) {
                 if (slash1 >= 0 && slash1 < colon1) {
                     // auth token in front
-                    this.authToken = path.substring(0, slash1);
+                    ret.authToken = path.substring(0, slash1);
                     path = path.substring(slash1 + 1);
                 }
+                int foi = path.indexOf(":fo/");
+                if (foi > 0 && extractFNO) {
+                    // filename override appended
+                    ret.filenameOverride = path.substring(foi + 4);
+                    path = path.substring(0, foi);
+                } else if (foi > 0) {
+                    throw new IllegalArgumentException("detected misuse of :fo/ filename override");
+                }
                 try {
-                    int foi = path.indexOf(":fo/");
-                    if (foi > 0 && extractFilenameOverride) {
-                        // filename override appended
-                        this.filenameOverride = path.substring(foi + 4);
-                        path = path.substring(0, foi);
-                    } else if (foi > 0) {
-                        throw new IllegalArgumentException("detected misuse of :fo/ filename override");
-                    }
                     URI auri = new URI(path);
                     InventoryUtil.validateArtifactURI(ArtifactAction.class, auri);
-                    this.artifactURI = auri;
-                } catch (URISyntaxException | IllegalArgumentException e) {
-                    this.errMsg = "illegal artifact URI: " + path + " reason: " + e.getMessage();
-                    log.debug(errMsg, e);
+                    ret.artifactURI = auri;
+                } catch (URISyntaxException ex) {
+                    throw new IllegalArgumentException("invalid Artifact.uri in path: " + path, ex);
                 }
             }
         }
+        return ret;
     }
     
     Artifact getArtifact(URI artifactURI) throws ResourceNotFoundException {
