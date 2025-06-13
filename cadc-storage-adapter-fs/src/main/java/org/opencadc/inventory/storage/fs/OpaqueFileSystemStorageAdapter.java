@@ -990,7 +990,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         String key = attributeKey;
         if (attributeValue != null) {
             attributeValue = attributeValue.trim();
-            log.warn("attribute write: " + key + " = " + attributeValue);
+            log.debug("attribute write: " + key + " = " + attributeValue);
             ByteBuffer buf = ByteBuffer.wrap(attributeValue.getBytes(Charset.forName("UTF-8")));
             udv.write(key, buf);
         } else {
