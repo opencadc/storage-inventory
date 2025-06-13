@@ -86,24 +86,6 @@ public class GetActionTest {
         Log4jInit.setLevel("org.opencadc.minoc", Level.INFO);
     }
     
-    class TestSyncInput extends SyncInput {
-
-        private String path;
-        
-        public TestSyncInput(String path) throws IOException {
-            super(null, null);
-            this.path = path;
-        }
-        
-        public String getPath() {
-            return path;
-        }
-
-        public String getComponentPath() {
-            return "";
-        }
-    }
-
     private void assertIgnoredRange(String range, long contentLength) throws RangeNotSatisfiableException {
         GetAction action = new GetAction(false);
         Assert.assertEquals(0, action.parseRange(null, contentLength).size());
