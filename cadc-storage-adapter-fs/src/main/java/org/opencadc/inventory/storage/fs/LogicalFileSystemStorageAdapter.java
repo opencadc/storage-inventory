@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2022.                            (c) 2022.
+ *  (c) 2025.                            (c) 2025.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -114,33 +114,28 @@ import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
 
 /**
- * An implementation of the storage adapter interface on a file system.
+ * An implementation of the storage adapter interface on a file system. This implementation
+ * organises files on disk using the scheme-specific part of the Artifact.uri as the relative
+ * path.
  * 
- * @author majorb
+ * @author pdowler
  */
-public class FileSystemStorageAdapter implements StorageAdapter {
+public class LogicalFileSystemStorageAdapter extends AbstractStorageAdapter implements StorageAdapter {
     
-    private static final Logger log = Logger.getLogger(FileSystemStorageAdapter.class);
+    private static final Logger log = Logger.getLogger(LogicalFileSystemStorageAdapter.class);
     
     public static final String CONFIG_FILE = "cadc-storage-adapter-fs.properties";
-    public static final String CONFIG_PROPERTY_ROOT = "root";
-    public static final String CONFIG_PROPERTY_BUCKETMODE = "bucketMode";
-    public static final String CONFIG_PROPERTY_BUCKETDEPTH = "bucketLength";
-    private static final String TXN_FOLDER = "transaction";
+    public static final String CONFIG_PROPERTY_ROOT = OpaqueFileSystemStorageAdapter.class.getPackage().getName() + ".baseDir";
+    
     static final String CHECKSUM_ATTRIBUTE_NAME = "contentChecksum";
     static final String CONTENT_FOLDER = "content";
+    private static final String TXN_FOLDER = "transaction";
 
     static final String MD5_CHECKSUM_SCHEME = "md5";
     
     private final FileSystem fs;
-    final Path txnPath;
-    final Path contentPath;
     
-    /**
-     * Construct a FileSystemStorageAdapter with the config stored in the
-     * well-known properties file with well-known properties.
-     */
-    public FileSystemStorageAdapter() {
+    public LogicalFileSystemStorageAdapter() {
         PropertiesReader pr = new PropertiesReader(CONFIG_FILE);
         MultiValuedProperties mvp = pr.getAllProperties();
         String rootVal = null;
@@ -153,18 +148,18 @@ public class FileSystemStorageAdapter implements StorageAdapter {
                 + " from " + CONFIG_FILE);
         }
         
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "rootDirectory", rootVal);
+        InventoryUtil.assertNotNull(LogicalFileSystemStorageAdapter.class, "rootDirectory", rootVal);
         this.fs = FileSystems.getDefault();
 
         Path root = this.fs.getPath(rootVal);
-        this.contentPath = root.resolve(CONTENT_FOLDER);
-        this.txnPath = root.resolve(TXN_FOLDER);
+        super.contentPath = root.resolve(CONTENT_FOLDER);
+        super.txnPath = root.resolve(TXN_FOLDER);
 
         init(root);
     }
 
-    public FileSystemStorageAdapter(File rootDirectory) {
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "rootDirectory", rootDirectory);
+    public LogicalFileSystemStorageAdapter(File rootDirectory) {
+        InventoryUtil.assertNotNull(LogicalFileSystemStorageAdapter.class, "rootDirectory", rootDirectory);
         this.fs = FileSystems.getDefault();
 
         Path root = fs.getPath(rootDirectory.getAbsolutePath());
@@ -216,256 +211,15 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     }
 
     @Override
-    public List<Namespace> getRecoverableNamespaces() {
-        throw new UnsupportedOperationException();
-    }
-    
-    @Override
     public void setPurgeNamespaces(List<Namespace> purged) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public List<Namespace> getPurgeNamespaces() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
     public BucketType getBucketType() {
-        throw new UnsupportedOperationException();
-        //return BucketType.PATH;
+        return BucketType.NONE; // path in storageID
     }
     
-    @Override
-    public void get(StorageLocation storageLocation, OutputStream dest)
-        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation", storageLocation);
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "dest", dest);
-        log.debug("get: " + storageLocation);
-
-        Path path = createStorageLocationPath(storageLocation);
-        if (!Files.exists(path)) {
-            throw new ResourceNotFoundException("not found: " + storageLocation.getStorageID());
-        }
-        if (!Files.isRegularFile(path)) {
-            throw new IllegalArgumentException("not found: " + storageLocation.getStorageID());
-        }
-        InputStream source = null;
-        try {
-            source = Files.newInputStream(path, StandardOpenOption.READ);
-        } catch (IOException e) {
-            throw new StorageEngageException("failed to create input stream to file system", e);
-        }
-
-        MultiBufferIO io = new MultiBufferIO();
-        try {
-            io.copy(source, dest);
-        } catch (InterruptedException ex) {
-            log.debug("get interrupted", ex);
-        }
-    }
-
-    @Override
-    public void get(StorageLocation storageLocation, OutputStream dest, ByteRange byteRange) 
-        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation", storageLocation);
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "dest", dest);
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "byteRange", byteRange);
-        log.debug("get: " + storageLocation + " " + byteRange);
-
-        Path path = createStorageLocationPath(storageLocation);
-        if (!Files.exists(path)) {
-            throw new ResourceNotFoundException("not found: " + storageLocation.getStorageID());
-        }
-        if (!Files.isRegularFile(path)) {
-            throw new IllegalArgumentException("not found: " + storageLocation.getStorageID());
-        }
-        InputStream source = null;
-        try {
-            if (byteRange != null) {
-                RandomAccessFile raf = new RandomAccessFile(path.toFile(), "r");
-                SortedSet<ByteRange> brs = new TreeSet<>();
-                brs.add(byteRange);
-                source = new PartialReadInputStream(raf, brs);
-            } else {
-                source = Files.newInputStream(path, StandardOpenOption.READ);
-            }
-        } catch (IOException e) {
-            throw new StorageEngageException("failed to create input stream for stored file: " + storageLocation, e);
-        }
-        
-        MultiBufferIO io = new MultiBufferIO();
-        try {
-            io.copy(source, dest);
-        } catch (InterruptedException ex) {
-            log.debug("get interrupted", ex);
-        }
-    }
-    
-    @Override
-    public StorageMetadata put(NewArtifact newArtifact, InputStream source, String transactionID)
-        throws IncorrectContentChecksumException, IncorrectContentLengthException, ReadException, WriteException,
-            StorageEngageException, TransientException {
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "artifact", newArtifact);
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "source", source);
-
-        if (transactionID != null) {
-            throw new UnsupportedOperationException("put with transaction");
-        }
-        
-        Path txnTarget = null;
-        Path contentTarget = null;
-        StorageLocation storageLocation = null;
-        URI artifactURI = newArtifact.getArtifactURI();
-        log.debug("put: artifactURI: " + artifactURI.toString());
-        
-        try {
-            // Make storage location using artifactURI
-            storageLocation = this.createStorageLocation(artifactURI);
-
-            // add UUID to txnPath to make it unique
-            txnTarget = txnPath.resolve(UUID.randomUUID().toString());
-            log.debug("resolved txnTarget file: " + txnTarget + " based on " + txnPath);
-
-            if (Files.exists(txnTarget)) {
-                // This is an error as the name in the transaction directory should be unique
-                log.debug("file/directory exists");
-                throw new IllegalArgumentException(txnPath + " already exists.");
-            }
-        } catch (InvalidPathException e) {
-            throw new IllegalArgumentException("Illegal path: " + txnPath, e);
-        }
-
-        Throwable throwable = null;
-        URI checksum = null;
-        Long length = null;
-        
-        try {
-            OutputStream out = Files.newOutputStream(txnTarget, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW);
-            MessageDigest digest = MessageDigest.getInstance("MD5");
-            DigestOutputStream digestOut = new DigestOutputStream(out, digest);
-            MultiBufferIO io = new MultiBufferIO();
-            io.copy(source, digestOut);
-            digestOut.flush();
-
-            byte[] md5sum = digest.digest();
-            String md5Val = HexUtil.toHex(md5sum);
-            checksum = URI.create(MD5_CHECKSUM_SCHEME + ":" + md5Val);
-            log.debug("calculated md5sum: " + checksum);
-            length = Files.size(txnTarget);
-            log.debug("calculated file size: " + length);
-            
-            boolean checksumProvided = newArtifact.contentChecksum != null && newArtifact.contentChecksum.getScheme().equals(MD5_CHECKSUM_SCHEME);
-            // checksum comparison
-            if (checksumProvided) {
-                String expectedMD5 = newArtifact.contentChecksum.getSchemeSpecificPart();
-                String actualMD5 = checksum.getSchemeSpecificPart();
-                if (!expectedMD5.equals(actualMD5)) {
-                    throw new IncorrectContentChecksumException(
-                        "expected md5 checksum [" + expectedMD5 + "] "
-                        + "but calculated [" + actualMD5 + "]");
-                }
-            } else {
-                log.debug("Uncomparable or no contentChecksum provided.");
-            }
-            
-            // content length comparison
-            if (newArtifact.contentLength != null) {
-                Long expectedLength = newArtifact.contentLength;
-                if (!expectedLength.equals(length)) {
-                    if (checksumProvided) {
-                        // likely bug in the client, throw a 400 instead
-                        throw new IllegalArgumentException("correct md5 checksum ["
-                            + newArtifact.contentChecksum + "] but incorrect length ["
-                            + expectedLength + "]");
-                    }
-                    throw new IncorrectContentLengthException(
-                        "expected contentLength [" + expectedLength + "] "
-                        + "but calculated [" + length + "]");
-                }
-            } else {
-                log.debug("No contentLength provided.");
-            }
-
-            // TODO: move such methods to utility class
-            OpaqueFileSystemStorageAdapter.setFileAttribute(txnTarget, CHECKSUM_ATTRIBUTE_NAME, checksum.toString());
-
-            try {
-                contentTarget = this.createStorageLocationPath(storageLocation);
-
-                if (Files.exists(contentTarget)) {
-                    // is an overwrite
-                    log.debug("file/directory exists");
-                    if (!Files.isRegularFile(contentTarget)) {
-                        throw new IllegalArgumentException(contentTarget + " is not a file.");
-                    }
-                } else if (!Files.exists(contentTarget.getParent())) {
-                    // is a new file
-                    Files.createDirectories(contentTarget.getParent());
-                }
-
-            } catch (InvalidPathException e) {
-                throw new IllegalArgumentException("Illegal path: " + contentTarget, e);
-            } catch (IOException e) {
-                throw new IllegalStateException("Failed to create content file: " + contentTarget, e);
-            }
-
-            // create this before committing the file so constraints applied
-            StorageMetadata test = new StorageMetadata(storageLocation, artifactURI, checksum, length, new Date());
-                
-            // to atomic copy into content directory
-            Path result = Files.move(txnTarget, contentTarget, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            log.debug("moved file to : " + contentTarget);
-            txnTarget = null;
-
-            StorageMetadata metadata = new StorageMetadata(storageLocation, artifactURI, 
-                    checksum, length, new Date(Files.getLastModifiedTime(result).toMillis()));
-            return metadata;
-            
-        } catch (ReadException | WriteException | IllegalArgumentException
-            | IncorrectContentChecksumException | IncorrectContentLengthException e) {
-            // pass through
-            throw e;
-        } catch (Throwable t) {
-            throwable = t;
-            log.error("put error", t);
-            if (throwable instanceof IOException) {
-                throw new StorageEngageException("put error", throwable);
-            }
-            // TODO: identify throwables that are transient
-            throw new IllegalStateException("Unexpected error", throwable);
-        } finally {
-            // if the txnPath file still exists, then something went wrong.
-            // Attempt to clear up the transaction file.
-            // Otherwise put succeeded.
-            if (txnTarget != null) {
-                try {
-                    log.debug("Deleting transaction file.");
-                    Files.delete(txnTarget);
-                } catch (IOException e) {
-                    log.error("Failed to delete transaction file", e);
-                }
-            }
-        }
-    }
-        
-    @Override
-    public void delete(StorageLocation storageLocation)
-        throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
-        delete(storageLocation, false);
-    }
-    
-    @Override
-    public void delete(StorageLocation storageLocation, boolean includeRecoverable)
-        throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation", storageLocation);
-        Path path = createStorageLocationPath(storageLocation);
-        if (!Files.exists(path)) {
-            throw new ResourceNotFoundException("not found: " + storageLocation);
-        }
-        Files.delete(path);
-    }
-
     @Override
     public void recover(StorageLocation storageLocation, Date contentLastModified) 
         throws ResourceNotFoundException, IOException, InterruptedException, StorageEngageException, TransientException {
@@ -473,58 +227,58 @@ public class FileSystemStorageAdapter implements StorageAdapter {
     }
 
     @Override
-    public PutTransaction startTransaction(URI uri, Long contentLength) 
-        throws StorageEngageException, TransientException {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public PutTransaction revertTransaction(String transactionID) 
-        throws IllegalArgumentException, StorageEngageException, TransientException, UnsupportedOperationException {
-        throw new UnsupportedOperationException();
-    }
-    
-    @Override
-    public StorageMetadata commitTransaction(String string) 
-        throws IllegalArgumentException, StorageEngageException, TransientException {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public void abortTransaction(String string) 
-        throws IllegalArgumentException, StorageEngageException, TransientException {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public PutTransaction getTransactionStatus(String string) 
-        throws IllegalArgumentException, StorageEngageException, TransientException {
-        throw new UnsupportedOperationException();
-    }
-    
-    @Override
     public Iterator<StorageMetadata> iterator()
         throws StorageEngageException, TransientException {
-        throw new UnsupportedOperationException("sorted iteration not supported");
+        return iterator(null, false);
     }
     
     @Override
     public Iterator<StorageMetadata> iterator(String storageBucket)
         throws StorageEngageException, TransientException {
-        throw new UnsupportedOperationException("sorted iteration not supported");
+        return iterator(storageBucket, false);
     }
 
     @Override
     public Iterator<StorageMetadata> iterator(String storageBucketPrefix, boolean includeRecoverable) throws StorageEngageException, TransientException {
-        throw new UnsupportedOperationException();
+        return new LogicalIterator(contentPath, storageBucketPrefix);
     }
 
     @Override
-    public Iterator<PutTransaction> transactionIterator() throws StorageEngageException, TransientException {
-        throw new UnsupportedOperationException();
+    protected StorageMetadata createStorageMetadata(Path base, Path p, boolean includeRecoverable) {
+        if (txnPath.equals(base)) {
+            log.warn("in-txn: re-use OpaqueFileSystemStorageAdapter.createStorageMetadataImpl");
+            return OpaqueFileSystemStorageAdapter.createStorageMetadataImpl(base, p, includeRecoverable);
+        }
+        // content
+        return createStorageMetadataImpl(base, p, includeRecoverable);
     }
     
-    private StorageLocation createStorageLocation(URI artifactURI) {
+    // content
+    static StorageMetadata createStorageMetadataImpl(Path base, Path p, boolean includeRecoverable) {
+        Path rel = base.relativize(p);
+        log.warn("base: " + base + " path: " + p + " rel: " + rel);
+        
+        URI artifactID = URI.create(rel.toString());
+        
+        StorageLocation storageLocation = createStorageLocationImpl(artifactID);
+        try {
+            URI checksum = new URI(AbstractStorageAdapter.getFileAttribute(p, LogicalFileSystemStorageAdapter.CHECKSUM_ATTRIBUTE_NAME));
+            long length = Files.size(p);
+            StorageMetadata meta = new StorageMetadata(storageLocation, artifactID, 
+                    checksum, length, new Date(Files.getLastModifiedTime(p).toMillis()));
+            return meta;
+        } catch (Exception ex) {
+            throw new RuntimeException("failed to recreate StorageMetadata: " + rel, ex);
+        }
+    }
+    
+    @Override
+    protected StorageLocation createStorageLocation(URI artifactURI, Path txnTarget) {
+        // ignore txn
+        return createStorageLocationImpl(artifactURI);
+    }
+        
+    private static StorageLocation createStorageLocationImpl(URI artifactURI) {
         URI storageID = artifactURI;
         String storageBucket = null;
         
@@ -538,7 +292,8 @@ public class FileSystemStorageAdapter implements StorageAdapter {
         return loc;
     }
     
-    private Path createStorageLocationPath(StorageLocation storageLocation) {
+    @Override
+    protected Path storageLocationToPath(StorageLocation storageLocation) {
         URI storageID = storageLocation.getStorageID();
         StringBuilder path = new StringBuilder();
 

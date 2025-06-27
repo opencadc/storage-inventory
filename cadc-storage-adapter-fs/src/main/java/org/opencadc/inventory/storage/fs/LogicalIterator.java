@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2025.                            (c) 2025.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -79,12 +79,14 @@ import java.nio.file.attribute.UserDefinedFileAttributeView;
 import java.util.Date;
 import java.util.EmptyStackException;
 import java.util.Iterator;
+import java.util.NoSuchElementException;
 import java.util.Stack;
 import java.util.stream.Stream;
 
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
 
 /**
@@ -92,93 +94,50 @@ import org.opencadc.inventory.storage.StorageMetadata;
  * 
  * @author majorb
  */
-public class FileSystemIterator implements Iterator<StorageMetadata> {
+class LogicalIterator implements Iterator<StorageMetadata> {
     
-    private static final Logger log = Logger.getLogger(FileSystemIterator.class);
+    private static final Logger log = Logger.getLogger(LogicalIterator.class);
     
-    private PathItem next = null;
+    private final Path base;
+    private Path nextFile = null;
     Stack<StackItem> stack;
-    private String fixedParentDir;
 
     /**
      * FileSystemIterator constructor.
      * 
-     * @param dir The directory to iterate
-     * @param ignoreDepth The depth of directories to navigate until non-bucket
-     *     directories are seen.
-     * @param fixedParentDir A path to add to the start of all returned files.
+     * @param base The base path to content
      * @throws IOException If there is a problem with file-system interaction.
      */
-    public FileSystemIterator(Path dir, int ignoreDepth, String fixedParentDir) throws IOException {
-        InventoryUtil.assertNotNull(FileSystemIterator.class, "dir", dir);
-        if (!Files.isDirectory(dir)) {
-            throw new IllegalArgumentException("not a directory: " + dir);
+    public LogicalIterator(Path base, String storageBucketPrefix) {
+        InventoryUtil.assertNotNull(LogicalIterator.class, "dir", base);
+        if (!Files.isDirectory(base)) {
+            throw new IllegalArgumentException("not a directory: " + base);
         }
-        stack = new Stack<StackItem>();
-        this.fixedParentDir = fixedParentDir;
+        this.base = base;
         
-        StackItem item = new StackItem();
-        item.stream = Files.list(dir);;
-        item.iterator = item.stream.iterator();
-        // base parentDir for the Iterator is CONTENT_FOLDER
-        item.parentDir = FileSystemStorageAdapter.CONTENT_FOLDER;
-        item.ignoreDepth = ignoreDepth;
-        
-        log.debug("bucket depth: " + item.ignoreDepth);
-        log.debug("parentDir: " + item.parentDir);
-        log.debug("entering directory [physical][logical]: [" + dir + "][]");
-        
-        stack.push(item);
+        try {
+            this.stack = new Stack<>();
+            Path p = base;
+            if (storageBucketPrefix != null) {
+                p = base.resolve(storageBucketPrefix);
+            }
+            if (p != null && Files.isDirectory(p)) {
+                log.debug("entering directory: " + p);
+                StackItem item = new StackItem(Files.list(p));
+                stack.push(item);
+                advance();
+            } else {
+                this.nextFile = null;
+            }
+        } catch (IOException ex) {
+            throw new StorageEngageException("failed to read filesystem: " + ex.getMessage(), ex);
+        }
     }
     
-    /**
-     * Used to see if there are more elements in the iterator.
-     * @return true if there are more files over which to iterate.
-     */
     @Override
     public boolean hasNext() {
-        try {
-            StackItem currentStackItem = stack.peek();
-            Iterator<Path> currentIterator = currentStackItem.iterator;
-            if (currentIterator.hasNext()) {
-                Path nextPath = currentIterator.next();
-                if (Files.isDirectory(nextPath)) {
-                    StackItem item = new StackItem();
-                    log.debug("bucket depth: " + currentStackItem.ignoreDepth);
-                    log.debug("parentDir: " + currentStackItem.parentDir);
-                    if (currentStackItem.ignoreDepth > 0) {
-                        item.ignoreDepth = currentStackItem.ignoreDepth - 1;
-                        item.parentDir = currentStackItem.parentDir;
-                    } else {
-                        String parentDir = currentStackItem.parentDir + nextPath.getFileName() + "/";
-                        item.parentDir = parentDir;
-                    }
-                    log.debug("entering directory [physical][logical]: [" + nextPath + "][" + item.parentDir + "]");
-                    item.stream = Files.list(nextPath);;
-                    item.iterator = item.stream.iterator();
-                    stack.push(item);
-                    return this.hasNext();
-                } else {
-                    next = new PathItem();
-                    next.pathAndFileName = currentStackItem.parentDir + nextPath.getFileName();
-                    if (fixedParentDir != null) {
-                        next.pathAndFileName = fixedParentDir + File.separator + next.pathAndFileName;
-                    }
-                    next.path = nextPath;
-                    return true;
-                }
-            } else {
-                log.debug("completed directory listing");
-                StackItem item = stack.pop();
-                item.stream.close();
-                return this.hasNext();
-            }
-        } catch (EmptyStackException e) {
-            log.debug("no more iterators, done");
-            return false;
-        } catch (IOException e) {
-            throw new IllegalStateException("io exception: " + e.getMessage(), e);
-        }
+        return (nextFile != null);
+        
     }
 
     /**
@@ -187,44 +146,56 @@ public class FileSystemIterator implements Iterator<StorageMetadata> {
      */
     @Override
     public StorageMetadata next() {
-        if (next == null) {
-            throw new IllegalStateException("No more elements");
+        if (nextFile == null) {
+            throw new NoSuchElementException();
         }
-        URI storageID = URI.create(next.pathAndFileName);
-        StorageLocation storageLocation = new StorageLocation(storageID);
-        // TODO: restore bucket consistent with put() return value
-        //storageLocation.storageBucket = ??; 
+        Path rpath = nextFile;
         try {
-            URI checksum = new URI(getFileAttribute(next.path, FileSystemStorageAdapter.CHECKSUM_ATTRIBUTE_NAME));
-            long length = Files.size(next.path);
-            StorageMetadata meta = new StorageMetadata(storageLocation, storageID, 
-                    checksum, length, new Date(Files.getLastModifiedTime(next.path).toMillis()));
-            return meta;
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to compute file metadata: " + e.getMessage(), e);
+            advance();
+        } catch (IOException ex) {
+            throw new StorageEngageException("failed to read filesystem: " + ex.getMessage(), ex);
         }
+        return LogicalFileSystemStorageAdapter.createStorageMetadataImpl(base, rpath, false);
     }
     
+    private void advance() throws IOException {
+        this.nextFile = null;
+        
+        while (nextFile == null) {
+            if (stack.empty()) {
+                return;
+            }
+            StackItem currentStackItem = stack.peek();
+            Iterator<Path> currentIterator = currentStackItem.iterator;
+            if (currentIterator.hasNext()) {
+                Path nextPath = currentIterator.next();
+                if (Files.isDirectory(nextPath)) {
+                    log.debug("entering directory: " + nextPath);
+                    StackItem item = new StackItem(Files.list(nextPath));
+                    stack.push(item);
+                } else {
+                    this.nextFile = nextPath;
+                }
+            } else {
+                log.debug("completed directory listing");
+                StackItem item = stack.pop();
+                item.stream.close();
+            }
+        }
+    }
+
     private class StackItem {
         Stream<Path> stream;
         Iterator<Path> iterator;
-        String parentDir;
-        int ignoreDepth;
+
+        StackItem(Stream<Path> stream) {
+            this.stream  = stream;
+            this.iterator = stream.sorted().iterator();
+        }
     }
     
-    private class PathItem {
-        Path path;
-        String pathAndFileName;
-    }
-
-    private static String getFileAttribute(Path path, String attributeName) throws IOException {
-        UserDefinedFileAttributeView udv = Files.getFileAttributeView(path,
-            UserDefinedFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
-
-        int sz = udv.size(attributeName);
-        ByteBuffer buf = ByteBuffer.allocate(2 * sz);
-        udv.read(attributeName, buf);
-        return new String(buf.array(), Charset.forName("UTF-8")).trim();
-    }
-
+    //private class PathItem {
+    //    Path path;
+    //    String pathAndFileName;
+    //}
 }
