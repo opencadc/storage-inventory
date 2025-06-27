@@ -144,23 +144,11 @@ public class OpaqueFileSystemStorageAdapter extends AbstractStorageAdapter imple
     public static final String CONFIG_XATTR_EXEC =  OpaqueFileSystemStorageAdapter.class.getName() + ".xattrAlwaysExec";
     public static final int MAX_BUCKET_LENGTH = 7;
             
-    
-    
     private static final String TXN_FOLDER = "transaction";
     private static final String CONTENT_FOLDER = "content";
-
-    
-    private static final int CIRC_BUFFERS = 3;
-    private static final int CIRC_BUFFERSIZE = 64 * 1024;
-
-    private static final String DELETED_PRESERVED = "deleted-preserved";
-    
     static boolean XATTR_EXEC;
     
     private final int bucketLength;
-    
-    private final List<Namespace> recoverableNamespaces = new ArrayList<>();
-    private final List<Namespace> purgeNamespaces = new ArrayList<>();
 
     public OpaqueFileSystemStorageAdapter() throws InvalidConfigException {
         PropertiesReader pr = new PropertiesReader(CONFIG_FILE);
@@ -207,7 +195,7 @@ public class OpaqueFileSystemStorageAdapter extends AbstractStorageAdapter imple
     public OpaqueFileSystemStorageAdapter(File rootDirectory, int bucketLen) 
             throws InvalidConfigException {
 
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "rootDirectory", rootDirectory);
+        InventoryUtil.assertNotNull(LogicalFileSystemStorageAdapter.class, "rootDirectory", rootDirectory);
 
         if (bucketLen < 0 || bucketLen > MAX_BUCKET_LENGTH) {
             throw new InvalidConfigException(CONFIG_PROPERTY_BUCKET_LENGTH + " must be in [1," + MAX_BUCKET_LENGTH + "], found " + bucketLen);
@@ -255,28 +243,6 @@ public class OpaqueFileSystemStorageAdapter extends AbstractStorageAdapter imple
             throw new InvalidConfigException(("Could not create content or transaction directory"), io);
         }
     }
-
-    @Override
-    public void setRecoverableNamespaces(List<Namespace> recoverable) {
-        this.recoverableNamespaces.clear();
-        this.recoverableNamespaces.addAll(recoverable);
-    }
-
-    @Override
-    public List<Namespace> getRecoverableNamespaces() {
-        return recoverableNamespaces;
-    }
-
-    @Override
-    public void setPurgeNamespaces(List<Namespace> purge) {
-        this.purgeNamespaces.clear();
-        this.purgeNamespaces.addAll(purge);
-    }
-
-    @Override
-    public List<Namespace> getPurgeNamespaces() {
-        return purgeNamespaces;
-    }
     
     @Override
     public BucketType getBucketType() {
@@ -284,368 +250,9 @@ public class OpaqueFileSystemStorageAdapter extends AbstractStorageAdapter imple
     }
     
     @Override
-    public void get(StorageLocation storageLocation, OutputStream dest)
-        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
-        InventoryUtil.assertNotNull(OpaqueFileSystemStorageAdapter.class, "storageLocation", storageLocation);
-        InventoryUtil.assertNotNull(OpaqueFileSystemStorageAdapter.class, "dest", dest);
-        log.debug("get: " + storageLocation);
-
-        Path path = storageLocationToPath(storageLocation);
-        if (!Files.exists(path)) {
-            throw new ResourceNotFoundException("not found: " + storageLocation);
-        }
-        try {
-            String delAttr = getFileAttribute(path, DELETED_PRESERVED);
-            if ("true".equals(delAttr)) {
-                log.debug("skip " + DELETED_PRESERVED + ": " + storageLocation);
-                throw new ResourceNotFoundException("not found: " + storageLocation);
-            }
-        } catch (IOException ex) {
-            throw new StorageEngageException("failed to read attributes for stored file: " + storageLocation, ex);
-        }
-        if (!Files.isRegularFile(path)) {
-            throw new IllegalArgumentException("not a file: " + storageLocation);
-        }
-        InputStream source = null;
-        try {
-            source = Files.newInputStream(path, StandardOpenOption.READ);
-        } catch (IOException ex) {
-            throw new StorageEngageException("failed to create input stream for stored file: " + storageLocation, ex);
-        }
-
-        MultiBufferIO io = new MultiBufferIO(CIRC_BUFFERS, CIRC_BUFFERSIZE);
-        try {
-            io.copy(source, dest);
-        } catch (InterruptedException ex) {
-            log.debug("get interrupted", ex);
-        }
-    }
-
-    @Override
-    public void get(StorageLocation storageLocation, OutputStream dest, ByteRange byteRange)
-        throws ResourceNotFoundException, ReadException, WriteException, StorageEngageException, TransientException {
-        InventoryUtil.assertNotNull(OpaqueFileSystemStorageAdapter.class, "storageLocation", storageLocation);
-        InventoryUtil.assertNotNull(OpaqueFileSystemStorageAdapter.class, "dest", dest);
-        InventoryUtil.assertNotNull(OpaqueFileSystemStorageAdapter.class, "byteRange", byteRange);
-        log.debug("get: " + storageLocation + " " + byteRange);
-
-        Path path = storageLocationToPath(storageLocation);
-        if (!Files.exists(path)) {
-            throw new ResourceNotFoundException("not found: " + storageLocation);
-        }
-        try {
-            String delAttr = getFileAttribute(path, DELETED_PRESERVED);
-            if ("true".equals(delAttr)) {
-                log.debug("skip " + DELETED_PRESERVED + ": " + storageLocation);
-                throw new ResourceNotFoundException("not found: " + storageLocation);
-            }
-        } catch (IOException ex) {
-            throw new StorageEngageException("failed to read attributes for stored file: " + storageLocation, ex);
-        }
-        
-        if (!Files.isRegularFile(path)) {
-            throw new IllegalArgumentException("not a file: " + storageLocation);
-        }
-        
-        InputStream source = null;
-        try {
-            if (byteRange != null) {
-                RandomAccessFile raf = new RandomAccessFile(path.toFile(), "r");
-                SortedSet<ByteRange> brs = new TreeSet<>();
-                brs.add(byteRange);
-                source = new PartialReadInputStream(raf, brs);
-            } else {
-                source = Files.newInputStream(path, StandardOpenOption.READ);
-            }
-        } catch (IOException ex) {
-            throw new StorageEngageException("failed to create input stream for stored file: " + storageLocation, ex);
-        }
-        
-        MultiBufferIO io = new MultiBufferIO(CIRC_BUFFERS, CIRC_BUFFERSIZE);
-        try {
-            io.copy(source, dest);
-        } catch (InterruptedException ex) {
-            log.debug("get interrupted", ex);
-        }
-    }
-    
-    @Override
-    public StorageMetadata put(NewArtifact newArtifact, InputStream source, String transactionID)
-        throws IncorrectContentChecksumException, IncorrectContentLengthException, 
-            ReadException, WriteException,
-            StorageEngageException, TransientException {
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "artifact", newArtifact);
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "source", source);
-
-        Path txnTarget;
-        Long expectedLength = null;
-        MessageDigestAPI txnDigest = null;
-        String checksumAlg = DEFAULT_CHECKSUM_ALGORITHM;
-        if (newArtifact.contentChecksum != null) {
-            checksumAlg = newArtifact.contentChecksum.getScheme(); // TODO: try sha1 in here
-        }
-        try {
-            if (transactionID != null) {
-                // validate
-                UUID.fromString(transactionID);
-                txnTarget = txnPath.resolve(transactionID);
-                if (!Files.exists(txnTarget)) {
-                    throw new IllegalArgumentException("unknown transaction: " + transactionID);
-                }
-                String dstate = getFileAttribute(txnTarget, CUR_DIGEST_ATTR);
-                if (dstate != null) {
-                    txnDigest = MessageDigestAPI.getDigest(dstate);
-                }
-                if (txnDigest == null) {
-                    throw new RuntimeException("BUG: failed to restore digest in transaction " + transactionID);
-                }
-                String auri = getFileAttribute(txnTarget, ARTIFACTID_ATTR);
-                if (auri == null) {
-                    throw new RuntimeException("BUG: failed to restore uri attribute in transaction " + transactionID);
-                }
-                if (!newArtifact.getArtifactURI().toASCIIString().equals(auri)) {
-                    throw new IllegalArgumentException("incorrect Artifact.uri in transaction: " + transactionID
-                        + " expected: " + auri);
-                }
-                String alen = getFileAttribute(txnTarget, EXP_LENGTH_ATTR);
-                if (alen != null) {
-                    try {
-                        expectedLength = Long.valueOf(alen);
-                    } catch (NumberFormatException ex) {
-                        throw new RuntimeException("BUG: failed to restore expected content length attribute in transaction " + transactionID);
-                    }
-                }
-            } else {
-                String tmp = UUID.randomUUID().toString();
-                txnTarget = txnPath.resolve(tmp);
-                txnDigest = MessageDigestAPI.getInstance(checksumAlg);
-                if (Files.exists(txnTarget)) {
-                    // unlikely: duplicate UUID in the txnpath directory?
-                    throw new RuntimeException("BUG: txnTarget already exists: " + txnTarget);
-                }
-                expectedLength = newArtifact.contentLength;
-            }
-        } catch (IOException ex) {
-            throw new StorageEngageException("failed to read file attributes", ex);
-        } catch (InvalidPathException e) {
-            throw new RuntimeException("BUG: invalid path: " + txnPath, e);
-        } catch (NoSuchAlgorithmException ex) {
-            throw new RuntimeException("failed to create MessageDigestAPI: " + checksumAlg, ex);
-        }
-        log.debug("transaction: " + txnTarget + " transactionID: " + transactionID);
-        
-        
-        Throwable throwable = null;
-        URI checksum = null;
-        
-        String prevDigestState = null;
-        Long prevLength = 0L;
-        
-        try {
-            prevDigestState = MessageDigestAPI.getEncodedState(txnDigest);
-            if (transactionID != null) {
-                prevLength = Files.size(txnTarget);
-            }
-            
-            OpenOption opt = StandardOpenOption.CREATE_NEW;
-            if (transactionID != null) {
-                opt = StandardOpenOption.APPEND;
-            }
-            MessageDigestAPI md = txnDigest;
-            DigestOutputStream out = new DigestOutputStream(Files.newOutputStream(txnTarget, StandardOpenOption.WRITE, opt), txnDigest);
-            MultiBufferIO io = new MultiBufferIO();
-            if (transactionID != null) {
-                try {
-                    log.debug("append starting at offset " + prevLength);
-                    io.copy(source, out);
-                    out.flush();
-                    md = out.getMessageDigest();
-                } catch (ReadException ex) {
-                    // rollback to prevLength
-                    RandomAccessFile raf = new RandomAccessFile(txnTarget.toFile(), "rws");
-                    log.debug("rollback from " + raf.length() + " to " + prevLength + " after " + ex);
-                    raf.setLength(prevLength);
-                    md = MessageDigestAPI.getDigest(prevDigestState);
-                    long len = Files.size(txnTarget);
-                    log.debug("auto-revert transaction " + transactionID + " to length " + len + " after failed input: " + ex);
-                    throw ex;
-                } catch (WriteException ex) {
-                    log.debug("auto-abort transaction " + transactionID + " after failed write to back end: ", ex);
-                    abortTransaction(transactionID);
-                    throw ex;
-                }
-            } else {
-                io.copy(source, out);
-                out.flush();
-                md = out.getMessageDigest();
-            }
-
-            String curDigestState = MessageDigestAPI.getEncodedState(md);
-            Long curLength = Files.size(txnTarget);
-            
-            String csVal = HexUtil.toHex(md.digest());
-            checksum = URI.create(checksumAlg.toLowerCase() + ":" + csVal);
-            log.debug("current checksum: " + checksum);
-            log.debug("current file size: " + curLength);
-            
-            if (transactionID != null && (expectedLength == null || curLength < expectedLength)) {
-                // incomplete: no further content checks
-                log.debug("incomplete put in transaction: " + transactionID + " - not verifying checksum");
-            } else {
-                boolean checksumProvided = newArtifact.contentChecksum != null;
-                if (checksumProvided) {
-                    if (!newArtifact.contentChecksum.equals(checksum)) {
-                        throw new IncorrectContentChecksumException(newArtifact.contentChecksum + " != " + checksum);
-                    }
-                }
-                if (expectedLength != null && !expectedLength.equals(curLength)) {
-                    if (checksumProvided) {
-                        // likely bug in the client, throw a 400 instead
-                        throw new IncorrectContentLengthException(expectedLength + " != " + curLength
-                            + " but checksum was correct! client BUG?");
-                    }
-                    throw new IncorrectContentLengthException(expectedLength + " != " + curLength);
-                }
-            }
-
-            // Set file attributes that must be recovered in iterator
-            setFileAttribute(txnTarget, CHECKSUM_ATTR, checksum.toASCIIString());
-            setFileAttribute(txnTarget, ARTIFACTID_ATTR, newArtifact.getArtifactURI().toASCIIString());
-            
-            StorageLocation storageLocation = pathToStorageLocation(txnTarget);
-            
-            if (transactionID != null) {
-                log.debug("transaction uncommitted: " + transactionID + " " + storageLocation);
-                // transaction will continue
-                setFileAttribute(txnTarget, CUR_DIGEST_ATTR, curDigestState);
-                setFileAttribute(txnTarget, PREV_DIGEST_ATTR, prevDigestState);
-                setFileAttribute(txnTarget, PREV_LENGTH_ATTR, prevLength.toString());
-                if (curLength == 0L) {
-                    return new StorageMetadata(storageLocation);
-                }
-                // current state
-                return new StorageMetadata(storageLocation, newArtifact.getArtifactURI(),
-                        checksum, curLength, new Date(Files.getLastModifiedTime(txnTarget).toMillis()));
-            }
-
-            // create this before committing the file so constraints applied
-            StorageMetadata metadata = new StorageMetadata(storageLocation, newArtifact.getArtifactURI(),
-                    checksum, curLength, new Date(Files.getLastModifiedTime(txnTarget).toMillis()));
-            
-            StorageMetadata ret = commit(metadata, txnTarget);
-            txnTarget = null;
-            return ret;
-            
-        } catch (ReadException | WriteException | IllegalArgumentException
-            | IncorrectContentChecksumException | IncorrectContentLengthException e) {
-            // pass through
-            throw e;
-        } catch (Throwable t) {
-            throwable = t;
-            log.error("put error", t);
-            if (throwable instanceof IOException) {
-                throw new StorageEngageException("put error", throwable);
-            }
-            // TODO: identify throwables that are transient
-            throw new RuntimeException("Unexpected error", throwable);
-        } finally {
-            // txnTarget file still exists and not in a transaction: something went wrong
-            if (txnTarget != null && transactionID == null) {
-                try {
-                    log.debug("Deleting transaction file.");
-                    Files.delete(txnTarget);
-                } catch (IOException e) {
-                    log.error("Failed to delete transaction file", e);
-                }
-            }
-        }
-    }
-    
-    
-    
-    @Override
-    public void delete(StorageLocation storageLocation)
-        throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
-        delete(storageLocation, false);
-    }
-    
-    @Override
-    public void delete(StorageLocation storageLocation, boolean includeRecoverable)
-        throws ResourceNotFoundException, StorageEngageException, TransientException {
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation", storageLocation);
-        Path path = storageLocationToPath(storageLocation);
-        if (!Files.exists(path)) {
-            throw new ResourceNotFoundException("not found: " + storageLocation);
-        }
-        String uriAttr = null;
-        boolean deletePreserved = false;
-        try {
-            deletePreserved = "true".equals(getFileAttribute(path, DELETED_PRESERVED));
-            uriAttr = getFileAttribute(path, ARTIFACTID_ATTR);
-        } catch (IOException ex) {
-            throw new StorageEngageException("failed to read attributes for stored file: " + storageLocation, ex);
-        }
-        
-        if (deletePreserved && !includeRecoverable) {
-            log.debug("skip " + DELETED_PRESERVED + ": " + storageLocation);
-            throw new ResourceNotFoundException("not found: " + storageLocation);
-        }
-        
-        log.debug("delete: " + storageLocation + " aka " + uriAttr);
-        if (uriAttr != null) {
-            try {
-                URI uri = new URI(uriAttr);
-                log.debug("recoverable: " + recoverableNamespaces.size() + " purge: " + purgeNamespaces.size());
-                Namespace purge = getFirstMatch(uri, purgeNamespaces);
-                Namespace recoverable = getFirstMatch(uri, recoverableNamespaces);
-               
-                if (purge != null) {
-                    log.debug("delete/purge: " + storageLocation 
-                                + " aka " + uri + " matched " + purge.getNamespace());
-                    // fall through to delete
-                } else if (recoverable != null) {
-                    log.debug("delete/recoverable: " + storageLocation 
-                                + " aka " + uri + " matched " + recoverable.getNamespace());
-                    // avoid poking fs timestamp unecessarily
-                    if (!deletePreserved) {
-                        try {
-                            setFileAttribute(path, DELETED_PRESERVED, "true");
-                        } catch (IOException ex) {
-                            throw new StorageEngageException("failed to set attribute for stored file: " + storageLocation, ex);
-                        }
-                    }
-                    return; // don't delete
-                } // else: normal fall through to delete
-            } catch (URISyntaxException ex) {
-                if (!recoverableNamespaces.isEmpty()) {
-                    log.error("found invalid " + ARTIFACTID_ATTR + "=" + uriAttr + " on " 
-                            + storageLocation + " -- cannot make recoverable");
-                }
-            }
-        } // else: no uriAttr aka incomplete put so delete
-        
-        log.debug("delete/actual: " + storageLocation + " aka " + uriAttr);
-        try {
-            Files.delete(path);
-        } catch (IOException ex) {
-            throw new StorageEngageException("failed to delete stored file: " + storageLocation, ex);
-        }
-    }
-    
-    private Namespace getFirstMatch(URI uri, List<Namespace> namespaces) {
-        for (Namespace ns : namespaces) {
-            log.debug("check: " + ns.getNamespace() + " vs " + uri);
-            if (ns.matches(uri)) {
-                return ns;
-            }
-        }
-        return null;
-    }
-
-    @Override
     public void recover(StorageLocation storageLocation, Date contentLastModified) 
             throws ResourceNotFoundException, IOException, InterruptedException, StorageEngageException, TransientException {
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation", storageLocation);
+        InventoryUtil.assertNotNull(LogicalFileSystemStorageAdapter.class, "storageLocation", storageLocation);
         Path path = storageLocationToPath(storageLocation);
         if (!Files.exists(path)) {
             throw new ResourceNotFoundException("not found: " + storageLocation);
@@ -686,9 +293,11 @@ public class OpaqueFileSystemStorageAdapter extends AbstractStorageAdapter imple
         return new OpaqueIterator(contentPath, storageBucketPrefix, includeRecoverable);
     }
 
-    // create from tmpfile in the txnPath to re-use UUID
-    StorageLocation pathToStorageLocation(Path tmpfile) {
-        // re-use the UUID from the tmpfile
+    
+    @Override
+    protected StorageLocation createStorageLocation(URI artifactURI, Path tmpfile) {
+        // ignore artifactURI
+        // create from tmpfile in the txnPath to re-use UUID
         String sid = tmpfile.getFileName().toString();
         URI storageID = URI.create("uuid:" + sid);
         String storageBucket = InventoryUtil.computeBucket(storageID, bucketLength);
@@ -704,7 +313,7 @@ public class OpaqueFileSystemStorageAdapter extends AbstractStorageAdapter imple
         StringBuilder path = new StringBuilder();
         String bucket = storageLocation.storageBucket;
         log.debug("bucket: " + bucket);
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "storageLocation.bucket", bucket);
+        InventoryUtil.assertNotNull(LogicalFileSystemStorageAdapter.class, "storageLocation.bucket", bucket);
         for (char c : bucket.toCharArray()) {
             path.append(c).append(File.separator);
         }
@@ -714,33 +323,7 @@ public class OpaqueFileSystemStorageAdapter extends AbstractStorageAdapter imple
         return ret;
     }
 
-    /*
-    // TODO: these methods would be used for a readable directory structure impl
-    // split scheme+path components into storageBucket, filename into storageID
-    StorageLocation createReadableStorageLocation(URI artifactURI) {
-        StringBuilder path = new StringBuilder();
-        path.append(artifactURI.getScheme()).append(File.separator);
-        String ssp = artifactURI.getSchemeSpecificPart();
-        int i = ssp.lastIndexOf("/");
-        path.append(ssp.substring(0, i));
-        String storageBucket = path.toString();
-        URI storageID = URI.create("name:" + ssp.substring(i));
-        StorageLocation loc = new StorageLocation(storageID);
-        loc.storageBucket = storageBucket;
-        log.debug("created: " + loc);
-        return loc;
-    }
-    
-    Path createReadableStorageLocationPath(StorageLocation storageLocation) {
-        StringBuilder path = new StringBuilder();
-        path.append(storageLocation.storageBucket).append(File.separator);
-        path.append(storageLocation.getStorageID().getSchemeSpecificPart());
-        log.debug("Resolving path in content : " + path.toString());
-        Path ret = contentPath.resolve(path.toString());
-        return ret;
-    }
-    */
-    
+    @Override
     protected StorageMetadata createStorageMetadata(Path base, Path p, boolean includeRecoverable) {
         return createStorageMetadataImpl(base, p, includeRecoverable);
     }
