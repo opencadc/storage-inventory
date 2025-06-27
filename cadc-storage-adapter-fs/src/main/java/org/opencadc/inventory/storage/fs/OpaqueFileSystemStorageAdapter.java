@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2022.                            (c) 2022.
+ *  (c) 2025.                            (c) 2025.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -134,7 +134,7 @@ import org.opencadc.util.fs.XAttrCommandExecutor;
  * @author pdowler
  *
  */
-public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
+public class OpaqueFileSystemStorageAdapter extends AbstractStorageAdapter implements StorageAdapter {
     private static final Logger log = Logger.getLogger(OpaqueFileSystemStorageAdapter.class);
     
     public static final String CONFIG_FILE = "cadc-storage-adapter-fs.properties";
@@ -144,30 +144,19 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     public static final String CONFIG_XATTR_EXEC =  OpaqueFileSystemStorageAdapter.class.getName() + ".xattrAlwaysExec";
     public static final int MAX_BUCKET_LENGTH = 7;
             
-    static final String ARTIFACTID_ATTR = "artifactID";
-    static final String CHECKSUM_ATTR = "contentChecksum";
-    static final String EXP_LENGTH_ATTR = "contentLength";
     
-    private static final Long PT_MIN_BYTES = 1L;
-    private static final Long PT_MAX_BYTES = null;
     
     private static final String TXN_FOLDER = "transaction";
     private static final String CONTENT_FOLDER = "content";
 
-    private static final String DEFAULT_CHECKSUM_ALGORITHM = "MD5";
+    
     private static final int CIRC_BUFFERS = 3;
     private static final int CIRC_BUFFERSIZE = 64 * 1024;
 
-    private static final String CUR_DIGEST_ATTR = "curDigest";
-    private static final String PREV_DIGEST_ATTR = "prevDigest";
-    private static final String PREV_LENGTH_ATTR = "prevLength";
-    
     private static final String DELETED_PRESERVED = "deleted-preserved";
     
     static boolean XATTR_EXEC;
     
-    final Path txnPath;
-    final Path contentPath;
     private final int bucketLength;
     
     private final List<Namespace> recoverableNamespaces = new ArrayList<>();
@@ -572,170 +561,7 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         }
     }
     
-    @Override
-    public PutTransaction startTransaction(URI artifactURI, Long contentLength) 
-            throws StorageEngageException, TransientException {
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "artifactURI", artifactURI);
-        try {
-            String transactionID = UUID.randomUUID().toString();
-            Path txnFile = txnPath.resolve(transactionID);
-            OutputStream  ostream = Files.newOutputStream(txnFile, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW);
-            ostream.close();
-            
-            // TODO: accept non-default checksum algorithm for txn?
-            MessageDigestAPI md = MessageDigestAPI.getInstance(DEFAULT_CHECKSUM_ALGORITHM);
-            String digestState = MessageDigestAPI.getEncodedState(md);
-            String md5Val = HexUtil.toHex(md.digest());
-            URI checksum = URI.create(DEFAULT_CHECKSUM_ALGORITHM + ":" + md5Val);
-            setFileAttribute(txnFile, CUR_DIGEST_ATTR, digestState);
-            setFileAttribute(txnFile, CHECKSUM_ATTR, checksum.toASCIIString());
-            setFileAttribute(txnFile, ARTIFACTID_ATTR, artifactURI.toASCIIString());
-            if (contentLength != null) {
-                setFileAttribute(txnFile, EXP_LENGTH_ATTR, contentLength.toString());
-            }
-            log.debug("startTransaction: " + transactionID);
-            return new PutTransaction(transactionID, PT_MIN_BYTES, PT_MAX_BYTES);
-        } catch (IOException ex) {
-            throw new StorageEngageException("failed to create transaction", ex);
-        } catch (NoSuchAlgorithmException ex) {
-            throw new RuntimeException("BUG", ex);
-        }
-    }
     
-    @Override
-    public PutTransaction revertTransaction(String transactionID) 
-            throws IllegalArgumentException, StorageEngageException, TransientException, UnsupportedOperationException {
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "transactionID", transactionID);
-        try {
-            // validate
-            UUID.fromString(transactionID);
-            Path txnFile = txnPath.resolve(transactionID);
-            if (Files.exists(txnFile)) {
-                String prevDigestState = getFileAttribute(txnFile, PREV_DIGEST_ATTR);
-                String sprevLen = getFileAttribute(txnFile, PREV_LENGTH_ATTR);
-                if (prevDigestState == null || sprevLen == null) {
-                    throw new IllegalArgumentException("transaction not revertable: " + transactionID);
-                }
-                Long prevLength = Long.parseLong(sprevLen);
-                
-                // revert
-                RandomAccessFile raf = new RandomAccessFile(txnFile.toFile(), "rws");
-                log.debug("revertTransaction: " + transactionID + " from " + raf.length() + " to " + prevLength);
-                raf.setLength(prevLength);
-                String curDigestState = prevDigestState;
-                long len = Files.size(txnFile);
-                setFileAttribute(txnFile, CUR_DIGEST_ATTR, curDigestState);
-                setFileAttribute(txnFile, PREV_DIGEST_ATTR, null);
-                setFileAttribute(txnFile, PREV_LENGTH_ATTR, null);
-                
-                MessageDigestAPI md = MessageDigestAPI.getDigest(curDigestState);
-                String md5Val = HexUtil.toHex(md.digest());
-                URI checksum = URI.create(md.getAlgorithmName() + ":" + md5Val);
-                setFileAttribute(txnFile, CHECKSUM_ATTR, checksum.toASCIIString());
-                
-                StorageMetadata ret = createStorageMetadata(txnPath, txnFile, false);
-                // txnPath does not have bucket dirs
-                ret.getStorageLocation().storageBucket = InventoryUtil.computeBucket(ret.getStorageLocation().getStorageID(), bucketLength);
-                PutTransaction pt = new PutTransaction(transactionID, PT_MIN_BYTES, PT_MAX_BYTES);
-                pt.storageMetadata = ret;
-                return pt;
-            }
-        } catch (NoSuchAlgorithmException ex) {
-            throw new RuntimeException("BUG: failed to restore digest", ex);
-        } catch (InvalidPathException e) {
-            throw new RuntimeException("BUG: invalid path: " + txnPath, e);
-        } catch (IOException ex) {
-            throw new StorageEngageException("failed to revert transaction", ex);
-        }
-        throw new IllegalArgumentException("unknown transaction: " + transactionID);
-    }
-    
-    @Override
-    public void abortTransaction(String transactionID) 
-            throws IllegalArgumentException, StorageEngageException, TransientException {
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "transactionID", transactionID);
-        try {
-            Path txnTarget = txnPath.resolve(transactionID);
-            if (Files.exists(txnPath)) {
-                Files.delete(txnTarget);
-            } else {
-                throw new IllegalArgumentException("unknown transaction: " + transactionID);
-            }
-        } catch (IOException ex) {
-            throw new StorageEngageException("failed to create transaction", ex);
-        }
-    }
-    
-    @Override
-    public PutTransaction getTransactionStatus(String transactionID)
-        throws IllegalArgumentException, StorageEngageException, TransientException {
-        InventoryUtil.assertNotNull(FileSystemStorageAdapter.class, "transactionID", transactionID);
-        try {
-            // validate
-            UUID.fromString(transactionID);
-            Path txnFile = txnPath.resolve(transactionID);
-            if (Files.exists(txnFile)) {
-                StorageMetadata ret = createStorageMetadata(txnPath, txnFile, false);
-                // txnPath does not have bucket dirs
-                ret.getStorageLocation().storageBucket = InventoryUtil.computeBucket(ret.getStorageLocation().getStorageID(), bucketLength);
-                PutTransaction pt = new PutTransaction(transactionID, PT_MIN_BYTES, PT_MAX_BYTES);
-                pt.storageMetadata = ret;
-                return pt;
-            }
-        } catch (InvalidPathException e) {
-            throw new RuntimeException("BUG: invalid path: " + txnPath, e);
-        }
-        throw new IllegalArgumentException("unknown transaction: " + transactionID);
-    }
-    
-    @Override
-    public StorageMetadata commitTransaction(String transactionID)
-        throws IllegalArgumentException, StorageEngageException, TransientException {
-        PutTransaction pt = getTransactionStatus(transactionID);
-        Path txnTarget = txnPath.resolve(transactionID); // again
-        
-        try {
-            setFileAttribute(txnTarget, CUR_DIGEST_ATTR, null);
-            setFileAttribute(txnTarget, PREV_DIGEST_ATTR, null);
-            setFileAttribute(txnTarget, PREV_LENGTH_ATTR, null);
-            setFileAttribute(txnTarget, EXP_LENGTH_ATTR, null);
-        } catch (IOException ex) {
-            throw new StorageEngageException("failed to commit (clear transaction attributes)", ex);
-        }
-        return commit(pt.storageMetadata, txnTarget);
-    }
-    
-    private StorageMetadata commit(StorageMetadata sm, Path txnTarget) throws StorageEngageException {
-        try {
-            Path contentTarget = storageLocationToPath(sm.getStorageLocation());
-            // make sure parent (bucket) directories exist
-            Path parent = contentTarget.getParent();
-            if (!Files.exists(parent)) {
-                Files.createDirectories(parent);
-            }
-
-            if (Files.exists(contentTarget)) {
-                // since filename is a UUID this is fatal
-                throw new RuntimeException("BUG: UUID collision on commit: " + sm.getStorageLocation());
-            }
-
-            // atomic copy into content directory
-            final Path result = Files.move(txnTarget, contentTarget, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            log.debug("committed: " + result);
-            
-            // defensive check in case commit tweaked lastModified timestamp slightly:
-            Date d2 = new Date(Files.getLastModifiedTime(contentTarget).toMillis());
-            long delta = d2.getTime() - sm.getContentLastModified().getTime();
-            if (delta != 0L) {
-                log.debug("commit-induced delta lastModified: " + delta + " - recreate StorageMetadata from path");
-                sm = createStorageMetadata(contentPath, contentTarget, false);
-            }
-
-            return sm;
-        } catch (IOException ex) {
-            throw new StorageEngageException("failed to commit (atomic move)", ex);
-        }
-    }
     
     @Override
     public void delete(StorageLocation storageLocation)
@@ -860,11 +686,6 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
         return new OpaqueIterator(contentPath, storageBucketPrefix, includeRecoverable);
     }
 
-    @Override
-    public Iterator<PutTransaction> transactionIterator() throws StorageEngageException, TransientException {
-        throw new UnsupportedOperationException();
-    }
-
     // create from tmpfile in the txnPath to re-use UUID
     StorageLocation pathToStorageLocation(Path tmpfile) {
         // re-use the UUID from the tmpfile
@@ -878,7 +699,8 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     }
     
     // generate destination path with bucket under contentPath
-    Path storageLocationToPath(StorageLocation storageLocation) {
+    @Override
+    protected Path storageLocationToPath(StorageLocation storageLocation) {
         StringBuilder path = new StringBuilder();
         String bucket = storageLocation.storageBucket;
         log.debug("bucket: " + bucket);
@@ -919,8 +741,12 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
     }
     */
     
-    // also used by OpaqueIterator 
-    static StorageMetadata createStorageMetadata(Path base, Path p, boolean includeRecoverable) {
+    protected StorageMetadata createStorageMetadata(Path base, Path p, boolean includeRecoverable) {
+        return createStorageMetadataImpl(base, p, includeRecoverable);
+    }
+
+    // static impl more easily re-used by OpaqueIterator 
+    static StorageMetadata createStorageMetadataImpl(Path base, Path p, boolean includeRecoverable) {
         Path rel = base.relativize(p);
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < rel.getNameCount() - 1; i++) {
@@ -968,59 +794,6 @@ public class OpaqueFileSystemStorageAdapter implements StorageAdapter {
             }
         } catch (IOException ex) {
             throw new RuntimeException("failed to recreate StorageMetadata: " + storageBucket + "," + storageID, ex);
-        }
-    }
-    
-    public static void setFileAttribute(Path path, String attributeKey, String attributeValue) throws IOException {
-        log.debug("setFileAttribute: " + path);
-        
-        if (XATTR_EXEC) {
-            String namespace = "user";
-            String key = namespace + "." + attributeKey;
-            if (StringUtil.hasText(attributeValue)) {
-                XAttrCommandExecutor.set(path, key, attributeValue);
-            } else {
-                XAttrCommandExecutor.remove(path, key);
-            }
-            return;
-        }
-        
-        UserDefinedFileAttributeView udv = Files.getFileAttributeView(path,
-            UserDefinedFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
-        String key = attributeKey;
-        if (attributeValue != null) {
-            attributeValue = attributeValue.trim();
-            log.debug("attribute write: " + key + " = " + attributeValue);
-            ByteBuffer buf = ByteBuffer.wrap(attributeValue.getBytes(Charset.forName("UTF-8")));
-            udv.write(key, buf);
-        } else {
-            try {
-                log.debug("attribute delete: " + attributeKey);
-                udv.delete(attributeKey);
-            } catch (FileSystemException ex) {
-                log.debug("assume no such attr: " + ex);
-            }
-        }
-    }
-    
-    public static String getFileAttribute(Path path, String attributeKey) throws IOException {
-        if (XATTR_EXEC) {
-            String namespace = "user";
-            String key = namespace + "." + attributeKey;
-            return XAttrCommandExecutor.get(path, key);
-        }
-
-        try {
-            UserDefinedFileAttributeView udv = Files.getFileAttributeView(path,
-                UserDefinedFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
-
-            int sz = udv.size(attributeKey);
-            ByteBuffer buf = ByteBuffer.allocate(2 * sz);
-            udv.read(attributeKey, buf);
-            return new String(buf.array(), Charset.forName("UTF-8")).trim();
-        } catch (FileSystemException ex) {
-            log.debug("assume no such attr: " + ex);
-            return null;
         }
     }
 }
