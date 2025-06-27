@@ -77,14 +77,15 @@ import ca.nrc.cadc.rest.InlineContentHandler;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.rest.SyncInput;
 import ca.nrc.cadc.rest.Version;
-import ca.nrc.cadc.util.StringUtil;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.AccessControlException;
 import java.security.cert.CertificateException;
 import java.util.Map;
+import java.util.Set;
 import javax.security.auth.Subject;
+import javax.security.auth.x500.X500Principal;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
@@ -251,6 +252,43 @@ public abstract class ArtifactAction extends RestAction {
             }
             // no return from inside check
             throw new AccessControlException("invalid auth token");
+        }
+        
+        X500Principal xp = AuthenticationUtil.getX500Principal(subject);
+        if (xp != null && !config.archiveOperators.isEmpty()) {
+            // local configured read-write
+            for (X500Principal xa : config.archiveOperators) {
+                if (AuthenticationUtil.equals(xp, xa)) {
+                    logInfo.setResource(artifactURI);
+                    logInfo.setPath(syncInput.getContextPath() + syncInput.getComponentPath());
+                    if (ReadGrant.class.isAssignableFrom(grantClass)) {
+                        logInfo.setGrant("read: archiveOperator");
+                        // granted
+                        return;
+                    } 
+                    if (WriteGrant.class.isAssignableFrom(grantClass)) {
+                        logInfo.setGrant("write: archiveOperator");
+                        // granted
+                        return;
+                    }
+                    // fall through to normal checks below
+                }
+            }
+        }
+        if (xp != null && !config.fileSyncOperators.isEmpty()) {
+            // locally configured read
+            for (X500Principal xa : config.archiveOperators) {
+                if (AuthenticationUtil.equals(xp, xa)) {
+                    logInfo.setResource(artifactURI);
+                    logInfo.setPath(syncInput.getContextPath() + syncInput.getComponentPath());
+                    if (ReadGrant.class.isAssignableFrom(grantClass)) {
+                        logInfo.setGrant("read: fileSyncOperator");
+                        // granted
+                        return;
+                    }
+                    // fall through to normal checks below
+                }
+            }
         }
             
         // augment subject (minoc is configured so augment is not done in rest library)
