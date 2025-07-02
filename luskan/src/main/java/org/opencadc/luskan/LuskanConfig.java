@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2020.                            (c) 2020.
+ *  (c) 2025.                            (c) 2025.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -83,6 +83,7 @@ public class LuskanConfig {
     private static final String LUSKAN_KEY = LuskanConfig.class.getPackage().getName();
     public static final String STORAGE_SITE_KEY = LUSKAN_KEY + ".isStorageSite";
     public static final String ALLOW_ANON = LUSKAN_KEY + ".allowAnon";
+    public static final String ALLOWED_USER_X509 = LUSKAN_KEY + ".allowedUserX509";
     public static final String ALLOWED_GROUP = LUSKAN_KEY + ".allowedGroup";
     
     public static final String UWS_ROLLOVER = LUSKAN_KEY + ".uwsRollover";
