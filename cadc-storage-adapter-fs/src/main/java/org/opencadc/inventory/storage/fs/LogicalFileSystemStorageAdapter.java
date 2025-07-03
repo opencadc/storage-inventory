@@ -207,11 +207,17 @@ public class LogicalFileSystemStorageAdapter extends AbstractStorageAdapter impl
 
     @Override
     public void setRecoverableNamespaces(List<Namespace> preserved) {
+        if (preserved == null || preserved.isEmpty()) {
+            return;
+        }
         throw new UnsupportedOperationException();
     }
 
     @Override
     public void setPurgeNamespaces(List<Namespace> purged) {
+        if (purged == null || purged.isEmpty()) {
+            return;
+        }
         throw new UnsupportedOperationException();
     }
 
