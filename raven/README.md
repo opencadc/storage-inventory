@@ -75,8 +75,11 @@ prefix of) another namepsace.
 
 ```
 org.opencadc.raven.putPreference={entry name}
-{entry name}.resourceID={storage site resourceID}
+{entry name}.resourceID={storage site minoc resourceID}
 {entry name}.namespace={storage site namespace}
+
+org.opencadc.raven.putAvoid={storage site minoc resourceID}
+org.opencadc.raven.getAvoid={storage site minoc resourceID}
 ```
 
 Example `putPreference` config:
@@ -90,6 +93,11 @@ CADC.namespace=cadc:CGPS/
 The _putPreference_ rules are optimizations; they do not restrict the destination of a PUT. They are useful in cases 
 where a namespace is intended to be stored only in some site(s) or where most or all PUTs come from systems that are near one 
 storage site. TODO: support for `GET` preferences? also use client IP address to prioritize?
+
+The _putAvoid_ key configures raven to **never** return PUT URLs to the sopecified site(s).
+
+The _getAvoid_ key configures raven to **only** return GET URLs to the specified site(s) if the site contains the only copy
+of a file.
 
 `raven` can be configured to return URLs to external sites (in addition to the `minoc` ones) for the artifacts that are
 mirrored at other data providers. To do that, the configuration needs to include the name of the storage resolver class

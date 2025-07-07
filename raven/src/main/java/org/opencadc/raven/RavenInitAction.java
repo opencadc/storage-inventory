@@ -120,6 +120,10 @@ public class RavenInitAction extends InitAction {
     static final String WRITE_GRANTS_KEY = RAVEN_KEY + ".writeGrantProvider";
     static final String RESOLVER_ENTRY = "ca.nrc.cadc.net.StorageResolver";
     
+    static final String PUT_PREF_KEY = RAVEN_KEY + ".putPreference";
+    static final String PUT_AVOID_KEY = RAVEN_KEY + ".putAvoid";
+    static final String GET_AVOID_KEY = RAVEN_KEY + ".getAvoid";
+    
     static final String DEV_AUTH_ONLY_KEY = RAVEN_KEY + ".authenticateOnly";
 
     // set init initConfig, used by subsequent init methods
@@ -336,6 +340,34 @@ public class RavenInitAction extends InitAction {
 
         return mvp;
     }
+    
+    static List<URI> getPutAvoid(MultiValuedProperties props) {
+        List<URI> ret = new ArrayList<>();
+        List<String> raw = props.getProperty(PUT_AVOID_KEY);
+        for (String s : raw) {
+            try {
+                URI u = new URI(s);
+                ret.add(u);
+            } catch (URISyntaxException ex) {
+                log.error("invalid " + PUT_AVOID_KEY + " value: " + s);
+            }
+        }
+        return ret;
+    }
+    
+    static List<URI> getGetAvoid(MultiValuedProperties props) {
+        List<URI> ret = new ArrayList<>();
+        List<String> raw = props.getProperty(GET_AVOID_KEY);
+        for (String s : raw) {
+            try {
+                URI u = new URI(s);
+                ret.add(u);
+            } catch (URISyntaxException ex) {
+                log.error("invalid " + GET_AVOID_KEY + " value: " + s);
+            }
+        }
+        return ret;
+    }
 
     static Map<String,Object> getDaoConfig(MultiValuedProperties props, String pool) {
         String cname = props.getFirstPropertyValue(SQLGenerator.class.getName());
@@ -358,7 +390,7 @@ public class RavenInitAction extends InitAction {
         Map<URI, StorageSiteRule> prefs = new HashMap<>();
 
         String propName;
-        List<String> putPreferences = props.getProperty("org.opencadc.raven.putPreference");
+        List<String> putPreferences = props.getProperty(PUT_PREF_KEY);
         for (String putPreference : putPreferences) {
 
             propName = putPreference + ".resourceID";
