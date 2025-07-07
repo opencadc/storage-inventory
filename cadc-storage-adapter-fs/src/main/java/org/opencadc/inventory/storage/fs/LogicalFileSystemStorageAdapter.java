@@ -223,7 +223,7 @@ public class LogicalFileSystemStorageAdapter extends AbstractStorageAdapter impl
 
     @Override
     public BucketType getBucketType() {
-        return BucketType.NONE; // path in storageID
+        return BucketType.PATH; // path in storageID
     }
     
     @Override
@@ -283,14 +283,22 @@ public class LogicalFileSystemStorageAdapter extends AbstractStorageAdapter impl
         // ignore txn
         return createStorageLocationImpl(artifactURI);
     }
-        
-    private static StorageLocation createStorageLocationImpl(URI artifactURI) {
-        URI storageID = artifactURI;
+
+    static StorageLocation createStorageLocationImpl(URI artifactURI) {
+        URI storageID = null;
         String storageBucket = null;
         
         String ssp = artifactURI.getSchemeSpecificPart();
-        String sspPath = ssp.substring(0, ssp.lastIndexOf("/"));
-        storageBucket = artifactURI.getScheme() + ":" + sspPath;
+        int lastSlash = ssp.lastIndexOf("/");
+        if (lastSlash > 0) {
+            String sspPath = ssp.substring(0, lastSlash + 1); // include /
+            storageBucket = artifactURI.getScheme() + ":" + sspPath;
+            storageID = URI.create(ssp.substring(lastSlash + 1)); // do not include /
+        } else {
+            // bare scheme:filename
+            storageBucket = artifactURI.getScheme() + ":"; 
+            storageID = URI.create(ssp);
+        }
            
         log.debug("new storage location " + storageID + " with bucket: " + storageBucket);
         StorageLocation loc = new StorageLocation(storageID);
@@ -300,10 +308,10 @@ public class LogicalFileSystemStorageAdapter extends AbstractStorageAdapter impl
     
     @Override
     protected Path storageLocationToPath(StorageLocation storageLocation) {
-        URI storageID = storageLocation.getStorageID();
         StringBuilder path = new StringBuilder();
 
-        path.append(storageID.toString());
+        path.append(storageLocation.storageBucket);
+        path.append(storageLocation.getStorageID().toASCIIString());
         
         log.debug("Resolving path in content : " + path.toString());
         Path ret = contentPath.resolve(path.toString());
