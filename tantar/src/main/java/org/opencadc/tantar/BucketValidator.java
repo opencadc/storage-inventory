@@ -167,6 +167,7 @@ public class BucketValidator implements ValidateActions {
                     this.bucketPrefixes.add(bucketIterator.next().trim());
                 }
                 break;
+            case PATH:
             case PLAIN:
                 if (bucketRange == null) {
                     throw new IllegalArgumentException("invalid bucket range: null");
