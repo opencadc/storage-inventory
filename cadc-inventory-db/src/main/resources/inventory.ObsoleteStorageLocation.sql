@@ -1,7 +1,7 @@
 
 create table <schema>.ObsoleteStorageLocation (
     location_storageID varchar(512),
-    location_storageBucket varchar(8),
+    location_storageBucket varchar(512),
 
     lastModified timestamp not null,
     metaChecksum varchar(136) not null,
