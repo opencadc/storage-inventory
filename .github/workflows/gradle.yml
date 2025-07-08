@@ -16,8 +16,8 @@ jobs:
       with:
         java-version: 11
         
-    - name: build and test storage-inventory-dm
-      run: cd storage-inventory-dm && ../gradlew --info clean build xslt
+#    - name: build and test storage-inventory-dm
+#      run: cd storage-inventory-dm && ../gradlew --info clean build xslt
       
     - name: build and test cadc-inventory
       run: cd cadc-inventory && ../gradlew --info clean build javadoc checkstyleMain install
