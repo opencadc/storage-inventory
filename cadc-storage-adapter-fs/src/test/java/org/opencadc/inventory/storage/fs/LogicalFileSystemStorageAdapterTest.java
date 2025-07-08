@@ -71,6 +71,7 @@ import ca.nrc.cadc.util.Log4jInit;
 import java.io.File;
 import java.net.URI;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -103,18 +104,40 @@ public class LogicalFileSystemStorageAdapterTest {
     
     @Test
     public void testStorageLocationRoundTrip() {
+        Path abs;
+        Path rel;
         try {
-            URI artifactURI = URI.create("scheme:path/filename");
-            StorageLocation sloc1 = LogicalFileSystemStorageAdapter.createStorageLocationImpl(artifactURI);
+            URI typicalPath = URI.create("scheme:path/filename");
+            StorageLocation sloc1 = LogicalFileSystemStorageAdapter.createStorageLocationImpl(typicalPath);
             Assert.assertNotNull(sloc1);
             Assert.assertEquals(URI.create("filename"), sloc1.getStorageID());
             Assert.assertEquals("scheme:path/", sloc1.storageBucket);
+            abs = adapter.storageLocationToPath(sloc1);
+            Assert.assertNotNull(abs);
+            rel = adapter.contentPath.relativize(abs);
+            Assert.assertEquals(typicalPath.toASCIIString(), rel.toString());
             
             URI noPath = URI.create("scheme:filename");
             StorageLocation sloc2 = LogicalFileSystemStorageAdapter.createStorageLocationImpl(noPath);
             Assert.assertNotNull(sloc2);
             Assert.assertEquals(URI.create("filename"), sloc2.getStorageID());
             Assert.assertEquals("scheme:", sloc2.storageBucket);
+            abs = adapter.storageLocationToPath(sloc2);
+            Assert.assertNotNull(abs);
+            rel = adapter.contentPath.relativize(abs);
+            Assert.assertEquals(noPath.toASCIIString(), rel.toString());
+            
+            // make sure it is the whole path -> storage bucket
+            String expectedBucket = "scheme:path/to/some/thing/";
+            URI longPath = URI.create(expectedBucket + "filename");
+            StorageLocation sloc3 = LogicalFileSystemStorageAdapter.createStorageLocationImpl(longPath);
+            Assert.assertNotNull(sloc3);
+            Assert.assertEquals(URI.create("filename"), sloc3.getStorageID());
+            Assert.assertEquals(expectedBucket, sloc3.storageBucket);
+            abs = adapter.storageLocationToPath(sloc3);
+            Assert.assertNotNull(abs);
+            rel = adapter.contentPath.relativize(abs);
+            Assert.assertEquals(longPath.toASCIIString(), rel.toString());
             
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
