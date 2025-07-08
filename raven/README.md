@@ -94,7 +94,7 @@ The _putPreference_ rules are optimizations; they do not restrict the destinatio
 where a namespace is intended to be stored only in some site(s) or where most or all PUTs come from systems that are near one 
 storage site. TODO: support for `GET` preferences? also use client IP address to prioritize?
 
-The _putAvoid_ key configures raven to **never** return PUT URLs to the sopecified site(s).
+The _putAvoid_ key configures raven to **never** return PUT URLs to the specified site(s).
 
 The _getAvoid_ key configures raven to **only** return GET URLs to the specified site(s) if the site contains the only copy
 of a file.
