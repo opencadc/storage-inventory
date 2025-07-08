@@ -146,7 +146,6 @@ public class OpaqueFileSystemStorageAdapter extends AbstractStorageAdapter imple
             
     private static final String TXN_FOLDER = "transaction";
     private static final String CONTENT_FOLDER = "content";
-    static boolean XATTR_EXEC;
     
     private final int bucketLength;
 

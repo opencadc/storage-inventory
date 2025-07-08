@@ -93,8 +93,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.UserDefinedFileAttributeView;
-import java.security.DigestOutputStream;
-import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Date;
@@ -108,15 +106,13 @@ import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.ByteRange;
+import org.opencadc.inventory.storage.DigestOutputStream;
 import org.opencadc.inventory.storage.MessageDigestAPI;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
-import static org.opencadc.inventory.storage.fs.LogicalFileSystemStorageAdapter.CHECKSUM_ATTRIBUTE_NAME;
-import static org.opencadc.inventory.storage.fs.LogicalFileSystemStorageAdapter.MD5_CHECKSUM_SCHEME;
-import static org.opencadc.inventory.storage.fs.OpaqueFileSystemStorageAdapter.XATTR_EXEC;
 import org.opencadc.util.fs.XAttrCommandExecutor;
 
 /**
@@ -141,6 +137,7 @@ abstract class AbstractStorageAdapter implements StorageAdapter {
     private static final int CIRC_BUFFERS = 3;
     private static final int CIRC_BUFFERSIZE = 64 * 1024;
     static final String DELETED_PRESERVED = "deleted-preserved";
+    static boolean XATTR_EXEC;
     
     protected Path txnPath;
     protected Path contentPath;
@@ -400,7 +397,7 @@ abstract class AbstractStorageAdapter implements StorageAdapter {
                 opt = StandardOpenOption.APPEND;
             }
             MessageDigestAPI md = txnDigest;
-            org.opencadc.inventory.storage.DigestOutputStream out = new org.opencadc.inventory.storage.DigestOutputStream(Files.newOutputStream(txnTarget, StandardOpenOption.WRITE, opt), txnDigest);
+            DigestOutputStream out = new DigestOutputStream(Files.newOutputStream(txnTarget, StandardOpenOption.WRITE, opt), txnDigest);
             MultiBufferIO io = new MultiBufferIO();
             if (transactionID != null) {
                 try {
@@ -509,7 +506,7 @@ abstract class AbstractStorageAdapter implements StorageAdapter {
         }
     }
  
-@Override
+    @Override
     public void delete(StorageLocation storageLocation)
         throws ResourceNotFoundException, IOException, StorageEngageException, TransientException {
         delete(storageLocation, false);
