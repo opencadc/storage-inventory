@@ -1,0 +1,13 @@
+# map of "archive name" to one or more URI schemes that could be used in SI and CAOM
+default: cadc
+
+EUCLID: esa
+
+HST: mast
+JWST: mast
+
+GEMINI: gemini cadc
+
+RACS: casda
+VLASS: nrao cadc
+

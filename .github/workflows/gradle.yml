@@ -75,4 +75,7 @@ jobs:
 
     - name: java build -- ringhold
       run: cd ringhold && ../gradlew --info clean build javadoc checkstyleMain
+      
+    - name: java build -- data
+      run: cd compat-api/data && ../../gradlew --info clean build javadoc checkstyleMain
 

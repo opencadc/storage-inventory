@@ -1,0 +1,159 @@
+swagger: '2.0'
+info:
+  version: 2.0
+  title: Data web service
+  description: >
+    The classic CADC data web service.
+
+
+    The data web service is a helper service that supports downloading files
+    from the CADC archive. The call can be anonymous or the caller can authenticate 
+    using cookie, tokens, or client (proxy) certificate. 
+    
+    
+    If the specified archive or file is not "public", an anonymous caller will be 
+    redirected to an alternate URL that challenges for authentication 
+    (username/password login) before proceeding.
+
+schemes:
+  - https
+basePath: /data
+paths:
+  /pub/{archive}/{filename}:
+    get:
+      description: >
+        Download a file. An authorized download request will be redirected to a download 
+        URL that can be used without further authentication. This final download URL may 
+        have a limited lifetime so should not be stored for later use.
+      tags:
+        - Direct archive access
+      parameters:
+        - name: archive
+          in: path
+          description: >-
+            The name of the archive (data collection).
+          required: true
+          type: string
+        - name: filename
+          in: path
+          description: >-
+            The name of the file to download.
+          required: true
+          type: string
+        - name: cutout
+          in: query
+          description: >-
+            Perform a cutout operation on the specified file; multiple cutout 
+            parameters can be supplied.
+          required: false
+          type: string
+        - name: fhead
+          in: query
+          description: >-
+            If the value equals 'true', return the FITs header information for
+            the specified file
+          required: false
+          type: string
+      responses:
+        '200':
+          description: Successful response
+          schema:
+            title: The telescope archive file
+            type: file
+        '303':
+          description: redirect to storage location
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+        default:
+          description: Unexpeced error
+    head:
+      description: >
+        Get file metadata. An authorized metadata request will include file metadata in
+        the HTTP headers without an additional redirect.
+      tags:
+        - Direct archive access
+      parameters:
+        - name: archive
+          in: path
+          description: >-
+            The name of the archive (data collection).
+          required: true
+          type: string
+        - name: filename
+          in: path
+          description: >-
+            The name of the file to query.
+          required: true
+          type: string
+      responses:
+        '200':
+          description: Successful response
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+        default:
+          description: Unexpeced error
+  /availability:
+    get:
+      tags:
+        - Support Interfaces
+      schemes:
+        - https
+      summary: VOSI Availability
+      description: >
+        Indicates whether the service is operable and the reliability of the
+        service for extended and scheduled requests.
+      parameters:
+        - name: detail
+          in: query
+          description: >-
+            specifies heart beat to be used to check for availability of this
+            service, the value 'min' must be used, otherwise the full
+            availability test will be performed
+          required: false
+          type: string
+      responses:
+        '200':
+          description: Successful response
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+        default:
+          description: Unexpeced error
+  /capabilities:
+    head:
+      tags:
+        - Support Interfaces
+      schemes:
+        - https
+      summary: VOSI Capabilities
+      description: discover supported authentication mechanisms via www-authenticate headers
+      responses:
+        '200':
+          description: Successful response
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+        default:
+          description: Unexpeced error
+    get:
+      tags:
+        - Support Interfaces
+      schemes:
+        - https
+      summary: VOSI Capabilities
+      description: get service capabilities (XML document)
+      responses:
+        '200':
+          description: Successful response
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+        default:
+          description: Unexpeced error
