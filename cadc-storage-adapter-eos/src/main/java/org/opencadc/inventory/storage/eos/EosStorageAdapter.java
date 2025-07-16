@@ -82,11 +82,13 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
+import java.nio.file.Path;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import org.apache.log4j.Logger;
-import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.BucketType;
@@ -109,9 +111,19 @@ public class EosStorageAdapter implements StorageAdapter {
     static final String CONFIG_FILE = "cadc-storage-adapter-eos.properties";
     static final String CONFIG_PROPERTY_SRV = EosStorageAdapter.class.getName() + ".mgmServer";
     static final String CONFIG_PROPERTY_TOKEN = EosStorageAdapter.class.getName() + ".authToken";
+    static final String CONFIG_PROPERTY_SCHEME = EosStorageAdapter.class.getName() + ".artifactScheme";
+
+    private static final String EOS_PATH = "file";
+    private static final String EOS_CONTENT_TIME = "ctime";
+    private static final String EOS_CHECKSUM_TYPE = "xstype";
+    private static final String EOS_CHECKSUM_VALUE = "xs";
+    private static final String EOS_FILE_SIZE = "size";
 
     private final URI mgmServer;
     private final String authToken;
+    private final String artifactScheme;
+    
+    private final String remotePath;
 
     /**
      * Standard constructor for dynamic loading and operational use.
@@ -125,9 +137,16 @@ public class EosStorageAdapter implements StorageAdapter {
             throw new InvalidConfigException("failed to load " + CONFIG_PROPERTY_SRV
                     + " from " + CONFIG_FILE);
         }
+
         String tok = mvp.getFirstPropertyValue(CONFIG_PROPERTY_TOKEN);
-        if (srv == null) {
+        if (tok == null) {
             throw new InvalidConfigException("failed to load " + CONFIG_PROPERTY_TOKEN
+                    + " from " + CONFIG_FILE);
+        }
+
+        String as = mvp.getFirstPropertyValue(CONFIG_PROPERTY_SCHEME);
+        if (as == null || as.isEmpty()) {
+            throw new InvalidConfigException("failed to load " + CONFIG_PROPERTY_SCHEME
                     + " from " + CONFIG_FILE);
         }
 
@@ -141,6 +160,9 @@ public class EosStorageAdapter implements StorageAdapter {
         } else {
             throw new InvalidConfigException("invalid " + CONFIG_PROPERTY_TOKEN + ": expected zteos64:{encoded}");
         }
+        this.artifactScheme = as;
+        
+        this.remotePath = mgmServer.getPath();
     }
 
     @Override
@@ -185,10 +207,75 @@ public class EosStorageAdapter implements StorageAdapter {
         if (line == null || line.isEmpty() || line.isBlank()) {
             return null;
         }
-        // stuff to skip?
+        
+        URI artifactURI = null;
+        URI contentChecksum = null;
+        Date contentLastModified = null;
+        Long contentLength = null;
+        StorageLocation sloc = null;
+        
+        String csAlg = null;
+        String csHex = null;
+        String[] parts = line.split(" ");
+        for (String s : parts) {
+            String[] kv = s.split("=");
+            if (kv.length == 2) {
+                switch (kv[0]) {
+                    case EOS_PATH:
+                        log.warn("path: " + kv[1]);
+                        if (kv[1].startsWith(remotePath)) {
+                            String rel = kv[1].substring(remotePath.length() + 1);
+                            artifactURI = URI.create(artifactScheme + ":" + rel);
+                            sloc = pathToStorageLocation(rel);
+                        }
+                        break;
+                    case EOS_FILE_SIZE:
+                        log.warn("size: " + kv[1]);
+                        try {
+                            contentLength = Long.parseLong(kv[1]);
+                        } catch (NumberFormatException ex) {
+                            throw new RuntimeException("failed to parse " + s + ": " + kv[1] + " is not a valid long", ex);
+                        }
+                        break;
+                    case EOS_CHECKSUM_TYPE:
+                        log.warn("checksum scheme: " + kv[1]);
+                        csAlg = kv[1];
+                        break;
+                    case EOS_CHECKSUM_VALUE:
+                        log.warn("checksum hex: " + kv[1]);
+                        csHex = kv[1];
+                        break;
+                    case EOS_CONTENT_TIME:
+                        log.warn("time: " + kv[1]);
+                        try {
+                            double ctime = Double.parseDouble(kv[1]);
+                            ctime *= 1000; // seconds to milliseconds
+                            contentLastModified = new Date((long) Math.floor(ctime));
+                        } catch (NumberFormatException ex) {
+                            throw new RuntimeException("failed to parse " + s + ": " + kv[1] + " is not a valid double", ex);
+                        }
+                        break;
+                    default:
+                        log.debug("skip: " + kv[0]);
+                }
+            } else {
+                log.debug("skip token: " + s);
+            }
+        }
 
-        // parse
-        throw new UnsupportedOperationException();
+        if (csAlg != null && csHex != null) {
+            contentChecksum = URI.create(csAlg + ":" + csHex);
+        }
+        StorageMetadata ret = new StorageMetadata(sloc, artifactURI, contentChecksum, contentLength, contentLastModified);
+        return ret;
+    }
+
+    StorageLocation pathToStorageLocation(String rel) {
+        int i = rel.lastIndexOf('/');
+        String filename = rel.substring(i + 1);
+        StorageLocation ret = new StorageLocation(URI.create(filename));
+        ret.storageBucket = rel.substring(0, i);
+        return ret;
     }
 
     // read-only implementation -- everything else unsupported
