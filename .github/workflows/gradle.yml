@@ -40,8 +40,8 @@ jobs:
     - name: build and test cadc-storage-adapter-fs
       run: cd cadc-storage-adapter-fs && ../gradlew --info clean build javadoc checkstyleMain install
 
-#    - name: build and test cadc-storage-adapter-ad
-#      run: cd cadc-storage-adapter-ad && ../gradlew --info clean build javadoc checkstyleMain install
+    - name: build and test cadc-storage-adapter-eos
+      run: cd cadc-storage-adapter-eos && ../gradlew --info clean build javadoc checkstyleMain install
 
 #    - name: build and test cadc-storage-adapter-s3
 #      run: cd cadc-storage-adapter-s3 && ../gradlew --info clean build javadoc checkstyleMain install
