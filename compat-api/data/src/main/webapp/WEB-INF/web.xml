@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE web-app
+    PUBLIC "-//Sun Microsystems, Inc.//DTD Web Application 2.3//EN"
+    "http://java.sun.com/j2ee/dtds/web-app_2_3.dtd">
+
+<web-app>
+  <display-name>data</display-name>
+  <welcome-file-list>
+    <welcome-file>index.html</welcome-file>
+  </welcome-file-list>
+  
+  <!--  Log Control -->
+  <servlet>
+    <servlet-name>logControl</servlet-name>
+    <servlet-class>ca.nrc.cadc.log.LogControlServlet</servlet-class>
+    <init-param>
+      <param-name>logLevel</param-name>
+      <param-value>info</param-value>
+    </init-param>
+    <init-param>
+      <param-name>logLevelPackages</param-name>
+      <param-value>
+        ca.nrc.cadc.rest
+        ca.nrc.cadc.data
+        ca.nrc.cadc.vos
+        ca.nrc.cadc.vosi
+        ca.nrc.cadc.net
+      </param-value>
+    </init-param>
+    <load-on-startup>1</load-on-startup>
+  </servlet>
+  
+  <servlet>
+    <servlet-name>PubServlet</servlet-name>
+    <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
+    <init-param>
+      <param-name>init</param-name>
+      <param-value>ca.nrc.cadc.data.DataInitAction</param-value>
+    </init-param>
+    <init-param>
+      <param-name>head</param-name>
+      <param-value>ca.nrc.cadc.data.HeadAction</param-value>
+    </init-param>
+    <init-param>
+      <param-name>get</param-name>
+      <param-value>ca.nrc.cadc.data.GetAction</param-value>
+    </init-param>
+    <load-on-startup>4</load-on-startup>
+  </servlet>
+  
+  <servlet>
+    <servlet-name>AuthServlet</servlet-name>
+    <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
+    <init-param>
+        <param-name>augmentSubject</param-name>
+        <param-value>false</param-value>
+    </init-param>
+    <init-param>
+      <param-name>head</param-name>
+      <param-value>ca.nrc.cadc.data.HeadAction</param-value>
+    </init-param>
+    <init-param>
+      <param-name>get</param-name>
+      <param-value>ca.nrc.cadc.data.GetAction</param-value>
+    </init-param>
+    <init-param>
+      <param-name>authRequired</param-name>
+      <param-value>true</param-value>
+    </init-param>
+    <load-on-startup>4</load-on-startup>
+  </servlet>
+
+  <servlet>
+    <servlet-name>AvailabilityServlet</servlet-name>
+    <servlet-class>ca.nrc.cadc.vosi.AvailabilityServlet</servlet-class>
+    <init-param>
+      <param-name>ca.nrc.cadc.vosi.AvailabilityPlugin</param-name>
+      <param-value>ca.nrc.cadc.data.AvailabilityImpl</param-value>
+    </init-param>
+    <load-on-startup>5</load-on-startup>
+  </servlet>
+
+  <servlet>
+    <servlet-name>CapabilitiesServlet</servlet-name>
+    <servlet-class>ca.nrc.cadc.rest.RestServlet</servlet-class>
+    <init-param>
+      <param-name>init</param-name>
+      <param-value>ca.nrc.cadc.vosi.CapInitAction</param-value>
+    </init-param>
+    <init-param>
+      <param-name>get</param-name>
+      <param-value>ca.nrc.cadc.vosi.CapGetAction</param-value>
+    </init-param>
+    <init-param>
+      <param-name>head</param-name>
+      <param-value>ca.nrc.cadc.vosi.CapHeadAction</param-value>
+    </init-param>
+    <init-param>
+      <param-name>input</param-name>
+      <param-value>/capabilities.xml</param-value>
+    </init-param>
+  </servlet>
+  
+  <servlet-mapping>
+    <servlet-name>PubServlet</servlet-name>
+    <url-pattern>/pub/*</url-pattern>
+  </servlet-mapping>
+  
+  <servlet-mapping>
+    <servlet-name>AuthServlet</servlet-name>
+    <url-pattern>/auth/*</url-pattern>
+  </servlet-mapping>
+
+
+  <servlet-mapping>
+    <servlet-name>AvailabilityServlet</servlet-name>
+    <url-pattern>/availability</url-pattern>
+  </servlet-mapping>
+
+  <servlet-mapping>
+    <servlet-name>CapabilitiesServlet</servlet-name>
+    <url-pattern>/capabilities</url-pattern>
+  </servlet-mapping>
+
+  <servlet-mapping>
+    <servlet-name>logControl</servlet-name>
+    <url-pattern>/logControl</url-pattern>
+  </servlet-mapping>
+
+  <!-- use tomcat supplied username/password challenge -->
+  <!--
+  <security-constraint>
+    <web-resource-collection>
+      <web-resource-name>auth</web-resource-name>
+      <description/>
+      <url-pattern>/auth/*</url-pattern>
+      <http-method>GET</http-method>
+      <http-method>POST</http-method>
+      <http-method>HEAD</http-method>
+      <http-method>PUT</http-method>
+      <http-method>OPTIONS</http-method>
+      <http-method>TRACE</http-method>
+      <http-method>DELETE</http-method>
+    </web-resource-collection>
+    <auth-constraint>
+      <description>force authentication for all requests</description>
+      <role-name>public</role-name>
+    </auth-constraint>
+  </security-constraint>
+
+  <login-config>
+    <auth-method>DIGEST</auth-method>
+    <realm-name>Canadian Astronomy Data Centre</realm-name>
+  </login-config>
+    -->
+</web-app>
