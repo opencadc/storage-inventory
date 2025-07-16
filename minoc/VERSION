@@ -4,6 +4,6 @@
 # tags with and without build number so operators use the versioned
 # tag but we always keep a timestamped tag in case a semantic tag gets
 # replaced accidentally
-VER=1.0.9
+VER=1.0.10
 TAGS="${VER} ${VER}-$(date -u +"%Y%m%dT%H%M%S")"
 unset VER

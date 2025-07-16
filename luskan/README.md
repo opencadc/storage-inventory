@@ -76,25 +76,35 @@ org.opencadc.luskan.isStorageSite={true|false}
 # optional authorization: allow anonymous queries (default: false for backwards compatibility)
 org.opencadc.luskan.allowAnon={true|false}
 
+# optional: authorise specific users
+org.opencadc.luskan.allowedUserX509={X509 distinguished name}
+
 # optional: group(s) whose members have authorization to query luskan 
-org.opencadc.luskan.allowedGroup={authorized group}
+org.opencadc.luskan.allowedGroup={GMS group identifier}
 
 # optional: rollover of UWS tables
 org.opencadc.luskan.uwsRollover = {days}
 ```
 
+The `org.opencadc.luskan.allowedAnon` property specifies that anonymous queries are allowed.
+
+The `org.opencadc.luskan.allowedUserX509` property(ies) specify the users who have have authorization 
+to make calls to the service. Although multiple values of this property are allowed, it is intended to 
+be used for operational purposes: a user running the metadata-sync process `fenwick` to synchronise 
+metadata between storage sites and a global inventory site. The _allowedGroup_ mechanism is recommended 
+when it is necessary to grant access to mroe than a few users.
+
 The `org.opencadc.luskan.allowedGroup` property(ies) specify the group(s) whose members have authorization 
 to make calls to the service. The value is a group identifiers (e.g. ivo://cadc.nrc.ca/gms?CADC); multiple
 groups can be granted access with multiple properties, one line per group.
 
-EXPERIMENTAL: The optional `org.opencadc.luskan.uwsRollover` property how frequently to rollover the `uws.Job` and
-`uws.JobDetail` tables. The value is a number of days; on startup, if the tables are older than this number 
-of days they will be renamed to include the date in the name and new (empty) tables will be created. Old 
-tables (those marked with a date) can be backed up, safely dropped, or just left lying around in case an 
-operator wants to look at the content (seems unlikely as the jobs here are queries mostly done by remote
-`fenwick` and `ratik` processes). It is possible that the rollover on startup could disrupt an executing
-query in a different instance of `luskan` because the job will no longer be in the active table; that might be
-worth improving/fixing in the future. Example:
+EXPERIMENTAL: The optional `org.opencadc.luskan.uwsRollover` property how frequently to rollover the
+`uws.Job` and `uws.JobDetail` tables. The value is a number of days; on startup, if the tables are 
+older than this number of days they will be renamed to include the date in the name and new (empty) tables
+will be created. Old tables (those marked with a date) can be backed up, safely dropped, or just left lying
+around in case an operator wants to look at the content (seems unlikely as the jobs here are queries mostly done by remote `fenwick` and `ratik` processes). It is possible that the rollover on startup could disrupt 
+an executing query in a different instance of `luskan` because the job will no longer be in the active table;
+that might be worth improving/fixing in the future. Example:
 ```
 org.opencadc.luskan.uwsRollover = 180
 ```

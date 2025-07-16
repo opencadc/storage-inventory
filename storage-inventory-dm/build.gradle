@@ -11,7 +11,7 @@ repositories {
 
 apply from: '../opencadc.gradle'
 
-sourceCompatibility = 1.8
+sourceCompatibility = 11
 
 group = 'org.opencadc'
 
@@ -50,7 +50,8 @@ xslt {
 }
 
 dependencies {
-    testCompile 'org.opencadc:cadc-vodml:[1.0.9,)'
+    testImplementation 'org.opencadc:cadc-util:[1.12,)'
+    testImplementation 'org.opencadc:cadc-vodml:[1.0.9,)'
 
-    testCompile 'junit:junit:[4.0,)' 
+    testImplementation 'junit:junit:[4.0,)' 
 }

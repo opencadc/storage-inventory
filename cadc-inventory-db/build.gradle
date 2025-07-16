@@ -15,7 +15,7 @@ sourceCompatibility = 11
 
 group = 'org.opencadc'
 
-version = '1.0.4'
+version = '1.0.5'
 
 description = 'OpenCADC Storage Inventory database library'
 def git_url = 'https://github.com/opencadc/storage-inventory'
@@ -29,5 +29,5 @@ dependencies {
     testImplementation 'junit:junit:[4.0,)'
     
     runtimeOnly 'org.postgresql:postgresql:[42.2.8,)'
-    intTestRuntime 'org.postgresql:postgresql:[42.2.8,)'
+    intTestRuntimeOnly 'org.postgresql:postgresql:[42.2.8,)'
 }

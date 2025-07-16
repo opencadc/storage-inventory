@@ -71,6 +71,7 @@ import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.Log4jInit;
 
 import java.io.File;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Iterator;
@@ -114,7 +115,7 @@ public class OpaqueFileSystemStorageAdapterTest {
     public void testStorageLocationMethods() {
         try {
             Path p = adapter.txnPath.resolve(UUID.randomUUID().toString());
-            StorageLocation sloc = adapter.pathToStorageLocation(p);
+            StorageLocation sloc = adapter.createStorageLocation(null, p);
             log.info("created: " + sloc);
             Assert.assertNotNull(sloc);
             Assert.assertNotNull(sloc.storageBucket);

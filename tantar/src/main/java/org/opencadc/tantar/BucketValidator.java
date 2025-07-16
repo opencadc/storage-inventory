@@ -76,6 +76,7 @@ import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.profiler.Profiler;
 import ca.nrc.cadc.util.BucketSelector;
+import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -96,6 +97,7 @@ import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
 import org.opencadc.inventory.db.ObsoleteStorageLocationDAO;
 import org.opencadc.inventory.db.StorageLocationEventDAO;
 import org.opencadc.inventory.db.version.InitDatabaseSI;
+import org.opencadc.inventory.storage.BucketType;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
@@ -165,6 +167,7 @@ public class BucketValidator implements ValidateActions {
                     this.bucketPrefixes.add(bucketIterator.next().trim());
                 }
                 break;
+            case PATH:
             case PLAIN:
                 if (bucketRange == null) {
                     throw new IllegalArgumentException("invalid bucket range: null");
@@ -643,29 +646,48 @@ public class BucketValidator implements ValidateActions {
      * @return Iterator instance of Artifact objects
      */
     Iterator<Artifact> getInventoryIterator() {
-        return new Iterator<Artifact>() {
-            final Iterator<String> bucketPrefixIterator = bucketPrefixes.iterator();
+        return new StoredArtifactIterator();
+    }
+    
+    private class StoredArtifactIterator implements ResourceIterator<Artifact> {
 
-            // The bucket range should have at least one value, so calling next() should be safe here.
-            ResourceIterator<Artifact> artifactIterator = iteratorDAO.storedIterator(bucketPrefixIterator.next());
-
-            @Override
-            public boolean hasNext() {
-                if (artifactIterator.hasNext()) {
-                    return true;
-                } else if (bucketPrefixIterator.hasNext()) {
-                    artifactIterator = iteratorDAO.storedIterator(bucketPrefixIterator.next());
-                    return hasNext();
-                } else {
-                    return false;
-                }
+        Iterator<String> bucketPrefixIterator = bucketPrefixes.iterator();
+        ResourceIterator<Artifact> artifactIterator;
+        
+        public StoredArtifactIterator() {
+            if (BucketType.NONE.equals(storageAdapter.getBucketType())) {
+                this.artifactIterator = iteratorDAO.storedIterator(null);
+            } else {
+                // The bucket range should have at least one value, so calling next() should be safe here.
+                this.artifactIterator = iteratorDAO.storedIterator(bucketPrefixIterator.next());
             }
+        }
 
-            @Override
-            public Artifact next() {
-                return artifactIterator.next();
+        @Override
+        public boolean hasNext() {
+            if (artifactIterator.hasNext()) {
+                return true;
+            } else if (bucketPrefixIterator.hasNext()) {
+                artifactIterator = iteratorDAO.storedIterator(bucketPrefixIterator.next());
+                return hasNext();
+            } else {
+                return false;
             }
-        };
+        }
+
+        @Override
+        public Artifact next() {
+            return artifactIterator.next();
+        }
+
+        @Override
+        public void close() throws IOException {
+            if (artifactIterator != null) {
+                artifactIterator.close();
+            }
+        }
+        
+        
     }
 
     /**
@@ -734,8 +756,12 @@ public class BucketValidator implements ValidateActions {
         StorageMetadataIterator() throws StorageEngageException {
             this.bucketPrefixIterator = bucketPrefixes.iterator();
 
-            // The bucket range should have at least one value, so calling next() should be safe here.
-            this.storageMetadataIterator = storageAdapter.iterator(bucketPrefixIterator.next(), includeRecoverable);
+            if (BucketType.NONE.equals(storageAdapter.getBucketType())) {
+                this.storageMetadataIterator = storageAdapter.iterator(null, includeRecoverable);
+            } else {
+                // The bucket range should have at least one value, so calling next() should be safe here.
+                this.storageMetadataIterator = storageAdapter.iterator(bucketPrefixIterator.next(), includeRecoverable);
+            }
             advance();
         }
 

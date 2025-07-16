@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2024.                            (c) 2024.
+*  (c) 2025.                            (c) 2025.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -128,6 +128,8 @@ public class ProtocolsGenerator {
     
     private final Map<URI, Availability> siteAvailabilities;
     private final Map<URI, StorageSiteRule> siteRules;
+    
+    public final List<URI> siteAvoid = new ArrayList<>();
     
     /**
      * Optional StorageResolver to resolve Artifact.uri to an external data provider.
@@ -326,7 +328,7 @@ public class ProtocolsGenerator {
 
     // contains the algorithm for prioritizing storage sites to get file
     static List<StorageSite> prioritizePullFromSites(List<StorageSite> storageSites) {
-        // filter out non-readble
+        // filter out non-readable
         List<StorageSite> ret = new ArrayList<>(storageSites.size());
         for (StorageSite s : storageSites) {
             if (s.getAllowRead()) {
@@ -346,9 +348,7 @@ public class ProtocolsGenerator {
         StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
         Set<StorageSite> sites = storageSiteDAO.list(); // this set could be cached
 
-        List<Protocol> protos = new ArrayList<>();
         Artifact artifact = artifactDAO.get(artifactURI);
-        
         if (artifact == null) {
             if (this.preventNotFound) {
                 log.debug("Artifact " + artifactURI.toASCIIString() + " not found in global. Check sites.");
@@ -380,9 +380,13 @@ public class ProtocolsGenerator {
         
         List<StorageSite> readableSites = prioritizePullFromSites(storageSites);
         log.debug("pullFrom: known sites " + storageSites.size() + " -> readableSites " + readableSites.size());
+        
+        List<Protocol> protos = new ArrayList<>();
+        List<Protocol> avoidable = new ArrayList<>();
         for (StorageSite storageSite : readableSites) {
+            boolean avoid = siteAvoid.contains(storageSite.getResourceID());
             log.debug("trying site: " + storageSite.getResourceID() + " allowRead=" + storageSite.getAllowRead());
-            Capability filesCap = getFilesCapability(storageSite);
+            Capability filesCap = getFilesCapability(storageSite); // checks availability
             if (filesCap != null && storageSite.getAllowRead()) {
                 for (Protocol proto : transfer.getProtocols()) {
                     log.debug("\tprotocol: " + proto);
@@ -391,7 +395,11 @@ public class ProtocolsGenerator {
                     if (proto.getUri().equals(filesCap.getStandardID())) {
                         Protocol p = new Protocol(proto.getUri());
                         p.setEndpoint(storageSite.getResourceID().toASCIIString());
-                        protos.add(p);
+                        if (avoid) {
+                            avoidable.add(p);
+                        } else {
+                            protos.add(p);
+                        }
                     }
                     URI sec = proto.getSecurityMethod();
                     if (sec == null) {
@@ -416,7 +424,11 @@ public class ProtocolsGenerator {
                                 p.setSecurityMethod(proto.getSecurityMethod());
                             }
                             p.setEndpoint(sb.toString());
-                            protos.add(p);
+                            if (avoid) {
+                                avoidable.add(p);
+                            } else {
+                                protos.add(p);
+                            }
                             log.debug("added: " + p);
 
                             // add a plain anon URL
@@ -429,7 +441,11 @@ public class ProtocolsGenerator {
                                     sb.append(":fo/").append(filenameOverride);
                                 }
                                 p.setEndpoint(sb.toString());
-                                protos.add(p);
+                                if (avoid) {
+                                    avoidable.add(p);
+                                } else {
+                                    protos.add(p);
+                                }
                                 log.debug("added: " + p);
                             }
                         } else {
@@ -440,10 +456,10 @@ public class ProtocolsGenerator {
                         log.debug("reject protocol: " + proto
                                 + " reason: unsupported security method: " + proto.getSecurityMethod());
                     }
-                    
                 }
             }
         }
+        
         if (storageResolver != null) {
             try {
                 URL externalURL = storageResolver.toURL(artifactURI);
@@ -465,10 +481,14 @@ public class ProtocolsGenerator {
         }
 
         if (protos.isEmpty()) {
-            // unable to generate any URLs
+            protos.addAll(avoidable);
+        }
+        
+        if (protos.isEmpty()) {
+            // unable to generate any URLs - maybe "no copies available"?
             throw new ResourceNotFoundException("not found: " + artifactURI.toString());
         }
-
+        
         return protos;
     }
 
@@ -498,6 +518,11 @@ public class ProtocolsGenerator {
         // produce URLs for all writable sites
         log.debug("pushTo: known sites " + storageSites.size() + " -> writableSites " + orderedSites.size());
         for (StorageSite storageSite : orderedSites) {
+            // check if this site avoided
+            if (siteAvoid.contains(storageSite.getResourceID())) {
+                log.debug("avoid storage site: " + storageSite.getResourceID());
+                continue;
+            }
             // check if site is currently offline
             if (!isAvailable(storageSite.getResourceID())) {
                 log.warn("storage site is offline: " + storageSite.getResourceID());

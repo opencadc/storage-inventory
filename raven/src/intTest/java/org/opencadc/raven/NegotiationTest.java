@@ -118,7 +118,7 @@ public class NegotiationTest extends RavenTest {
     private static final Logger log = Logger.getLogger(NegotiationTest.class);
     
     static {
-        Log4jInit.setLevel("org.opencadc.raven", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.raven", Level.INFO);
         Log4jInit.setLevel("ca.nrc.cadc.db", Level.INFO);
     }
 

@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2025.                            (c) 2025.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,19 +65,83 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.storage;
+package org.opencadc.inventory.storage.fs;
+
+import ca.nrc.cadc.util.Log4jInit;
+import java.io.File;
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+import org.junit.Assert;
+import org.junit.Test;
+import org.opencadc.inventory.StorageLocation;
 
 /**
- * BucketType are the different kinds of buckets supported by a StorageAdapter implementation.
- * NONE: no bucket support at all. HEX: buckets are strings of hex chars and fewer larger buckets
- * can be dynamically used by using a prefix. PATH: buckets are relative paths and could be prefixed.
- * PLAIN: buckets are opaque strings that can only be used as-is.
- * 
+ *
  * @author pdowler
  */
-public enum BucketType {
-    NONE,
-    HEX,
-    PATH,
-    PLAIN
+public class LogicalFileSystemStorageAdapterTest {
+    private static final Logger log = Logger.getLogger(LogicalFileSystemStorageAdapterTest.class);
+
+    static {
+        Log4jInit.setLevel("org.opencadc.inventory.storage.fs", Level.INFO);
+    }
+
+    LogicalFileSystemStorageAdapter adapter;
+
+    public LogicalFileSystemStorageAdapterTest() {
+        File tmp = new File("build/tmp");
+        File root = new File(tmp, "logical-unit-tests");
+        root.mkdir();
+        this.adapter = new LogicalFileSystemStorageAdapter(root);
+        log.info("    content path: " + adapter.contentPath);
+        log.info("transaction path: " + adapter.txnPath);
+        Assert.assertTrue("testInit: contentPath", Files.exists(adapter.contentPath));
+        Assert.assertTrue("testInit: txnPath", Files.exists(adapter.txnPath));
+    }
+    
+    @Test
+    public void testStorageLocationRoundTrip() {
+        Path abs;
+        Path rel;
+        try {
+            URI typicalPath = URI.create("scheme:path/filename");
+            StorageLocation sloc1 = LogicalFileSystemStorageAdapter.createStorageLocationImpl(typicalPath);
+            Assert.assertNotNull(sloc1);
+            Assert.assertEquals(URI.create("filename"), sloc1.getStorageID());
+            Assert.assertEquals("scheme:path/", sloc1.storageBucket);
+            abs = adapter.storageLocationToPath(sloc1);
+            Assert.assertNotNull(abs);
+            rel = adapter.contentPath.relativize(abs);
+            Assert.assertEquals(typicalPath.toASCIIString(), rel.toString());
+            
+            URI noPath = URI.create("scheme:filename");
+            StorageLocation sloc2 = LogicalFileSystemStorageAdapter.createStorageLocationImpl(noPath);
+            Assert.assertNotNull(sloc2);
+            Assert.assertEquals(URI.create("filename"), sloc2.getStorageID());
+            Assert.assertEquals("scheme:", sloc2.storageBucket);
+            abs = adapter.storageLocationToPath(sloc2);
+            Assert.assertNotNull(abs);
+            rel = adapter.contentPath.relativize(abs);
+            Assert.assertEquals(noPath.toASCIIString(), rel.toString());
+            
+            // make sure it is the whole path -> storage bucket
+            String expectedBucket = "scheme:path/to/some/thing/";
+            URI longPath = URI.create(expectedBucket + "filename");
+            StorageLocation sloc3 = LogicalFileSystemStorageAdapter.createStorageLocationImpl(longPath);
+            Assert.assertNotNull(sloc3);
+            Assert.assertEquals(URI.create("filename"), sloc3.getStorageID());
+            Assert.assertEquals(expectedBucket, sloc3.storageBucket);
+            abs = adapter.storageLocationToPath(sloc3);
+            Assert.assertNotNull(abs);
+            rel = adapter.contentPath.relativize(abs);
+            Assert.assertEquals(longPath.toASCIIString(), rel.toString());
+            
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
 }

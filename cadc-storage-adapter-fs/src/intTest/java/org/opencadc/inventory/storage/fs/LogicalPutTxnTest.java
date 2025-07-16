@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2025.                            (c) 2025.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,19 +65,78 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.storage;
+package org.opencadc.inventory.storage.fs;
+
+import ca.nrc.cadc.util.Log4jInit;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+import org.junit.Assert;
+import org.junit.Before;
+import org.opencadc.inventory.storage.test.StorageAdapterPutTxnTest;
 
 /**
- * BucketType are the different kinds of buckets supported by a StorageAdapter implementation.
- * NONE: no bucket support at all. HEX: buckets are strings of hex chars and fewer larger buckets
- * can be dynamically used by using a prefix. PATH: buckets are relative paths and could be prefixed.
- * PLAIN: buckets are opaque strings that can only be used as-is.
- * 
+ *
  * @author pdowler
  */
-public enum BucketType {
-    NONE,
-    HEX,
-    PATH,
-    PLAIN
+public class LogicalPutTxnTest extends StorageAdapterPutTxnTest {
+    private static final Logger log = Logger.getLogger(LogicalPutTxnTest.class);
+
+    static final File ROOT_DIR;
+    static {
+        Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
+        ROOT_DIR = new File("build/tmp/opaque-int-tests");
+        ROOT_DIR.mkdir();
+    }
+    
+    final LogicalFileSystemStorageAdapter fsAdapter;
+    
+    public LogicalPutTxnTest() {
+        super(new LogicalFileSystemStorageAdapter(ROOT_DIR));
+        this.fsAdapter = (LogicalFileSystemStorageAdapter) super.adapter;
+
+        log.debug("    content path: " + fsAdapter.contentPath);
+        log.debug("transaction path: " + fsAdapter.txnPath);
+        Assert.assertTrue("testInit: contentPath", Files.exists(fsAdapter.contentPath));
+        Assert.assertTrue("testInit: txnPath", Files.exists(fsAdapter.txnPath));
+    }
+    
+    @Before
+    public void cleanupBefore() throws Exception {
+        log.info("cleanupBefore: " + fsAdapter.contentPath.getParent());
+        if (Files.exists(fsAdapter.contentPath)) {
+            Files.walkFileTree(fsAdapter.contentPath, new SimpleFileVisitor<Path>() {
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                    Files.delete(file);
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+                    if (!fsAdapter.contentPath.equals(dir)) {
+                        Files.delete(dir);
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        }
+        if (Files.exists(fsAdapter.txnPath)) {
+            Files.walkFileTree(fsAdapter.txnPath, new SimpleFileVisitor<Path>() {
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                    Files.delete(file);
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        }
+        log.info("cleanupBefore: " + fsAdapter.contentPath.getParent() + " DONE");
+    }
+
 }

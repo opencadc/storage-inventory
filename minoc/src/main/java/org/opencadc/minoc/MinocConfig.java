@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2023.                            (c) 2023.
+*  (c) 2025.                            (c) 2025.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,10 +67,9 @@
 
 package org.opencadc.minoc;
 
-import ca.nrc.cadc.auth.AuthMethod;
+import ca.nrc.cadc.auth.X500PrincipalComparator;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpTransfer;
-import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.MultiValuedProperties;
@@ -82,7 +81,10 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
+import javax.security.auth.x500.X500Principal;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.Namespace;
@@ -111,6 +113,9 @@ public class MinocConfig {
     static final String READABLE_KEY = MINOC_KEY + ".readable";
     static final String WRITABLE_KEY = MINOC_KEY + ".writable";
     static final String RECOVERABLE_NS_KEY = MINOC_KEY + ".recoverableNamespace";
+    static final String ARCHIVE_OPS_KEY = MINOC_KEY + ".archiveOperatorX509";
+    static final String FILE_SYNC_OPS_KEY = MINOC_KEY + ".fileSyncOperatorX509";
+    
     static final String DEV_AUTH_ONLY_KEY = MINOC_KEY + ".authenticateOnly";
     
     private final MultiValuedProperties configProperties;
@@ -121,6 +126,9 @@ public class MinocConfig {
     private final boolean readable;
     private final boolean writable;
     private final List<Namespace> recoverableNamespaces = new ArrayList<>();
+    
+    final Set<X500Principal> archiveOperators = new TreeSet<>(new X500PrincipalComparator());
+    final Set<X500Principal> fileSyncOperators = new TreeSet<>(new X500PrincipalComparator());
     
     final boolean authenticateOnly;
     
@@ -151,6 +159,30 @@ public class MinocConfig {
                     writeGrantServices.add(u);
                 } catch (URISyntaxException ex) {
                     throw new IllegalStateException("invalid config: " + WRITE_GRANTS_KEY + "=" + s + " INVALID", ex);
+                }
+            }
+        }
+        
+        List<String> aops = configProperties.getProperty(ARCHIVE_OPS_KEY);
+        if (aops != null) {
+            for (String s : aops) {
+                try {
+                    X500Principal p = new X500Principal(s);
+                    archiveOperators.add(p);
+                } catch (Exception ex) {
+                    throw new IllegalStateException("invalid config: " + ARCHIVE_OPS_KEY + "=" + s + " INVALID", ex);
+                }
+            }
+        }
+        
+        List<String> fsus = configProperties.getProperty(FILE_SYNC_OPS_KEY);
+        if (fsus != null) {
+            for (String s : fsus) {
+                try {
+                    X500Principal p = new X500Principal(s);
+                    fileSyncOperators.add(p);
+                } catch (Exception ex) {
+                    throw new IllegalStateException("invalid config: " + FILE_SYNC_OPS_KEY + "=" + s + " INVALID", ex);
                 }
             }
         }
@@ -414,7 +446,9 @@ public class MinocConfig {
     public StorageAdapter getStorageAdapter() {
         String cname = configProperties.getFirstPropertyValue(MinocConfig.SA_KEY);
         StorageAdapter storageAdapter = InventoryUtil.loadPlugin(cname);
-        storageAdapter.setRecoverableNamespaces(recoverableNamespaces);
+        if (!recoverableNamespaces.isEmpty()) {
+            storageAdapter.setRecoverableNamespaces(recoverableNamespaces);
+        }
         return storageAdapter;
     }
     

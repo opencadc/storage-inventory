@@ -73,10 +73,10 @@ import ca.nrc.cadc.auth.AuthMethod;
 import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.auth.IdentityManager;
 import ca.nrc.cadc.auth.NotAuthenticatedException;
+import ca.nrc.cadc.auth.X500PrincipalComparator;
 import ca.nrc.cadc.cred.client.CredUtil;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
-import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.uws.Job;
 import ca.nrc.cadc.uws.server.JobPersistenceException;
@@ -89,10 +89,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import javax.security.auth.Subject;
+import javax.security.auth.x500.X500Principal;
 import org.apache.log4j.Logger;
-import org.opencadc.gms.GroupClient;
 import org.opencadc.gms.GroupURI;
-import org.opencadc.gms.GroupUtil;
 import org.opencadc.gms.IvoaGroupClient;
 
 public class AuthJobPersistence extends PostgresJobPersistence {
@@ -127,12 +126,20 @@ public class AuthJobPersistence extends PostgresJobPersistence {
             throw new NotAuthenticatedException("permission denied");
         }
         
+        List<String> configUsers = props.getProperty(LuskanConfig.ALLOWED_USER_X509);
+        Set<X500Principal> allowedUsers = new TreeSet<>(new X500PrincipalComparator());
+        configUsers.forEach(u -> allowedUsers.add(new X500Principal(u)));
+        for (X500Principal p : s.getPrincipals(X500Principal.class)) {
+            if (allowedUsers.contains(p)) {
+                // TODO: would be nice to be able to log this in the LogInfo object
+                log.debug("allowedUserX509 query granted: " + p);
+                return;
+            }
+        }
+
         List<String> configGroups = props.getProperty(LuskanConfig.ALLOWED_GROUP);
         Set<GroupURI> allowedGroups = new TreeSet<>();
         configGroups.forEach(group -> allowedGroups.add(new GroupURI(URI.create(group))));
-        if (allowedGroups.isEmpty()) {
-            throw new AccessControlException("permission denied");
-        }
                 
         try {
             if (CredUtil.checkCredentials()) {
@@ -144,7 +151,7 @@ public class AuthJobPersistence extends PostgresJobPersistence {
                         sb.append(" ").append(g.getURI());
                     }
                     // TODO: would be nice to be able to log this in the LogInfo object
-                    log.debug("query granted: " + sb.toString());
+                    log.debug("GMS query granted: " + sb.toString());
                     return;
                 }
                 

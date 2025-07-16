@@ -91,6 +91,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.Namespace;
+import org.opencadc.inventory.storage.BucketType;
 import org.opencadc.inventory.storage.NewArtifact;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageMetadata;
@@ -406,44 +407,96 @@ public abstract class StorageAdapterBasicTest {
         }
     }
     
+    protected Iterator<URI> getTestArtifacts(int start, int num, String namespace) {
+        return new URIGenerator(start, num, namespace);
+    }
+
+    private class URIGenerator implements Iterator<URI> {
+        private int num;
+        private int cur;
+        private String namespace;
+
+        public URIGenerator(int start, int num, String namespace) {
+            this.cur = start;
+            this.num = num;
+            this.namespace = namespace;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return cur < num;
+        }
+
+        @Override
+        public URI next() {
+            return URI.create(namespace + "testIteratorBucketPrefix-" + cur++);
+        }
+    }
+
     @Test
     public void testIteratorBucketPrefix() {
         int iterNum = 13;
         long datalen = 8192L;
         try {
             SortedSet<StorageMetadata> expected = new TreeSet<>();
-            for (int i = 0; i < iterNum; i++) {
-                URI artifactURI = URI.create(TEST_NAMESPACE + "TEST/testIteratorBucketPrefix-" + i);
+            SortedSet<String> buckets = new TreeSet<>();
+            Iterator<URI> gen = getTestArtifacts(0, iterNum, TEST_NAMESPACE + "FOO/");
+            while (gen.hasNext()) {
+                URI artifactURI = gen.next();
                 NewArtifact na = new NewArtifact(artifactURI);
                 na.contentLength = (long) datalen;
                 StorageMetadata sm = adapter.put(na,  TestUtil.getInputStreamOfRandomBytes(datalen), null);
-                log.debug("testList put: " + artifactURI + " to " + sm.getStorageLocation());
+                if (sm.getStorageLocation().storageBucket != null) {
+                    buckets.add(sm.getStorageLocation().storageBucket);
+                }
+                log.info("testIteratorBucketPrefix put: " + artifactURI + " to " + sm.getStorageLocation());
                 expected.add(sm);
             }
             // put + delete could leave empty buckets behind: should be harmless
-            for (int i = iterNum; i < 2 * iterNum; i++) {
-                String suri = "test:FOO/bar" + i;
-                URI uri = URI.create(suri);
-                NewArtifact na = new NewArtifact(uri);
+            gen = getTestArtifacts(iterNum, 2 * iterNum, TEST_NAMESPACE + "BAR/");
+            while (gen.hasNext()) {
+                URI artifactURI = gen.next();
+                NewArtifact na = new NewArtifact(artifactURI);
                 na.contentLength = (long) datalen;
-                StorageMetadata meta = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(datalen), null);
-                adapter.delete(meta.getStorageLocation());
-                log.info("extra storageBucket: " + meta.getStorageLocation().storageBucket);
+                StorageMetadata sm = adapter.put(na, TestUtil.getInputStreamOfRandomBytes(datalen), null);
+                if (sm.getStorageLocation().storageBucket != null) {
+                    buckets.add(sm.getStorageLocation().storageBucket);
+                }
+                log.info("testIteratorBucketPrefix put: " + artifactURI + " to " + sm.getStorageLocation());
+                adapter.delete(sm.getStorageLocation());
+                log.info("extra storageBucket: " + sm.getStorageLocation().storageBucket);
             }
             log.info("testIteratorBucketPrefix created: " + expected.size());
             
-            int found = 0;
-            for (byte b = 0; b < 16; b++) {
-                String bpre = HexUtil.toHex(b).substring(1);
-                log.debug("bucket prefix: " + bpre);
-                Iterator<StorageMetadata> i = adapter.iterator(bpre);
-                while (i.hasNext()) {
-                    StorageMetadata sm = i.next();
-                    Assert.assertTrue("prefix match", sm.getStorageLocation().storageBucket.startsWith(bpre));
-                    found++;
+            if (BucketType.HEX.equals(adapter.getBucketType())) {
+                // scan all possible buckets
+                int found = 0;
+                for (byte b = 0; b < 16; b++) {
+                    String bpre = HexUtil.toHex(b).substring(1);
+                    log.debug("bucket prefix: " + bpre);
+                    Iterator<StorageMetadata> i = adapter.iterator(bpre);
+                    while (i.hasNext()) {
+                        StorageMetadata sm = i.next();
+                        Assert.assertTrue("prefix match", sm.getStorageLocation().storageBucket.startsWith(bpre));
+                        found++;
+                    }
                 }
+                Assert.assertEquals("found with bucketPrefix", expected.size(), found);
+            } else {
+                // scan known buckets
+                int found = 0;
+                for (String sb : buckets) {
+                    log.info("scan bucket prefix: " + sb);
+                    Iterator<StorageMetadata> i = adapter.iterator(sb);
+                    while (i.hasNext()) {
+                        StorageMetadata sm = i.next();
+                        log.info("found: " + sm.getStorageLocation());
+                        Assert.assertTrue("prefix match", sm.getStorageLocation().storageBucket.startsWith(sb));
+                        found++;
+                    }
+                }
+                Assert.assertEquals("found with bucketPrefix", expected.size(), found);
             }
-            Assert.assertEquals("found with bucketPrefix", expected.size(), found);
             
         } catch (Exception ex) {
             log.error("unexpected exception", ex);

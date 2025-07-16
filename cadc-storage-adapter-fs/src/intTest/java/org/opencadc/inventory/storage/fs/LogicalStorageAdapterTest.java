@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2019.                            (c) 2019.
+ *  (c) 2025.                            (c) 2025.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,6 +67,7 @@
 
 package org.opencadc.inventory.storage.fs;
 
+import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.Log4jInit;
 
 import java.io.File;
@@ -87,9 +88,9 @@ import org.opencadc.inventory.storage.test.StorageAdapterBasicTest;
  * @author majorb
  *
  */
-public class FileSystemStorageAdapterTest extends StorageAdapterBasicTest {
+public class LogicalStorageAdapterTest extends StorageAdapterBasicTest {
     
-    private static final Logger log = Logger.getLogger(FileSystemStorageAdapterTest.class);
+    private static final Logger log = Logger.getLogger(LogicalStorageAdapterTest.class);
     
     static final File ROOT_DIR;
 
@@ -99,14 +100,14 @@ public class FileSystemStorageAdapterTest extends StorageAdapterBasicTest {
         ROOT_DIR.mkdir();
     }
     
-    final FileSystemStorageAdapter fsAdapter;
+    final LogicalFileSystemStorageAdapter fsAdapter;
             
-    public FileSystemStorageAdapterTest() { 
-        super(new FileSystemStorageAdapter(ROOT_DIR));
-        this.fsAdapter = (FileSystemStorageAdapter) super.adapter;
+    public LogicalStorageAdapterTest() throws InvalidConfigException { 
+        super(new LogicalFileSystemStorageAdapter(ROOT_DIR));
+        this.fsAdapter = (LogicalFileSystemStorageAdapter) super.adapter;
 
-        log.debug("    content path: " + fsAdapter.contentPath);
-        log.debug("transaction path: " + fsAdapter.txnPath);
+        log.info("    content path: " + fsAdapter.contentPath);
+        log.info("transaction path: " + fsAdapter.txnPath);
         Assert.assertTrue("testInit: contentPath", Files.exists(fsAdapter.contentPath));
         Assert.assertTrue("testInit: txnPath", Files.exists(fsAdapter.txnPath));
     }
@@ -141,19 +142,5 @@ public class FileSystemStorageAdapterTest extends StorageAdapterBasicTest {
             });
         }
         log.info("cleanupBefore: " + fsAdapter.contentPath.getParent() + " DONE");
-    }
-
-    @Override
-    @Test
-    @Ignore
-    public void testIteratorBucketPrefix() {
-        super.testIteratorBucketPrefix();
-    }
-
-    @Override
-    @Test
-    @Ignore
-    public void testIterator() {
-        super.testIterator();
     }
 }

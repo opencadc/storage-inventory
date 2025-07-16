@@ -77,6 +77,10 @@ The following keys are optional:
 # services that are trusted to generate pre-auth URLs
 org.opencadc.minoc.trust.preauth = {resourceID}
 
+# operations permissions (optional)
+org.opencadc.minoc.archiveOperator = {X509 distinguished name}
+org.opencadc.minoc.fileSyncOperator = {X509 distinguished name}
+
 # permission granting services (optional)
 org.opencadc.minoc.readGrantProvider={resourceID of a permission granting service}
 org.opencadc.minoc.writeGrantProvider={resourceID of a permission granting service}
@@ -102,6 +106,13 @@ org.opencadc.minoc.trust.preauth = ivo://example.net/vault
 ```
 Setting _trust.preauth_ one or more times implicitly sets _readable_ and _writable_ to _true_.
 
+The optional _archiveOperator_ and _fileSyncOperator_ keys grant permissions directly to operational
+users. An _archiveOperator_ has read-write permission to **ALL** namespaces and files and can be used 
+to enable processes to put files into the archive. A _fileSyncOperator_ has read-only permission to
+**ALL** namespaces and files and can be used to enable file-sync (`critwall` running at a different 
+storage site). Both of these can be used with no additional AAI components, but they do require front-end
+proxy setup and an IdentityManager implementation to support X509 client certificate use.
+
 The optional _readGrantProvider_ and _writeGrantProvider_ keys configure minoc to call other services to 
 get grants (permissions) for operations. Multiple values of the granting service resourceID(s) may be provided 
 by including multiple property settings (one per line). All services will be consulted but a single positive 
@@ -109,8 +120,9 @@ result is sufficient to grant permission for an action. Setting these values imp
 and _writable_ to _true_ respectively.
 
 The optional _readable_ and _writable_ keys configure minoc explicitly rather than relying on one or more of 
-the above trust or grant provider settings. For example, this allows one to configure a read-only minoc
-(_writable_ = false) that trusts other services to do the authorization checks.
+the above trust or grant provider settings. For example, this allows one to configure a minoc service to
+advertise itself as read-only (_writable_ = false) even though local authorisation would allow read-write
+access.
 
 The optional _recoverableNamespace_ key causes `minoc` to configure the storage adapter so that deletions
 preserve the file content in a recoverable state. This generally means that storage space remains in use
