@@ -80,11 +80,10 @@ import ca.nrc.cadc.util.PropertiesReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
-import java.nio.file.Path;
+import java.net.URL;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
@@ -109,7 +108,11 @@ public class EosStorageAdapter implements StorageAdapter {
     private static final Logger log = Logger.getLogger(EosStorageAdapter.class);
 
     static final String CONFIG_FILE = "cadc-storage-adapter-eos.properties";
-    static final String CONFIG_PROPERTY_SRV = EosStorageAdapter.class.getName() + ".mgmServer";
+    // https://eos-mgm.keel-dev.arbutus.cloud:8443/eos/keel-dev.arbutus.cloud/data/lsst/users/fabio/hello.txt?authz=$EOSAUTHZ
+
+    static final String CONFIG_PROPERTY_MGM_SRV = EosStorageAdapter.class.getName() + ".mgmServer";
+    static final String CONFIG_PROPERTY_MGM_PATH = EosStorageAdapter.class.getName() + ".mgmServerPath";
+    static final String CONFIG_PROPERTY_MGM_HTTPS_PORT = EosStorageAdapter.class.getName() + ".mgmHttpsPort";
     static final String CONFIG_PROPERTY_TOKEN = EosStorageAdapter.class.getName() + ".authToken";
     static final String CONFIG_PROPERTY_SCHEME = EosStorageAdapter.class.getName() + ".artifactScheme";
 
@@ -120,10 +123,10 @@ public class EosStorageAdapter implements StorageAdapter {
     private static final String EOS_FILE_SIZE = "size";
 
     private final URI mgmServer;
+    private final String mgmPath;
+    private final URL mgmBaseURL;
     private final String authToken;
     private final String artifactScheme;
-    
-    private final String remotePath;
 
     /**
      * Standard constructor for dynamic loading and operational use.
@@ -132,9 +135,21 @@ public class EosStorageAdapter implements StorageAdapter {
         PropertiesReader pr = new PropertiesReader(CONFIG_FILE);
         MultiValuedProperties mvp = pr.getAllProperties();
 
-        String srv = mvp.getFirstPropertyValue(CONFIG_PROPERTY_SRV);
+        String srv = mvp.getFirstPropertyValue(CONFIG_PROPERTY_MGM_SRV);
         if (srv == null) {
-            throw new InvalidConfigException("failed to load " + CONFIG_PROPERTY_SRV
+            throw new InvalidConfigException("failed to load " + CONFIG_PROPERTY_MGM_SRV
+                    + " from " + CONFIG_FILE);
+        }
+
+        String path = mvp.getFirstPropertyValue(CONFIG_PROPERTY_MGM_PATH);
+        if (path == null) {
+            throw new InvalidConfigException("failed to load " + CONFIG_PROPERTY_MGM_PATH
+                    + " from " + CONFIG_FILE);
+        }
+
+        String port = mvp.getFirstPropertyValue(CONFIG_PROPERTY_MGM_HTTPS_PORT);
+        if (port == null) {
+            throw new InvalidConfigException("failed to load " + CONFIG_PROPERTY_MGM_HTTPS_PORT
                     + " from " + CONFIG_FILE);
         }
 
@@ -150,19 +165,39 @@ public class EosStorageAdapter implements StorageAdapter {
                     + " from " + CONFIG_FILE);
         }
 
+        this.mgmPath = path;
         try {
             this.mgmServer = new URI(srv);
         } catch (URISyntaxException ex) {
-            throw new InvalidConfigException("invalid " + CONFIG_PROPERTY_SRV + ": " + srv, ex);
+            throw new InvalidConfigException("invalid " + CONFIG_PROPERTY_MGM_SRV + ": " + srv, ex);
         }
+        
+        StringBuilder sb = new StringBuilder();
+        sb.append("https://").append(mgmServer.getAuthority());
+        if (port != null) {
+            sb.append(":").append(port);
+        }
+        sb.append(path);
+        String surl = sb.toString();
+        try {
+            this.mgmBaseURL = new URL(surl);
+        } catch (MalformedURLException ex) {
+            throw new InvalidConfigException("failed to construct https URL: " + surl, ex);
+        }
+        
         if (tok.startsWith("zteos64:")) {
             this.authToken = tok;
         } else {
             throw new InvalidConfigException("invalid " + CONFIG_PROPERTY_TOKEN + ": expected zteos64:{encoded}");
         }
+        
         this.artifactScheme = as;
         
-        this.remotePath = mgmServer.getPath();
+        log.warn("mgmServer: " + mgmServer);
+        log.warn("mgmPath: " + mgmPath);
+        log.warn("mgm http: " + mgmBaseURL);
+        log.warn("artifact scheme: " + artifactScheme);
+        log.warn("authToken: REDACTED");
     }
 
     @Override
@@ -223,8 +258,8 @@ public class EosStorageAdapter implements StorageAdapter {
                 switch (kv[0]) {
                     case EOS_PATH:
                         log.warn("path: " + kv[1]);
-                        if (kv[1].startsWith(remotePath)) {
-                            String rel = kv[1].substring(remotePath.length() + 1);
+                        if (kv[1].startsWith(mgmPath)) {
+                            String rel = kv[1].substring(mgmPath.length() + 1);
                             artifactURI = URI.create(artifactScheme + ":" + rel);
                             sloc = pathToStorageLocation(rel);
                         }

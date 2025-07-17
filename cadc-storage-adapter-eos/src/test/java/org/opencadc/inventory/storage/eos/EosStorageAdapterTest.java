@@ -70,6 +70,7 @@ package org.opencadc.inventory.storage.eos;
 import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.Log4jInit;
+import ca.nrc.cadc.util.PropertiesReader;
 import java.text.DateFormat;
 import java.util.Date;
 import org.apache.log4j.Level;
@@ -88,13 +89,22 @@ public class EosStorageAdapterTest {
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
+        Log4jInit.setLevel(PropertiesReader.class.getPackageName(), Level.DEBUG);
     }
     
     final EosStorageAdapter eosAdapter;
     
     public EosStorageAdapterTest() throws InvalidConfigException {
-        this.eosAdapter = new EosStorageAdapter();
-        log.info("loaded: " + eosAdapter.getClass().getName());
+        try {
+            System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "build/resources/test");
+            this.eosAdapter = new EosStorageAdapter();
+            log.info("loaded: " + eosAdapter.getClass().getName());
+        } catch (InvalidConfigException ex) {
+            log.error("CONFIG", ex);
+            throw ex;
+        } finally {
+            System.clearProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY);
+        }
     }
     
     @Test
@@ -116,7 +126,7 @@ public class EosStorageAdapterTest {
         // eos find -f --fileinfo /eos/keel-dev.arbutus.cloud/data/lsst/users
         // date from eos ls -l: 2025-03-18T08:19:12.102
         DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
-        Date expectedDate = df.parse("2025-03-18T08:19:12.102");
+        final Date expectedDate = df.parse("2025-03-18T08:19:12.102");
         
         fileInfoLine = "keylength.file=59 file=/eos/keel-dev.arbutus.cloud/data/lsst/users/fabio/hello.txt size=12 status=healthy"
             + " mtime=1742285952.707288000 ctime=1742285952.102409887 btime=1742285952.102409887 atime=1742285952.102410975"
