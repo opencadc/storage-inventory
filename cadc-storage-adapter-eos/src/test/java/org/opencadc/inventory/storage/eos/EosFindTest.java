@@ -68,7 +68,6 @@
 package org.opencadc.inventory.storage.eos;
 
 import ca.nrc.cadc.date.DateUtil;
-import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.PropertiesReader;
 import java.text.DateFormat;
@@ -84,28 +83,69 @@ import org.opencadc.inventory.storage.StorageMetadata;
  *
  * @author pdowler
  */
-public class EosStorageAdapterTest {
-    private static final Logger log = Logger.getLogger(EosStorageAdapterTest.class);
+public class EosFindTest {
+    private static final Logger log = Logger.getLogger(EosFindTest.class);
 
     static {
         Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
-        Log4jInit.setLevel(PropertiesReader.class.getPackageName(), Level.DEBUG);
     }
-    
-    public EosStorageAdapterTest() {
+
+    EosFind eos = new EosFind("/eos/keel-dev.arbutus.cloud/data/lsst", "lsst");
+
+    public EosFindTest() { 
     }
 
     @Test
-    public void testCtorParseConfig() {
-        try {
-            System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "build/resources/test");
-            EosStorageAdapter eos = new EosStorageAdapter();
-            log.info("loaded: " + eos.getClass().getName());
-        } catch (Exception ex) {
-            log.error("unexpected exception", ex);
-            Assert.fail("unexpected exception: " + ex);
-        } finally {
-            System.clearProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY);
-        }
+    public void testPathStorageLocation() throws Exception {
+        String path = "users/fabio/hello.txt";
+        StorageLocation sloc = eos.pathToStorageLocation(path);
+        log.info("sloc: " + sloc);
+        Assert.assertNotNull(sloc);
+        Assert.assertEquals("hello.txt", sloc.getStorageID().toASCIIString());
+        Assert.assertEquals("users/fabio", sloc.storageBucket);
+    }
+
+    @Test
+    public void testParseFileInfoSkip() throws Exception {
+        String fileInfoLine = "";
+        StorageMetadata sm = eos.parseFileInfo(fileInfoLine);
+        Assert.assertNull(sm);
+        
+        sm = eos.parseFileInfo("blah blah");
+        Assert.assertNull(sm);
+        
+        sm = eos.parseFileInfo("");
+        Assert.assertNull(sm);
+        
+        sm = eos.parseFileInfo(" ");
+        Assert.assertNull(sm);
+    }
+
+    @Test
+    public void testParseFileInfo() throws Exception {
+        // eos find -f --fileinfo /eos/keel-dev.arbutus.cloud/data/lsst/users
+        // date from eos ls -l: 2025-03-18T08:19:12.102
+        DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+        final Date expectedDate = df.parse("2025-03-18T08:19:12.102");
+        
+        String fileInfoLine = "keylength.file=59 file=/eos/keel-dev.arbutus.cloud/data/lsst/users/fabio/hello.txt size=12 status=healthy"
+            + " mtime=1742285952.707288000 ctime=1742285952.102409887 btime=1742285952.102409887 atime=1742285952.102410975"
+            + " clock=1751496240343894024 mode=0644 uid=5000 gid=5000 fxid=00000007 fid=7 ino=1879048192 pid=21 pxid=00000015"
+            + " xstype=adler xs=1e3d045f etag=\"1879048192:1e3d045f\""
+            + " detached=0 layout=plain nstripes=1 lid=00100002 nrep=1 xattrn=sys.eos.btime xattrv=1742285952.102409887"
+            + " xattrn=sys.fs.tracking xattrv=+3 xattrn=sys.utrace xattrv=ac39a4b8-03d1-11f0-9ee4-423bedf0b9a2"
+            + " xattrn=sys.vtrace xattrv=[Tue Mar 18 09:19:12 2025] uid:5000[lsst] gid:5000[lsst]"
+            + " tident:http name:lsst dn: prot:https app:http host:[::ffff:134.158.240.252] domain:158.240.252] geo: sudo:0 fsid=3";
+        StorageMetadata sm = eos.parseFileInfo(fileInfoLine);
+        log.info("parsed: " + sm);
+        Assert.assertNotNull(sm);
+        
+        Assert.assertEquals("lsst:users/fabio/hello.txt", sm.getArtifactURI().toASCIIString());
+        Assert.assertEquals(12L, sm.getContentLength().longValue());
+        Assert.assertEquals("adler:1e3d045f", sm.getContentChecksum().toASCIIString());
+        Assert.assertEquals(expectedDate.getTime(), sm.getContentLastModified().getTime());
+        StorageLocation sloc = sm.getStorageLocation();
+        Assert.assertEquals("hello.txt", sloc.getStorageID().toASCIIString());
+        Assert.assertEquals("users/fabio", sloc.storageBucket);
     }
 }

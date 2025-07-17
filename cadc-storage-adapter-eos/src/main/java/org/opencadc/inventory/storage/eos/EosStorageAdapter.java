@@ -116,12 +116,6 @@ public class EosStorageAdapter implements StorageAdapter {
     static final String CONFIG_PROPERTY_TOKEN = EosStorageAdapter.class.getName() + ".authToken";
     static final String CONFIG_PROPERTY_SCHEME = EosStorageAdapter.class.getName() + ".artifactScheme";
 
-    private static final String EOS_PATH = "file";
-    private static final String EOS_CONTENT_TIME = "ctime";
-    private static final String EOS_CHECKSUM_TYPE = "xstype";
-    private static final String EOS_CHECKSUM_VALUE = "xs";
-    private static final String EOS_FILE_SIZE = "size";
-
     private final URI mgmServer;
     private final String mgmPath;
     private final URL mgmBaseURL;
@@ -235,82 +229,6 @@ public class EosStorageAdapter implements StorageAdapter {
     public Iterator<StorageMetadata> iterator(String storageBucketPrefix, boolean includeRecoverable)
             throws StorageEngageException, TransientException {
         throw new UnsupportedOperationException();
-    }
-
-    // implementation
-    StorageMetadata parseFileInfo(String line) {
-        if (line == null || line.isEmpty() || line.isBlank()) {
-            return null;
-        }
-        
-        URI artifactURI = null;
-        URI contentChecksum = null;
-        Date contentLastModified = null;
-        Long contentLength = null;
-        StorageLocation sloc = null;
-        
-        String csAlg = null;
-        String csHex = null;
-        String[] parts = line.split(" ");
-        for (String s : parts) {
-            String[] kv = s.split("=");
-            if (kv.length == 2) {
-                switch (kv[0]) {
-                    case EOS_PATH:
-                        log.warn("path: " + kv[1]);
-                        if (kv[1].startsWith(mgmPath)) {
-                            String rel = kv[1].substring(mgmPath.length() + 1);
-                            artifactURI = URI.create(artifactScheme + ":" + rel);
-                            sloc = pathToStorageLocation(rel);
-                        }
-                        break;
-                    case EOS_FILE_SIZE:
-                        log.warn("size: " + kv[1]);
-                        try {
-                            contentLength = Long.parseLong(kv[1]);
-                        } catch (NumberFormatException ex) {
-                            throw new RuntimeException("failed to parse " + s + ": " + kv[1] + " is not a valid long", ex);
-                        }
-                        break;
-                    case EOS_CHECKSUM_TYPE:
-                        log.warn("checksum scheme: " + kv[1]);
-                        csAlg = kv[1];
-                        break;
-                    case EOS_CHECKSUM_VALUE:
-                        log.warn("checksum hex: " + kv[1]);
-                        csHex = kv[1];
-                        break;
-                    case EOS_CONTENT_TIME:
-                        log.warn("time: " + kv[1]);
-                        try {
-                            double ctime = Double.parseDouble(kv[1]);
-                            ctime *= 1000; // seconds to milliseconds
-                            contentLastModified = new Date((long) Math.floor(ctime));
-                        } catch (NumberFormatException ex) {
-                            throw new RuntimeException("failed to parse " + s + ": " + kv[1] + " is not a valid double", ex);
-                        }
-                        break;
-                    default:
-                        log.debug("skip: " + kv[0]);
-                }
-            } else {
-                log.debug("skip token: " + s);
-            }
-        }
-
-        if (csAlg != null && csHex != null) {
-            contentChecksum = URI.create(csAlg + ":" + csHex);
-        }
-        StorageMetadata ret = new StorageMetadata(sloc, artifactURI, contentChecksum, contentLength, contentLastModified);
-        return ret;
-    }
-
-    StorageLocation pathToStorageLocation(String rel) {
-        int i = rel.lastIndexOf('/');
-        String filename = rel.substring(i + 1);
-        StorageLocation ret = new StorageLocation(URI.create(filename));
-        ret.storageBucket = rel.substring(0, i);
-        return ret;
     }
 
     // read-only implementation -- everything else unsupported
