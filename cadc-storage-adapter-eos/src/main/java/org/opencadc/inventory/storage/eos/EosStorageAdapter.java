@@ -68,10 +68,13 @@
 package org.opencadc.inventory.storage.eos;
 
 import ca.nrc.cadc.io.ByteLimitExceededException;
+import ca.nrc.cadc.io.MultiBufferIO;
 import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.WriteException;
+import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
+import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.InvalidConfigException;
@@ -84,10 +87,14 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.BucketType;
@@ -116,6 +123,9 @@ public class EosStorageAdapter implements StorageAdapter {
     static final String CONFIG_PROPERTY_TOKEN = EosStorageAdapter.class.getName() + ".authToken";
     static final String CONFIG_PROPERTY_SCHEME = EosStorageAdapter.class.getName() + ".artifactScheme";
 
+    private static final int CIRC_BUFFERS = 3;
+    private static final int CIRC_BUFFERSIZE = 64 * 1024;
+    
     private final URI mgmServer;
     private final String mgmPath;
     private final URL mgmBaseURL;
@@ -203,14 +213,67 @@ public class EosStorageAdapter implements StorageAdapter {
     public void get(StorageLocation storageLocation, OutputStream dest)
             throws InterruptedException, ResourceNotFoundException,
             ReadException, WriteException, StorageEngageException, TransientException {
-        throw new UnsupportedOperationException();
+        get(storageLocation, dest, null);
     }
 
     @Override
     public void get(StorageLocation storageLocation, OutputStream dest, ByteRange byteRange)
             throws InterruptedException, ResourceNotFoundException,
             ReadException, WriteException, StorageEngageException, TransientException {
-        throw new UnsupportedOperationException();
+        InventoryUtil.assertNotNull(EosStorageAdapter.class, "storageLocation", storageLocation);
+        InventoryUtil.assertNotNull(EosStorageAdapter.class, "dest", dest);
+        log.debug("get: " + storageLocation);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(mgmBaseURL);
+        sb.append("/").append(storageLocation.storageBucket);
+        sb.append("/").append(storageLocation.getStorageID().toASCIIString());
+        sb.append("?authz=").append(authToken); // no url-encode required
+        String surl = sb.toString();
+        log.warn("get: " + surl);
+        
+        String rangeRequest = null;
+        if (byteRange != null) {
+            long a = byteRange.getOffset();
+            long b = byteRange.getOffset() + byteRange.getLength() - 1;
+            rangeRequest = "bytes=" + a + "-" + b;
+        }
+        InputStream source = null;
+        try {
+            URL url = new URL(sb.toString());
+            HttpGet get = new HttpGet(url, true);
+            if (rangeRequest != null) {
+                get.setRequestProperty("Range", rangeRequest);
+            }
+            get.prepare();
+            if (get.getResponseCode() == 307) {
+                // temporary redirect not supported by HttpGet/HttpTransfer or core java lib
+                String location = get.getResponseHeader("Location");
+                if (location == null) {
+                    throw new StorageEngageException("GET return a 307 with no location header: " + mgmBaseURL);
+                }
+                url = new URL(location);
+                get = new HttpGet(url, true);
+                if (rangeRequest != null) {
+                    get.setRequestProperty("Range", rangeRequest);
+                }
+                get.prepare();
+            }
+            source = get.getInputStream();
+        } catch (ByteLimitExceededException | ResourceAlreadyExistsException ignore) {
+            log.debug("ignore exception: " + ignore);
+        } catch (MalformedURLException ex) {
+            throw new RuntimeException("BUG: generated invalid URL " + surl + "?AUTHZ=REDACTED");
+        } catch (IOException ex) {
+            throw new StorageEngageException("cannot access " + mgmBaseURL);
+        } 
+
+        MultiBufferIO io = new MultiBufferIO(CIRC_BUFFERS, CIRC_BUFFERSIZE);
+        try {
+            io.copy(source, dest);
+        } catch (InterruptedException ex) {
+            log.debug("get interrupted", ex);
+        }
     }
 
     @Override

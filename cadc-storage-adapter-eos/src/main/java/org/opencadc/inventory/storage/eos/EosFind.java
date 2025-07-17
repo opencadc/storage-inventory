@@ -83,6 +83,7 @@ import java.util.List;
 import java.util.Map;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
 
 /**
@@ -111,6 +112,9 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
     private OutputStream ostream;
     private InputStream estream;
     private int exitValue;
+    
+    private LineNumberReader inputReader;
+    private StorageMetadata cur = null;
 
     public EosFind(URI mgmServer, String mgmPath, String authToken, String artifactScheme) {
         this.mgmServer = mgmServer;
@@ -118,30 +122,51 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
         this.authToken = authToken;
         this.artifactScheme = artifactScheme;
     }
-    
-    // unit test of parseFileInfo
-    EosFind(String mgmPath, String artifactScheme) {
-        this.mgmServer = null;
-        this.mgmPath = mgmPath;
-        this.authToken = null;
-        this.artifactScheme = artifactScheme;
+
+    // explicit start or do in ctor?
+    public void start() throws StorageEngageException {
+        try {
+            openStream(mgmServer, mgmPath, authToken);
+            this.inputReader = new LineNumberReader(new InputStreamReader(istream));
+        } catch (IOException ex) {
+            throw new StorageEngageException("failed to connect to EOS: " + ex.getMessage(), ex);
+        }
     }
 
     @Override
     public boolean hasNext() {
-        throw new UnsupportedOperationException();
+        return cur != null;
     }
 
     @Override
     public StorageMetadata next() {
-        throw new UnsupportedOperationException();
+        StorageMetadata ret = cur;
+        advance();
+        return ret;
     }
 
     @Override
     public void close() throws IOException {
         closeStream();
     }
-    
+
+    private void advance() {
+        this.cur = null;
+        try {
+            
+            while (cur == null) {
+                // parseFileInfo skips lines by returning null
+                String line = inputReader.readLine();
+                if (line == null) {
+                    return; // end
+                }
+                this.cur = parseFileInfo(line);
+            }
+        } catch (IOException ex) {
+            throw new RuntimeException("failed to read input", ex);
+        }
+    }
+
     // implementation
     StorageMetadata parseFileInfo(String line) {
         if (line == null || line.isEmpty() || line.isBlank()) {
@@ -223,47 +248,42 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
         return ret;
     }
 
-    private void openStream(URI mgmServer, String remotePath, String authToken) {
-        try {
-            List<String> parameters = new ArrayList<>();
-            parameters.add("eos");
-            parameters.add("find");
-            parameters.add("-f");
-            parameters.add("--fileinfo");
-            parameters.add(remotePath);
-            ProcessBuilder processBuilder = new ProcessBuilder(parameters);
-            
-            Map<String, String> environment = processBuilder.environment();
-            environment.clear();
-            environment.put("EOS_MGM_URL", mgmServer.toASCIIString());
-            environment.put("EOSAUTHZ", authToken);
-            
-            this.proc = processBuilder.start();
-            this.istream = proc.getInputStream();
-            this.estream = proc.getErrorStream();
-            this.ostream = proc.getOutputStream();
+    private void openStream(URI mgmServer, String remotePath, String authToken) throws IOException {
+        List<String> parameters = new ArrayList<>();
+        parameters.add("eos");
+        parameters.add("find");
+        parameters.add("-f");
+        parameters.add("--fileinfo");
+        parameters.add(remotePath);
+        ProcessBuilder processBuilder = new ProcessBuilder(parameters);
 
-            this.errThread = new ReaderThread(estream, stderr);
-            errThread.start();
-        } catch (IOException ioex) {
-            stderr.append("IOException: ").append(ioex);
-            exitValue = -1;
-        } catch (Exception ex) {
-            stderr.append("Exception: ").append(ex);
-            exitValue = -1;
-        }
+        Map<String, String> environment = processBuilder.environment();
+        environment.clear();
+        environment.put("EOS_MGM_URL", mgmServer.toASCIIString());
+        environment.put("EOSAUTHZ", authToken);
+
+        this.proc = processBuilder.start();
+        this.istream = proc.getInputStream();
+        this.estream = proc.getErrorStream();
+        this.ostream = proc.getOutputStream();
+
+        this.errThread = new ReaderThread(estream, stderr);
+        errThread.start();
     }
 
     private void closeStream() throws IOException {
-        try {
-            errThread.join();
-            exitValue = proc.waitFor(); // block
-        } catch (InterruptedException ignore) {
-            log.debug("ignore: " + ignore);
+        if (errThread != null) {
+            try {
+                errThread.join();
+                exitValue = proc.waitFor(); // block
+            } catch (InterruptedException ignore) {
+                log.debug("ignore: " + ignore);
+            }
+            if (errThread.ex != null) {
+                stderr.append("exception while reading command error output:\n").append(errThread.ex.toString());
+            }
         }
-        if (errThread.ex != null) {
-            stderr.append("exception while reading command error output:\n").append(errThread.ex.toString());
-        }
+
         if (istream != null) {
             try {
                 istream.close();

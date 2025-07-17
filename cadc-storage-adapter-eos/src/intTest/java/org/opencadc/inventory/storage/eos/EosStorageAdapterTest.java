@@ -67,24 +67,19 @@
 
 package org.opencadc.inventory.storage.eos;
 
+import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.Log4jInit;
-
-import java.io.File;
-import java.io.IOException;
+import java.io.ByteArrayOutputStream;
 import java.net.URI;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.util.Iterator;
+import java.nio.charset.StandardCharsets;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
-import org.junit.Ignore;
 import org.junit.Test;
-import org.opencadc.inventory.storage.test.StorageAdapterBasicTest;
+import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.ByteRange;
+import org.opencadc.inventory.storage.MessageDigestAPI;
 
 /**
  * @author pdowler
@@ -95,6 +90,7 @@ public class EosStorageAdapterTest {
     
     static {
         Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
+        Log4jInit.setLevel("ca.nrc.cadc.net", Level.DEBUG);
     }
     
     final EosStorageAdapter eosAdapter;
@@ -105,10 +101,54 @@ public class EosStorageAdapterTest {
 
     @Test
     public void testGet() {
+        StorageLocation loc = new StorageLocation(URI.create("hello.txt"));
+        loc.storageBucket = "users/fabio";
+        URI contentChecksum = URI.create("adler:1e3d045f");
+        
+        try {
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            eosAdapter.get(loc, bos);
+            byte[] data = bos.toByteArray();
+            Assert.assertNotNull(data);
+            Assert.assertEquals(12, data.length);
+            log.info("data: len=" + data.length);
+            String content = new String(data, StandardCharsets.UTF_8);
+            log.info("data: " + content);
+            
+            MessageDigestAPI digest = MessageDigestAPI.getInstance(contentChecksum.getScheme());
+            digest.update(data);
+            byte[] metaChecksumBytes = digest.digest();
+            String hexMetaChecksum = HexUtil.toHex(metaChecksumBytes);
+            String alg = digest.getAlgorithmName().toLowerCase();
+            URI actualChecksum = new URI(alg, hexMetaChecksum, null);
+            log.info("actual checksum: " + actualChecksum);
+            Assert.assertEquals(contentChecksum, actualChecksum);
+                    
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
     }
 
     @Test
     public void testGetByteRange() {
+        StorageLocation loc = new StorageLocation(URI.create("hello.txt"));
+        loc.storageBucket = "users/fabio";
+        ByteRange range = new ByteRange(0, 4);
+        try {
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            eosAdapter.get(loc, bos, range);
+            byte[] data = bos.toByteArray();
+            Assert.assertNotNull(data);
+            Assert.assertEquals(4, data.length);
+            log.info("data: len=" + data.length);
+            String content = new String(data, StandardCharsets.UTF_8);
+            log.info("data: " + content);
+            Assert.assertEquals("hell", content);
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
     }
 
     @Test

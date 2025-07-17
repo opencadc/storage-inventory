@@ -70,6 +70,7 @@ package org.opencadc.inventory.storage.eos;
 import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.PropertiesReader;
+import java.net.URI;
 import java.text.DateFormat;
 import java.util.Date;
 import org.apache.log4j.Level;
@@ -77,6 +78,7 @@ import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
 
 /**
@@ -90,7 +92,8 @@ public class EosFindTest {
         Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
     }
 
-    EosFind eos = new EosFind("/eos/keel-dev.arbutus.cloud/data/lsst", "lsst");
+    EosFind eos = new EosFind(URI.create("root://eos-mgm.keel-dev.arbutus.cloud"), 
+            "/eos/keel-dev.arbutus.cloud/data/lsst", "zteos64:invalid-token", "lsst");
 
     public EosFindTest() { 
     }
@@ -147,5 +150,21 @@ public class EosFindTest {
         StorageLocation sloc = sm.getStorageLocation();
         Assert.assertEquals("hello.txt", sloc.getStorageID().toASCIIString());
         Assert.assertEquals("users/fabio", sloc.storageBucket);
+    }
+
+    @Test
+    public void testNoEosClient() throws Exception {
+        // this test will fail because eos command line not found
+        try {
+            eos.start();
+            Assert.fail("expected StorageEngageException");
+        } catch (StorageEngageException expected) {
+            log.info("caught exopected: " + expected);
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        } finally {
+            eos.close();
+        }
     }
 }
