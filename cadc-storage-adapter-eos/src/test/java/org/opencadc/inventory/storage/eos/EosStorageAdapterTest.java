@@ -65,28 +65,47 @@
 ************************************************************************
 */
 
-package ca.nrc.cadc.data;
+package org.opencadc.inventory.storage.eos;
 
-import ca.nrc.cadc.auth.IdentityManager;
-import ca.nrc.cadc.auth.PrincipalExtractor;
-import ca.nrc.cadc.rest.InitAction;
+import ca.nrc.cadc.date.DateUtil;
+import ca.nrc.cadc.util.InvalidConfigException;
+import ca.nrc.cadc.util.Log4jInit;
+import ca.nrc.cadc.util.PropertiesReader;
+import java.text.DateFormat;
+import java.util.Date;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.junit.Assert;
+import org.junit.Test;
+import org.opencadc.inventory.StorageLocation;
+import org.opencadc.inventory.storage.StorageMetadata;
 
 /**
  *
  * @author pdowler
  */
-public class DataInitAction extends InitAction {
-    private static final Logger log = Logger.getLogger(DataInitAction.class);
+public class EosStorageAdapterTest {
+    private static final Logger log = Logger.getLogger(EosStorageAdapterTest.class);
 
-    public DataInitAction() { 
+    static {
+        Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
+        Log4jInit.setLevel(PropertiesReader.class.getPackageName(), Level.DEBUG);
+    }
+    
+    public EosStorageAdapterTest() {
     }
 
-    @Override
-    public void doInit() {
-        // install custom identity manager and enable basic auth
-        System.setProperty(IdentityManager.class.getName(), CustomIdentityManager.class.getName());
-        System.setProperty(PrincipalExtractor.class.getName() + ".allowBasicATP", "true");
-        log.info("init: basic auth enabled");
+    @Test
+    public void testCtorParseConfig() {
+        try {
+            System.setProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY, "build/resources/test");
+            EosStorageAdapter eos = new EosStorageAdapter();
+            log.info("loaded: " + eos.getClass().getName());
+        } catch (Exception ex) {
+            log.error("unexpected exception", ex);
+            Assert.fail("unexpected exception: " + ex);
+        } finally {
+            System.clearProperty(PropertiesReader.CONFIG_DIR_SYSTEM_PROPERTY);
+        }
     }
 }

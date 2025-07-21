@@ -19,6 +19,8 @@ for system properties related to the deployment environment.
 See <a href="https://github.com/opencadc/core/tree/master/cadc-util">cadc-util</a>
 for common system properties.
 
+`data` uses an internal IdentityManager implementationn that cannot be configured.
+
 ### cadc-registry.properties
 
 See <a href="https://github.com/opencadc/reg/tree/master/cadc-registry">cadc-registry</a>.
