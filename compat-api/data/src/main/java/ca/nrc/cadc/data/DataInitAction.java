@@ -68,6 +68,7 @@
 package ca.nrc.cadc.data;
 
 import ca.nrc.cadc.auth.IdentityManager;
+import ca.nrc.cadc.auth.PrincipalExtractor;
 import ca.nrc.cadc.rest.InitAction;
 import org.apache.log4j.Logger;
 
@@ -85,6 +86,7 @@ public class DataInitAction extends InitAction {
     public void doInit() {
         // install custom identity manager and enable basic auth
         System.setProperty(IdentityManager.class.getName(), CustomIdentityManager.class.getName());
-        System.setProperty("ca.nrc.cadc.auth.AuthenticationUtil.allowBasicATP", "true");
+        System.setProperty(PrincipalExtractor.class.getName() + ".allowBasicATP", "true");
+        log.info("init: basic auth enabled");
     }
 }
