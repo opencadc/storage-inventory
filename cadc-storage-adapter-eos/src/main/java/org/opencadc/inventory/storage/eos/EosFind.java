@@ -125,8 +125,13 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
         this.artifactScheme = artifactScheme;
     }
 
-    // explicit start or do in ctor?
+    // explicit start
     public void start() throws StorageEngageException {
+        // two implementations:
+        // readFully uses the well tested BuilderOutptuGrabber from cadc-util
+        // openStream uses internal code based on above, reads from the stream while iterating,
+        //            but less well tested for error conditions
+        // currently used: openStream()
         try {
             openStream(mgmServer, mgmPath, authToken);
             this.inputReader = new LineNumberReader(new InputStreamReader(istream));
@@ -146,6 +151,14 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
     public StorageMetadata next() {
         StorageMetadata ret = cur;
         advance();
+        if (cur != null) {
+            // check order in the stream is as expected
+            int cmp = ret.compareTo(cur);
+            if (cmp >= 0) {
+                throw new RuntimeException("FATAL: found out of order entries in EOS find stream:"
+                    + ret.getStorageLocation() + " vs " + cur.getStorageLocation());
+            }
+        }
         return ret;
     }
 
@@ -157,9 +170,7 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
     private void advance() {
         this.cur = null;
         try {
-            
             while (cur == null) {
-                // parseFileInfo skips lines by returning null
                 String line = inputReader.readLine();
                 if (line == null) {
                     return; // end
@@ -174,11 +185,12 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
     // implementation
     StorageMetadata parseFileInfo(String line) {
         if (line == null || line.isEmpty() || line.isBlank()) {
+            log.debug("skip blank line");
             return null;
         }
         
         if (!line.startsWith("path=")) {
-            log.warn("skip unexpected output: " + line);
+            log.debug("skip unexpected output: " + line);
             return null;
         }
 

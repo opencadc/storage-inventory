@@ -281,7 +281,6 @@ public class EosStorageAdapter implements StorageAdapter {
             throws StorageEngageException, TransientException {
         EosFind find = new EosFind(mgmServer, mgmPath, authToken, artifactScheme);
         find.start();
-        log.warn("iterator.hasNext(): " + find.hasNext());
         return find;
     }
 
