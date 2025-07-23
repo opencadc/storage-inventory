@@ -67,6 +67,7 @@
 
 package org.opencadc.inventory.storage.eos;
 
+import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.Log4jInit;
@@ -80,6 +81,7 @@ import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.MessageDigestAPI;
+import org.opencadc.inventory.storage.StorageMetadata;
 
 /**
  * @author pdowler
@@ -153,5 +155,29 @@ public class EosStorageAdapterTest {
 
     @Test
     public void testIterator() {
+        ResourceIterator<StorageMetadata> iter = null;
+        try {
+            iter = (ResourceIterator) eosAdapter.iterator();
+            int num = 0;
+            while (iter.hasNext()) {
+                StorageMetadata sm = iter.next();
+                Assert.assertNotNull(sm);
+                log.info("found: " + sm);
+                num++;
+            }
+            log.info("files found: " + num);
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        } finally {
+            if (iter != null) {
+                try {
+                    iter.close();
+                } catch (Exception ex) {
+                    log.error("failed to close iter: ", ex);
+                }
+            }
+        }         
+        
     }
 }

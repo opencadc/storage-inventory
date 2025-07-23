@@ -67,12 +67,14 @@
 
 package org.opencadc.inventory.storage.eos;
 
+import ca.nrc.cadc.exec.BuilderOutputGrabber;
 import ca.nrc.cadc.io.ResourceIterator;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.LineNumberReader;
 import java.io.OutputStream;
+import java.io.StringReader;
 import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
@@ -94,10 +96,10 @@ import org.opencadc.inventory.storage.StorageMetadata;
 public class EosFind implements ResourceIterator<StorageMetadata> {
     private static final Logger log = Logger.getLogger(EosFind.class);
 
-    private static final String EOS_PATH = "file";
+    private static final String EOS_PATH = "path";
     private static final String EOS_CONTENT_TIME = "ctime";
-    private static final String EOS_CHECKSUM_TYPE = "xstype";
-    private static final String EOS_CHECKSUM_VALUE = "xs";
+    private static final String EOS_CHECKSUM_TYPE = "checksumtype";
+    private static final String EOS_CHECKSUM_VALUE = "checksum";
     private static final String EOS_FILE_SIZE = "size";
     
     private final URI mgmServer;
@@ -128,6 +130,8 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
         try {
             openStream(mgmServer, mgmPath, authToken);
             this.inputReader = new LineNumberReader(new InputStreamReader(istream));
+            //this.inputReader = readFully(mgmServer, mgmPath, authToken);
+            advance();
         } catch (IOException ex) {
             throw new StorageEngageException("failed to connect to EOS: " + ex.getMessage(), ex);
         }
@@ -173,7 +177,7 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
             return null;
         }
         
-        if (!line.startsWith("keylength.file=")) {
+        if (!line.startsWith("path=")) {
             log.warn("skip unexpected output: " + line);
             return null;
         }
@@ -192,15 +196,14 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
             if (kv.length == 2) {
                 switch (kv[0]) {
                     case EOS_PATH:
-                        log.warn("path: " + kv[1]);
-                        if (kv[1].startsWith(mgmPath)) {
-                            String rel = kv[1].substring(mgmPath.length() + 1);
-                            artifactURI = URI.create(artifactScheme + ":" + rel);
-                            sloc = pathToStorageLocation(rel);
-                        }
+                        log.debug("path: " + kv[1]);
+                        // also remove quotes
+                        String rel = kv[1].substring(mgmPath.length() + 2, kv[1].length() - 1);
+                        artifactURI = URI.create(artifactScheme + ":" + rel);
+                        sloc = pathToStorageLocation(rel);
                         break;
                     case EOS_FILE_SIZE:
-                        log.warn("size: " + kv[1]);
+                        log.debug("size: " + kv[1]);
                         try {
                             contentLength = Long.parseLong(kv[1]);
                         } catch (NumberFormatException ex) {
@@ -208,15 +211,15 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
                         }
                         break;
                     case EOS_CHECKSUM_TYPE:
-                        log.warn("checksum scheme: " + kv[1]);
+                        log.debug("checksum scheme: " + kv[1]);
                         csAlg = kv[1];
                         break;
                     case EOS_CHECKSUM_VALUE:
-                        log.warn("checksum hex: " + kv[1]);
+                        log.debug("checksum hex: " + kv[1]);
                         csHex = kv[1];
                         break;
                     case EOS_CONTENT_TIME:
-                        log.warn("time: " + kv[1]);
+                        log.debug("time: " + kv[1]);
                         try {
                             double ctime = Double.parseDouble(kv[1]);
                             ctime *= 1000; // seconds to milliseconds
@@ -248,20 +251,39 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
         return ret;
     }
 
-    private void openStream(URI mgmServer, String remotePath, String authToken) throws IOException {
-        List<String> parameters = new ArrayList<>();
-        parameters.add("eos");
-        parameters.add("find");
-        parameters.add("-f");
-        parameters.add("--fileinfo");
-        parameters.add(remotePath);
-        ProcessBuilder processBuilder = new ProcessBuilder(parameters);
+    // read-into-memory implementation
+    private LineNumberReader readFully(URI mgmServer, String remotePath, String authToken) throws IOException {
+        
+        String str = "eos find -f --format path,size,checksumtype,checksum,ctime " + remotePath;
+        final String[] cmd = str.split(" ");
+        final Map<String, String> environment = new HashMap<>();
+        environment.put("EOS_MGM_URL", mgmServer.toASCIIString());
+        environment.put("EOSAUTHZ", authToken);
+        
+        log.warn("readFully: " + str);
+        BuilderOutputGrabber exec = new BuilderOutputGrabber();
+        exec.captureOutput(cmd, environment);
+        log.warn("exit status: " + exec.getExitValue());
+        
+        if (exec.getExitValue() != 0) {
+            throw new StorageEngageException("eos find failed (" + exec.getExitValue() + "): " + exec.getOutput());
+        }
 
+        return new LineNumberReader(new StringReader(exec.getOutput()));
+    }
+
+    // streaming implementation
+    private void openStream(URI mgmServer, String remotePath, String authToken) throws IOException {
+        final String str = "eos find -f --format path,size,checksumtype,checksum,ctime " + remotePath;
+        List<String> parameters = Arrays.asList(str.split(" "));
+        
+        ProcessBuilder processBuilder = new ProcessBuilder(parameters);
         Map<String, String> environment = processBuilder.environment();
         environment.clear();
         environment.put("EOS_MGM_URL", mgmServer.toASCIIString());
         environment.put("EOSAUTHZ", authToken);
 
+        log.warn("openStream: " + str);
         this.proc = processBuilder.start();
         this.istream = proc.getInputStream();
         this.estream = proc.getErrorStream();

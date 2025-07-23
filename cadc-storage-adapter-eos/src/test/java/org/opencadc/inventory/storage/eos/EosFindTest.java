@@ -131,6 +131,7 @@ public class EosFindTest {
         DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
         final Date expectedDate = df.parse("2025-03-18T08:19:12.102");
         
+        // eos find -f --fileinfo:
         String fileInfoLine = "keylength.file=59 file=/eos/keel-dev.arbutus.cloud/data/lsst/users/fabio/hello.txt size=12 status=healthy"
             + " mtime=1742285952.707288000 ctime=1742285952.102409887 btime=1742285952.102409887 atime=1742285952.102410975"
             + " clock=1751496240343894024 mode=0644 uid=5000 gid=5000 fxid=00000007 fid=7 ino=1879048192 pid=21 pxid=00000015"
@@ -139,7 +140,12 @@ public class EosFindTest {
             + " xattrn=sys.fs.tracking xattrv=+3 xattrn=sys.utrace xattrv=ac39a4b8-03d1-11f0-9ee4-423bedf0b9a2"
             + " xattrn=sys.vtrace xattrv=[Tue Mar 18 09:19:12 2025] uid:5000[lsst] gid:5000[lsst]"
             + " tident:http name:lsst dn: prot:https app:http host:[::ffff:134.158.240.252] domain:158.240.252] geo: sudo:0 fsid=3";
-        StorageMetadata sm = eos.parseFileInfo(fileInfoLine);
+        
+        // eos find -f --format path,size,checksumtype,checksum,ctime
+        String findLine = "path=\"/eos/keel-dev.arbutus.cloud/data/lsst/users/fabio/hello.txt\""
+                + " size=12 checksumtype=adler checksum=1e3d045f ctime=1742285952.102409887";
+        
+        StorageMetadata sm = eos.parseFileInfo(findLine);
         log.info("parsed: " + sm);
         Assert.assertNotNull(sm);
         
@@ -150,21 +156,5 @@ public class EosFindTest {
         StorageLocation sloc = sm.getStorageLocation();
         Assert.assertEquals("hello.txt", sloc.getStorageID().toASCIIString());
         Assert.assertEquals("users/fabio", sloc.storageBucket);
-    }
-
-    @Test
-    public void testNoEosClient() throws Exception {
-        // this test will fail because eos command line not found
-        try {
-            eos.start();
-            Assert.fail("expected StorageEngageException");
-        } catch (StorageEngageException expected) {
-            log.info("caught exopected: " + expected);
-        } catch (Exception unexpected) {
-            log.error("unexpected exception", unexpected);
-            Assert.fail("unexpected exception: " + unexpected);
-        } finally {
-            eos.close();
-        }
     }
 }

@@ -279,7 +279,10 @@ public class EosStorageAdapter implements StorageAdapter {
     @Override
     public Iterator<StorageMetadata> iterator()
             throws StorageEngageException, TransientException {
-        throw new UnsupportedOperationException();
+        EosFind find = new EosFind(mgmServer, mgmPath, authToken, artifactScheme);
+        find.start();
+        log.warn("iterator.hasNext(): " + find.hasNext());
+        return find;
     }
 
     @Override
