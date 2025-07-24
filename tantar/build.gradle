@@ -27,6 +27,7 @@ dependencies {
 
     runtimeOnly 'org.opencadc:cadc-storage-adapter-fs:[0.9.5,)'
     runtimeOnly 'org.opencadc:cadc-storage-adapter-swift:[0.8.7,)'
+    runtimeOnly 'org.opencadc:cadc-storage-adapter-eos:[0.1.0,)'
 
     testImplementation 'junit:junit:[4.12,5.0)'
 

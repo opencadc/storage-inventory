@@ -164,15 +164,19 @@ public class BucketValidator implements ValidateActions {
                 final BucketSelector bucketSelector = new BucketSelector(bucketRange.trim());
                 for (final Iterator<String> bucketIterator = bucketSelector.getBucketIterator();
                      bucketIterator.hasNext();) {
-                    this.bucketPrefixes.add(bucketIterator.next().trim());
+                    bucketPrefixes.add(bucketIterator.next().trim());
                 }
                 break;
             case PATH:
+                if (bucketRange != null) {
+                    bucketPrefixes.add(bucketRange.trim());
+                }
+                break;
             case PLAIN:
                 if (bucketRange == null) {
                     throw new IllegalArgumentException("invalid bucket range: null");
                 }
-                this.bucketPrefixes.add(bucketRange.trim());
+                bucketPrefixes.add(bucketRange.trim());
                 break;
             default:
                 throw new RuntimeException("BUG: unexpected BucketType " + storageAdapter.getBucketType());
@@ -655,11 +659,12 @@ public class BucketValidator implements ValidateActions {
         ResourceIterator<Artifact> artifactIterator;
         
         public StoredArtifactIterator() {
-            if (BucketType.NONE.equals(storageAdapter.getBucketType())) {
-                this.artifactIterator = iteratorDAO.storedIterator(null);
-            } else {
-                // The bucket range should have at least one value, so calling next() should be safe here.
+            if (bucketPrefixIterator.hasNext()) {
+                // bucket type HEX, PATH, PLAIN
                 this.artifactIterator = iteratorDAO.storedIterator(bucketPrefixIterator.next());
+            } else {
+                // bucket type PATH, NONE
+                this.artifactIterator = iteratorDAO.storedIterator(null);
             }
         }
 
@@ -755,12 +760,12 @@ public class BucketValidator implements ValidateActions {
          */
         StorageMetadataIterator() throws StorageEngageException {
             this.bucketPrefixIterator = bucketPrefixes.iterator();
-
-            if (BucketType.NONE.equals(storageAdapter.getBucketType())) {
-                this.storageMetadataIterator = storageAdapter.iterator(null, includeRecoverable);
-            } else {
-                // The bucket range should have at least one value, so calling next() should be safe here.
+            if (bucketPrefixIterator.hasNext()) {
+                // bucket type HEX, PATH, PLAIN
                 this.storageMetadataIterator = storageAdapter.iterator(bucketPrefixIterator.next(), includeRecoverable);
+            } else {
+                // bucket type NONE, PATH
+                this.storageMetadataIterator = storageAdapter.iterator(null, includeRecoverable);
             }
             advance();
         }

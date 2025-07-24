@@ -10,12 +10,12 @@ Runtime configuration must be made available via the `/config` directory.
 
 ### tantar.properties
 ```
-org.opencadc.tantar.logging = {info|debug}
+org.opencadc.tantar.logging = info|debug
 
 # set whether to report all activity or to perform any actions required.
-org.opencadc.tantar.reportOnly = {true|false}
+org.opencadc.tantar.reportOnly = true|false
 
-# set the bucket prefix(es) that tantar will validate
+# (optional) set the bucket prefix(es) that tantar will validate
 org.opencadc.tantar.buckets = {bucket prefix or range of bucket prefixes}
 
 # set the policy to resolve conflicts of files
@@ -29,7 +29,7 @@ org.opencadc.tantar.inventory.password={password for inventory admin pool}
 org.opencadc.tantar.inventory.url=jdbc:postgresql://{server}/{database}
 
 ## storage adapter settings
-org.opencadc.inventory.storage.StorageAdapter={fully-qualified-classname of implementation}
+org.opencadc.inventory.storage.StorageAdapter = InventoryIsAlwaysRight | StorageIsAlwaysRight
 
 ## optional recoverable after delete behaviour
 org.opencadc.tantar.recoverableNamespace = {namespace}
@@ -47,11 +47,13 @@ the application to exit.
 The _buckets_ value indicates a subset of inventory database and back end storage to validate. 
 This uses the Artifact.storageLocation.storageBucket values so the exact usage and behaviour 
 depends on the StorageAdapter being used for the site. There are several kinds of buckets in use: 
-some StorageAdapter(s) use BucketType.HEX and one can prefix the hex string to denote fewer but 
-larger buckets (e.g. bucket prefix "0" denotes ~1/16 of the storage locations; the prefix range "0-f" 
-denotes the entire storage range). A StorageAdapter using BucketType.PLAIN has named buckets that
-are used as-is. A StorageAdapter using BucketType.NONE leaves Artifact.storageLocation.storageBucket
-null; the _buckets_ value in this case optional (ignored).
+- BucketType.HEX: one can prefix the hex string to denote fewer but larger buckets (e.g. bucket 
+prefix "0" denotes ~1/16 of the storage locations; the prefix range "0-f" denotes the entire storage range)
+- BucketType.PLAIN has opaque named buckets that are used as-is
+- BucketType.NONE leaves Artifact.storageLocation.storageBucket null; the _buckets_ value is optional/ignored
+- BucketType.PATH uses storage locations with relative path structure and put some or all of the path in the
+Artifact.storageLocation.storageBucket; the _buckets_ config can specify partial path prefix (without leading '/' so
+select a subset of the underlying storage space; the _buckets_ value is optional but used if specified
 
 The _StorageAdapter_ is a plugin implementation to support the back end storage system. These are implemented in separate libraries; 
 each available implementation is in a library named cadc-storage-adapter-{impl} and the fully qualified class name to use is documented 
@@ -60,7 +62,7 @@ there. Additional java system properties and/or configuration files may be requi
 
 - [File System Storage Adapter](https://github.com/opencadc/storage-inventory/tree/master/cadc-storage-adapter-fs)
 
-- [AD Storage Adapter](https://github.com/opencadc/storage-inventory/tree/master/cadc-storage-adapter-ad)
+- [EOS Storage Adapter](https://github.com/opencadc/storage-inventory/tree/master/cadc-storage-adapter-eos)
 
 
 The _SQLGenerator_ is a plugin implementation to support the database. There is currently only one implementation that is tested with 
@@ -86,8 +88,8 @@ of artifacts/files.
 The following StorageAdapter and ResolutionPolicy combinations are considered well tested:
 ```
 OpaqueFilesystemStorageAdapter + InventoryIsAlwaysRight
+LogicalFileSystemStorageAdapter + InventoryIsAlwaysRight
 SwiftStorageAdapter + InventoryIsAlwaysRight
-AdStorageAdapter + StorageIsAlwaysRight (CADC archive migration to SI)
 ```
 
 The _includeRecoverable_ configuration is optional and defaults to _false_. When true, `tantar` will 
@@ -150,12 +152,8 @@ docker run -t tantar:latest /bin/bash
 docker run -r --user opencadc:opencadc -v /path/to/external/config:/config:ro --name tantar tantar:latest
 ```
 
-## apply version tags
-```bash
-. VERSION && echo "tags: $TAGS" 
-for t in $TAGS; do
-   docker image tag tantar:latest tantar:$t
-done
-unset TAGS
-docker image list tantar
+## building tantar-eos variant
+```
+gradle clean build
+docker build -t tantar-eos -f Dockerfile-eos .
 ```
