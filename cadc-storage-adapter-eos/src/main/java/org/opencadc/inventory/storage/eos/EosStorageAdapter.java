@@ -67,6 +67,8 @@
 
 package org.opencadc.inventory.storage.eos;
 
+import ca.nrc.cadc.auth.AuthenticationUtil;
+import ca.nrc.cadc.auth.NotAuthenticatedException;
 import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.MultiBufferIO;
 import ca.nrc.cadc.io.ReadException;
@@ -74,6 +76,7 @@ import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
+import ca.nrc.cadc.net.RangeNotSatisfiableException;
 import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
@@ -87,12 +90,15 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
+import java.security.AccessControlContext;
+import java.security.AccessControlException;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
+import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.Namespace;
@@ -197,11 +203,11 @@ public class EosStorageAdapter implements StorageAdapter {
         
         this.artifactScheme = as;
         
-        log.warn("mgmServer: " + mgmServer);
-        log.warn("mgmPath: " + mgmPath);
-        log.warn("mgm http: " + mgmBaseURL);
-        log.warn("artifact scheme: " + artifactScheme);
-        log.warn("authToken: REDACTED");
+        log.debug("mgmServer: " + mgmServer);
+        log.debug("mgmPath: " + mgmPath);
+        log.debug("mgm http: " + mgmBaseURL);
+        log.debug("artifact scheme: " + artifactScheme);
+        log.debug("authToken: REDACTED");
     }
 
     @Override
@@ -228,9 +234,10 @@ public class EosStorageAdapter implements StorageAdapter {
         sb.append(mgmBaseURL);
         sb.append("/").append(storageLocation.storageBucket);
         sb.append("/").append(storageLocation.getStorageID().toASCIIString());
-        sb.append("?authz=").append(authToken); // no url-encode required
+        sb.append("?authz=");
         String surl = sb.toString();
-        log.warn("get: " + surl);
+        sb.append(authToken); // no url-encode required
+        log.debug("get: " + surl + "REDACTED");
         
         String rangeRequest = null;
         if (byteRange != null) {
@@ -239,8 +246,40 @@ public class EosStorageAdapter implements StorageAdapter {
             rangeRequest = "bytes=" + a + "-" + b;
         }
         InputStream source = null;
+        
         try {
-            URL url = new URL(sb.toString());
+            // make call anonymously so caller credentials are never pased on to EOS
+            final URL url = new URL(sb.toString());
+            final String rr = rangeRequest;
+            try {
+                
+                source = Subject.doAs(AuthenticationUtil.getAnonSubject(), new PrivilegedExceptionAction<InputStream>() {
+                    @Override
+                    public InputStream run() throws Exception {
+                        return openStream(url, rr);
+                    }
+                });
+            } catch (PrivilegedActionException pex) {
+                throw new StorageEngageException("failed to open stream to EOS", pex.getException());
+            }
+        } catch (MalformedURLException ex) {
+            throw new RuntimeException("BUG: generated invalid URL " + surl + "REDACTED");
+        } catch (IOException ex) {
+            throw new StorageEngageException("cannot access " + mgmBaseURL, ex);
+        } 
+
+        MultiBufferIO io = new MultiBufferIO(CIRC_BUFFERS, CIRC_BUFFERSIZE);
+        try {
+            io.copy(source, dest);
+        } catch (InterruptedException ex) {
+            log.debug("get interrupted", ex);
+        }
+    }
+    
+    private InputStream openStream(URL url, String rangeRequest) 
+            throws InterruptedException, IOException, ResourceNotFoundException,
+            ReadException, WriteException, StorageEngageException, TransientException {
+        try {
             HttpGet get = new HttpGet(url, true);
             if (rangeRequest != null) {
                 get.setRequestProperty("Range", rangeRequest);
@@ -259,63 +298,62 @@ public class EosStorageAdapter implements StorageAdapter {
                 }
                 get.prepare();
             }
-            source = get.getInputStream();
-        } catch (ByteLimitExceededException | ResourceAlreadyExistsException ignore) {
-            log.debug("ignore exception: " + ignore);
-        } catch (MalformedURLException ex) {
-            throw new RuntimeException("BUG: generated invalid URL " + surl + "?AUTHZ=REDACTED");
-        } catch (IOException ex) {
-            throw new StorageEngageException("cannot access " + mgmBaseURL);
-        } 
-
-        MultiBufferIO io = new MultiBufferIO(CIRC_BUFFERS, CIRC_BUFFERSIZE);
-        try {
-            io.copy(source, dest);
-        } catch (InterruptedException ex) {
-            log.debug("get interrupted", ex);
+            return get.getInputStream();
+        } catch (ByteLimitExceededException | ResourceAlreadyExistsException ex) {
+            throw new RuntimeException("BUG: unexpected fail during get: " + ex);
         }
     }
 
     @Override
     public Iterator<StorageMetadata> iterator()
             throws StorageEngageException, TransientException {
-        EosFind find = new EosFind(mgmServer, mgmPath, authToken, artifactScheme);
-        find.start();
-        return find;
+        return iterator(null);
     }
 
     @Override
     public Iterator<StorageMetadata> iterator(String storageBucketPrefix)
             throws StorageEngageException, TransientException {
-        throw new UnsupportedOperationException();
+        return iterator(storageBucketPrefix, false);
     }
 
     @Override
     public Iterator<StorageMetadata> iterator(String storageBucketPrefix, boolean includeRecoverable)
             throws StorageEngageException, TransientException {
-        throw new UnsupportedOperationException();
+        if (includeRecoverable) {
+            throw new UnsupportedOperationException();
+        }
+        EosFind find = new EosFind(mgmServer, mgmPath, authToken, artifactScheme);
+        find.pathPrefix = storageBucketPrefix;
+        find.start();
+        return find;
     }
 
     // read-only implementation -- everything else unsupported
 
     @Override
     public void setRecoverableNamespaces(List<Namespace> preserved) {
+        if (preserved.isEmpty()) {
+            return;
+        }
         throw new UnsupportedOperationException();
     }
 
     @Override
     public List<Namespace> getRecoverableNamespaces() {
-        throw new UnsupportedOperationException();
+        return new ArrayList<>();
     }
 
     @Override
     public void setPurgeNamespaces(List<Namespace> purged) {
+        if (purged.isEmpty()) {
+            return;
+        }
         throw new UnsupportedOperationException();
     }
 
     @Override
     public List<Namespace> getPurgeNamespaces() {
-        throw new UnsupportedOperationException();
+        return new ArrayList<>();
     }
 
     @Override

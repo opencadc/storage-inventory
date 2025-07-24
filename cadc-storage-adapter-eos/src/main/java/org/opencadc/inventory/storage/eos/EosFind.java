@@ -107,6 +107,9 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
     private final String authToken;
     private final String artifactScheme;
     
+    // optional storageBucketPrefix
+    public String pathPrefix;
+    
     private final StringBuilder stderr = new StringBuilder();
     private ReaderThread errThread;
     private Process proc;
@@ -133,7 +136,11 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
         //            but less well tested for error conditions
         // currently used: openStream()
         try {
-            openStream(mgmServer, mgmPath, authToken);
+            String path = mgmPath;
+            if (pathPrefix != null) {
+                path += "/" + pathPrefix;
+            }
+            openStream(mgmServer, path, authToken);
             this.inputReader = new LineNumberReader(new InputStreamReader(istream));
             //this.inputReader = readFully(mgmServer, mgmPath, authToken);
             advance();

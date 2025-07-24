@@ -185,6 +185,40 @@ public class EosStorageAdapterTest {
                 }
             }
         }         
+    }
+    
+    @Test
+    public void testIteratorBucket() {
+        ResourceIterator<StorageMetadata> iter = null;
+        try {
+            iter = (ResourceIterator) eosAdapter.iterator("users");
+            int num = 0;
+            StorageMetadata prev = null;
+            while (iter.hasNext()) {
+                StorageMetadata sm = iter.next();
+                Assert.assertNotNull(sm);
+                log.info("found: " + sm);
+                if (prev != null) {
+                    int cmp = prev.compareTo(sm);
+                    log.info("compare order: " + cmp + "\n" + prev.getStorageLocation() + "\n" + sm.getStorageLocation());
+                    Assert.assertTrue(cmp < 0);
+                }
+                prev = sm;
+                num++;
+            }
+            log.info("files found: " + num);
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        } finally {
+            if (iter != null) {
+                try {
+                    iter.close();
+                } catch (Exception ex) {
+                    log.error("failed to close iter: ", ex);
+                }
+            }
+        }         
         
     }
 }
