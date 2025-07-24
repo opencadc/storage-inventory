@@ -457,6 +457,14 @@ public abstract class InventoryUtil {
             return;
         }
         
+        if ("adler".equals(alg)) {
+            if (b.length != 4) {
+                throw new IllegalArgumentException("invalid checksum URI: " + uri 
+                        + " found " + b.length + " bytes, expected 4");
+            }
+            return;
+        }
+        
         throw new IllegalArgumentException("invalid checksum URI: " + uri + " unsupported algorithm");
     }
 }
