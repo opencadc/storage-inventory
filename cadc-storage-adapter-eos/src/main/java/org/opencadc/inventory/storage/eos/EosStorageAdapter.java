@@ -83,6 +83,7 @@ import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
+import ca.nrc.cadc.util.StringUtil;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -121,8 +122,6 @@ public class EosStorageAdapter implements StorageAdapter {
     private static final Logger log = Logger.getLogger(EosStorageAdapter.class);
 
     static final String CONFIG_FILE = "cadc-storage-adapter-eos.properties";
-    // https://eos-mgm.keel-dev.arbutus.cloud:8443/eos/keel-dev.arbutus.cloud/data/lsst/users/fabio/hello.txt?authz=$EOSAUTHZ
-
     static final String CONFIG_PROPERTY_MGM_SRV = EosStorageAdapter.class.getName() + ".mgmServer";
     static final String CONFIG_PROPERTY_MGM_PATH = EosStorageAdapter.class.getName() + ".mgmServerPath";
     static final String CONFIG_PROPERTY_MGM_HTTPS_PORT = EosStorageAdapter.class.getName() + ".mgmHttpsPort";
@@ -145,34 +144,55 @@ public class EosStorageAdapter implements StorageAdapter {
         PropertiesReader pr = new PropertiesReader(CONFIG_FILE);
         MultiValuedProperties mvp = pr.getAllProperties();
 
+        StringBuilder msg = new StringBuilder();
+        boolean ok = true;
         String srv = mvp.getFirstPropertyValue(CONFIG_PROPERTY_MGM_SRV);
-        if (srv == null) {
-            throw new InvalidConfigException("failed to load " + CONFIG_PROPERTY_MGM_SRV
-                    + " from " + CONFIG_FILE);
+        msg.append(CONFIG_PROPERTY_MGM_SRV).append("=").append(srv);
+        if (StringUtil.hasText(srv)) {
+            msg.append(" OK\n");
+        } else {
+            msg.append(" MISSING\n");
+            ok = false;
         }
 
         String path = mvp.getFirstPropertyValue(CONFIG_PROPERTY_MGM_PATH);
-        if (path == null) {
-            throw new InvalidConfigException("failed to load " + CONFIG_PROPERTY_MGM_PATH
-                    + " from " + CONFIG_FILE);
+        msg.append(CONFIG_PROPERTY_MGM_PATH).append("=").append(path);
+        if (StringUtil.hasText(path)) {
+            msg.append(" OK\n");
+        } else {
+            msg.append(" MISSING\n");
+            ok = false;
         }
 
         String port = mvp.getFirstPropertyValue(CONFIG_PROPERTY_MGM_HTTPS_PORT);
-        if (port == null) {
-            throw new InvalidConfigException("failed to load " + CONFIG_PROPERTY_MGM_HTTPS_PORT
-                    + " from " + CONFIG_FILE);
+        msg.append(CONFIG_PROPERTY_MGM_HTTPS_PORT).append("=").append(port);
+        if (StringUtil.hasText(port)) {
+            msg.append(" OK\n");
+        } else {
+            msg.append(" MISSING\n");
+            ok = false;
         }
 
         String tok = mvp.getFirstPropertyValue(CONFIG_PROPERTY_TOKEN);
-        if (tok == null) {
-            throw new InvalidConfigException("failed to load " + CONFIG_PROPERTY_TOKEN
-                    + " from " + CONFIG_FILE);
+        msg.append(CONFIG_PROPERTY_TOKEN).append("=").append("REDACTED");
+        if (StringUtil.hasText(tok)) {
+            msg.append(" OK\n");
+        } else {
+            msg.append(" MISSING\n");
+            ok = false;
         }
 
         String as = mvp.getFirstPropertyValue(CONFIG_PROPERTY_SCHEME);
-        if (as == null || as.isEmpty()) {
-            throw new InvalidConfigException("failed to load " + CONFIG_PROPERTY_SCHEME
-                    + " from " + CONFIG_FILE);
+        msg.append(CONFIG_PROPERTY_SCHEME).append("=").append(as);
+        if (StringUtil.hasText(as)) {
+            msg.append(" OK\n");
+        } else {
+            msg.append(" MISSING\n");
+            ok = false;
+        }
+
+        if (!ok) {
+            throw new InvalidConfigException("missing required configuration: " + msg);
         }
 
         this.mgmPath = path;
