@@ -148,7 +148,7 @@ public class MessageDigestAPI {
      */
     public static String getEncodedState(MessageDigestAPI d) {
         if (d.impl == null && d.adler32 != null) {
-            throw new UnsupportedOperationException("cannot encode adler digect");
+            throw new UnsupportedOperationException("cannot encode adler digest");
         }
         String alg = d.getAlgorithmName();
         byte[] ret = ((EncodableDigest)d.impl).getEncodedState();
