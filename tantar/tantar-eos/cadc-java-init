@@ -1,0 +1,41 @@
+#!/bin/bash
+
+SELF=cadc-java-init
+
+CONFDIR=/config
+USER=$(whoami)
+
+TS=$(date)
+echo "$TS $SELF START"
+echo "user: $USER"
+echo "home: $HOME"
+echo "image version: $IMAGE_VERSION"
+
+if [ -e $CONFDIR/cacerts ]; then
+    echo "Configure CA bundle with extra certificates: $CONFDIR/cacerts"
+    cp $CONFDIR/cacerts/* /etc/pki/ca-trust/source/anchors/
+    sudo update-ca-trust
+fi
+
+mkdir -p $HOME/.ssl
+chmod 700 $HOME/.ssl
+for pcf in $CONFDIR/*.pem; do
+    [ -e "$pcf" ] || continue
+    echo "Link proxy certificate: $pcf"
+    ln -s $pcf $HOME/.ssl/
+done
+
+test -e /config && (test -e $HOME/config || ln -s /config $HOME/config)
+
+TS=$(date)
+echo "$TS $SELF DONE"
+
+if [ -z "$1" ]; then
+    echo "no ENTRYPOINT args: missing CMD?"
+    exit
+fi
+
+## exec CMD
+exec $@
+
+
