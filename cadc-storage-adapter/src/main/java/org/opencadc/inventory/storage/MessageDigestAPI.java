@@ -67,10 +67,12 @@
 
 package org.opencadc.inventory.storage;
 
+import ca.nrc.cadc.util.HexUtil;
 import java.net.URI;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.zip.Adler32;
 import org.apache.log4j.Logger;
 import org.apache.xerces.impl.dv.util.Base64;
 import org.bouncycastle.crypto.Digest;
@@ -92,11 +94,19 @@ public class MessageDigestAPI {
     private static final List<String> ALG_NAMES = Arrays.asList(
             "md5", "sha1", "sha224", "sha256", "sha512"
     );
+    // hack to work with EOS
+    private Adler32 adler32;
+   
     
     private MessageDigestAPI(EncodableDigest impl) { 
         this.impl = (Digest) impl;
     }
     
+    private MessageDigestAPI(Adler32 impl) {
+        this.impl = null;
+        this.adler32 = impl;
+    }
+
     public static List<String> getAlgorithmNames() {
         return ALG_NAMES;
     }
@@ -124,6 +134,9 @@ public class MessageDigestAPI {
         if ("sha512".equalsIgnoreCase(algorithm)) {
             return new MessageDigestAPI(new SHA512Digest());
         }
+        if ("adler".equalsIgnoreCase(algorithm)) {
+            return new MessageDigestAPI(new Adler32());
+        }
         throw new NoSuchAlgorithmException("not found: " + algorithm);
     }
     
@@ -134,6 +147,9 @@ public class MessageDigestAPI {
      * @return string form of internal state
      */
     public static String getEncodedState(MessageDigestAPI d) {
+        if (d.impl == null && d.adler32 != null) {
+            throw new UnsupportedOperationException("cannot encode adler digest");
+        }
         String alg = d.getAlgorithmName();
         byte[] ret = ((EncodableDigest)d.impl).getEncodedState();
         String base64 = Base64.encode(ret);
@@ -171,24 +187,43 @@ public class MessageDigestAPI {
     }
     
     public String getAlgorithmName() {
+        if (adler32 != null) {
+            return "adler";
+        }
         return impl.getAlgorithmName().toLowerCase();
     }
     
     public void update(byte[] bytes, int offset, int length) {
-        impl.update(bytes, offset, length);
+        if (adler32 != null) {
+            adler32.update(bytes, offset, length);
+        } else {
+            impl.update(bytes, offset, length);
+        }
     }
     
     public void update(byte[] bytes) {
-        impl.update(bytes, 0, bytes.length);
+        if (adler32 != null) {
+            adler32.update(bytes);
+        } else {
+            impl.update(bytes, 0, bytes.length);
+        }
     }
     
     public byte[] digest() {
+        if (adler32 != null) {
+            int val = (int) adler32.getValue();
+            return HexUtil.toBytes(val);
+        }
         byte[] ret = new byte[impl.getDigestSize()];
         impl.doFinal(ret, 0);
         return ret;
     }
     
     public void reset() {
-        impl.reset();
+        if (adler32 != null) {
+            adler32.reset();
+        } else {
+            impl.reset();
+        }
     }
 }
