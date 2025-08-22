@@ -767,6 +767,10 @@ public class NodePersistenceImpl implements NodePersistence {
                 txn.rollbackTransaction();
                 log.debug("rollback txn: OK");
             }
+            if (ex.getMessage().contains("duplicate")) {
+                throw new IllegalArgumentException("destination exists", ex);
+            }
+            throw new RuntimeException("failed to move node", ex);
         } finally {
             if (txn.isOpen()) {
                 log.error("BUG - open transaction in finally");
