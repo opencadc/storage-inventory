@@ -257,7 +257,8 @@ public class EosStorageAdapter implements StorageAdapter {
         sb.append("?authz=");
         String surl = sb.toString();
         sb.append(authToken); // no url-encode required
-        log.debug("get: " + surl + "REDACTED");
+        final String safeURL = surl + "REDACTED";
+        log.debug("get: " + safeURL);
         
         String rangeRequest = null;
         if (byteRange != null) {
@@ -281,7 +282,9 @@ public class EosStorageAdapter implements StorageAdapter {
                 });
             } catch (PrivilegedActionException pex) {
                 throw new StorageEngageException("failed to open stream to EOS", pex.getException());
-            }
+            } catch (AccessControlException | TransientException ex) {
+                throw new StorageEngageException("cannot access " + safeURL, ex);
+            } 
         } catch (MalformedURLException ex) {
             throw new RuntimeException("BUG: generated invalid URL " + surl + "REDACTED");
         } catch (AccessControlException | IOException | TransientException ex) {
