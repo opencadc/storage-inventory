@@ -284,7 +284,7 @@ public class EosStorageAdapter implements StorageAdapter {
             }
         } catch (MalformedURLException ex) {
             throw new RuntimeException("BUG: generated invalid URL " + surl + "REDACTED");
-        } catch (IOException ex) {
+        } catch (AccessControlException | IOException | TransientException ex) {
             throw new StorageEngageException("cannot access " + mgmBaseURL, ex);
         } 
 

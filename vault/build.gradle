@@ -54,5 +54,5 @@ dependencies {
 }
 
 configurations {
-    runtime.exclude group: 'org.postgresql:postgresql'
+    runtimeOnly.exclude group: 'org.postgresql:postgresql'
 }
