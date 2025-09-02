@@ -45,14 +45,7 @@ dependencies {
     testImplementation 'junit:junit:[4.0,)'
 
     intTestImplementation 'org.opencadc:cadc-test-vosi:[1.0.11,)'
-    intTestRuntimeOnly 'org.postgresql:postgresql:[42.2.8,)'
 }
-
-configurations {
-    runtime.exclude group: 'org.postgresql:postgresql'
-}
-
-
 
 configurations {
   // this are provided by tomcat
