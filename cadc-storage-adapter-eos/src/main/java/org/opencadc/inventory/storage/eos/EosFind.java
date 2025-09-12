@@ -197,8 +197,7 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
         }
         
         if (!line.startsWith("path=")) {
-            log.debug("skip unexpected output: " + line);
-            return null;
+            throw new StorageEngageException("unexpected output: " + line);
         }
 
         URI artifactURI = null;
