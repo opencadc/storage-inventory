@@ -140,7 +140,7 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
             openStream(mgmServer, path, authToken);
             this.inputReader = new LineNumberReader(new InputStreamReader(istream));
             //this.inputReader = readFully(mgmServer, mgmPath, authToken);
-            advance();
+            advance(true);
         } catch (IOException ex) {
             throw new StorageEngageException("failed to connect to EOS: " + ex.getMessage(), ex);
         }
@@ -154,7 +154,7 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
     @Override
     public StorageMetadata next() {
         StorageMetadata ret = cur;
-        advance();
+        advance(false);
         if (cur != null) {
             // check order in the stream is as expected
             int cmp = ret.compareTo(cur);
@@ -171,15 +171,22 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
         closeStream();
     }
 
-    private void advance() {
+    private void advance(boolean failOnEOF) {
         this.cur = null;
         try {
             while (cur == null) {
                 String line = inputReader.readLine();
                 if (line == null) {
-                    int ev = proc.exitValue();
-                    if (ev != 0) {
-                        throw new StorageEngageException("eos process returned with exist status " + ev);
+                    try {
+                        int ev = proc.waitFor();
+                        if (ev != 0) {
+                            throw new StorageEngageException("eos process exited with status " + ev);
+                        }
+                    } catch (InterruptedException ex) {
+                        log.warn("waitFor termination was interrupted", ex);
+                    }
+                    if (failOnEOF) {
+                        throw new StorageEngageException("eos find: no files found");
                     }
                     return; // end
                 }
