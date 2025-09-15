@@ -110,12 +110,9 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
     // optional storageBucketPrefix
     public String pathPrefix;
     
-    private final StringBuilder stderr = new StringBuilder();
-    private ReaderThread errThread;
     private Process proc;
     private InputStream istream;
     private OutputStream ostream;
-    private InputStream estream;
     private int exitValue;
     
     private LineNumberReader inputReader;
@@ -180,6 +177,10 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
             while (cur == null) {
                 String line = inputReader.readLine();
                 if (line == null) {
+                    int ev = proc.exitValue();
+                    if (ev != 0) {
+                        throw new StorageEngageException("eos process returned with exist status " + ev);
+                    }
                     return; // end
                 }
                 this.cur = parseFileInfo(line);
@@ -197,8 +198,7 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
         }
         
         if (!line.startsWith("path=")) {
-            log.debug("skip unexpected output: " + line);
-            return null;
+            throw new StorageEngageException("unexpected output: " + line);
         }
 
         URI artifactURI = null;
@@ -297,6 +297,7 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
         List<String> parameters = Arrays.asList(str.split(" "));
         
         ProcessBuilder processBuilder = new ProcessBuilder(parameters);
+        processBuilder.redirectErrorStream(true);
         Map<String, String> environment = processBuilder.environment();
         environment.clear();
         environment.put("EOS_MGM_URL", mgmServer.toASCIIString());
@@ -305,37 +306,13 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
         log.warn("openStream: " + str);
         this.proc = processBuilder.start();
         this.istream = proc.getInputStream();
-        this.estream = proc.getErrorStream();
         this.ostream = proc.getOutputStream();
-
-        this.errThread = new ReaderThread(estream, stderr);
-        errThread.start();
     }
 
     private void closeStream() throws IOException {
-        if (errThread != null) {
-            try {
-                errThread.join();
-                exitValue = proc.waitFor(); // block
-            } catch (InterruptedException ignore) {
-                log.debug("ignore: " + ignore);
-            }
-            if (errThread.ex != null) {
-                stderr.append("exception while reading command error output:\n").append(errThread.ex.toString());
-            }
-        }
-
         if (istream != null) {
             try {
                 istream.close();
-            } catch (IOException ignore) {
-                // do nothing
-            }
-        }
-
-        if (estream != null) {
-            try {
-                estream.close();
             } catch (IOException ignore) {
                 // do nothing
             }

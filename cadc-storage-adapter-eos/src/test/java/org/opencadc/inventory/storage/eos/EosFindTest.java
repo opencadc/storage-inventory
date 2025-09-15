@@ -114,8 +114,12 @@ public class EosFindTest {
         StorageMetadata sm = eos.parseFileInfo(fileInfoLine);
         Assert.assertNull(sm);
         
-        sm = eos.parseFileInfo("blah blah");
-        Assert.assertNull(sm);
+        try {
+            sm = eos.parseFileInfo("blah blah");
+            Assert.fail("blah blah");
+        } catch (StorageEngageException expected) {
+            log.info("caught expected: " + expected);
+        }
         
         sm = eos.parseFileInfo("");
         Assert.assertNull(sm);
