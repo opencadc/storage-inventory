@@ -110,12 +110,9 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
     // optional storageBucketPrefix
     public String pathPrefix;
     
-    private final StringBuilder stderr = new StringBuilder();
-    private ReaderThread errThread;
     private Process proc;
     private InputStream istream;
     private OutputStream ostream;
-    private InputStream estream;
     private int exitValue;
     
     private LineNumberReader inputReader;
@@ -143,7 +140,7 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
             openStream(mgmServer, path, authToken);
             this.inputReader = new LineNumberReader(new InputStreamReader(istream));
             //this.inputReader = readFully(mgmServer, mgmPath, authToken);
-            advance();
+            advance(true);
         } catch (IOException ex) {
             throw new StorageEngageException("failed to connect to EOS: " + ex.getMessage(), ex);
         }
@@ -157,7 +154,7 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
     @Override
     public StorageMetadata next() {
         StorageMetadata ret = cur;
-        advance();
+        advance(false);
         if (cur != null) {
             // check order in the stream is as expected
             int cmp = ret.compareTo(cur);
@@ -174,12 +171,23 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
         closeStream();
     }
 
-    private void advance() {
+    private void advance(boolean failOnEOF) {
         this.cur = null;
         try {
             while (cur == null) {
                 String line = inputReader.readLine();
                 if (line == null) {
+                    try {
+                        int ev = proc.waitFor();
+                        if (ev != 0) {
+                            throw new StorageEngageException("eos process exited with status " + ev);
+                        }
+                    } catch (InterruptedException ex) {
+                        log.warn("waitFor termination was interrupted", ex);
+                    }
+                    if (failOnEOF) {
+                        throw new StorageEngageException("eos find: no files found");
+                    }
                     return; // end
                 }
                 this.cur = parseFileInfo(line);
@@ -197,8 +205,7 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
         }
         
         if (!line.startsWith("path=")) {
-            log.debug("skip unexpected output: " + line);
-            return null;
+            throw new StorageEngageException("unexpected output: " + line);
         }
 
         URI artifactURI = null;
@@ -297,6 +304,7 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
         List<String> parameters = Arrays.asList(str.split(" "));
         
         ProcessBuilder processBuilder = new ProcessBuilder(parameters);
+        processBuilder.redirectErrorStream(true);
         Map<String, String> environment = processBuilder.environment();
         environment.clear();
         environment.put("EOS_MGM_URL", mgmServer.toASCIIString());
@@ -305,37 +313,13 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
         log.warn("openStream: " + str);
         this.proc = processBuilder.start();
         this.istream = proc.getInputStream();
-        this.estream = proc.getErrorStream();
         this.ostream = proc.getOutputStream();
-
-        this.errThread = new ReaderThread(estream, stderr);
-        errThread.start();
     }
 
     private void closeStream() throws IOException {
-        if (errThread != null) {
-            try {
-                errThread.join();
-                exitValue = proc.waitFor(); // block
-            } catch (InterruptedException ignore) {
-                log.debug("ignore: " + ignore);
-            }
-            if (errThread.ex != null) {
-                stderr.append("exception while reading command error output:\n").append(errThread.ex.toString());
-            }
-        }
-
         if (istream != null) {
             try {
                 istream.close();
-            } catch (IOException ignore) {
-                // do nothing
-            }
-        }
-
-        if (estream != null) {
-            try {
-                estream.close();
             } catch (IOException ignore) {
                 // do nothing
             }

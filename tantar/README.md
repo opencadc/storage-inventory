@@ -28,8 +28,8 @@ org.opencadc.tantar.inventory.username={username for inventory admin pool}
 org.opencadc.tantar.inventory.password={password for inventory admin pool}
 org.opencadc.tantar.inventory.url=jdbc:postgresql://{server}/{database}
 
-## storage adapter settings
-org.opencadc.inventory.storage.StorageAdapter = InventoryIsAlwaysRight | StorageIsAlwaysRight
+## storage back end
+org.opencadc.inventory.storage.StorageAdapter = {fully qualified class name for StorageAdapter implementation}
 
 ## optional recoverable after delete behaviour
 org.opencadc.tantar.recoverableNamespace = {namespace}
