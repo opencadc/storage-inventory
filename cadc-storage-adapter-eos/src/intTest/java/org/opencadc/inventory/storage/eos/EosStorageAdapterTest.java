@@ -74,6 +74,7 @@ import ca.nrc.cadc.util.Log4jInit;
 import java.io.ByteArrayOutputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -81,6 +82,7 @@ import org.junit.Test;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.ByteRange;
 import org.opencadc.inventory.storage.MessageDigestAPI;
+import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
 
 /**
@@ -147,6 +149,19 @@ public class EosStorageAdapterTest {
             String content = new String(data, StandardCharsets.UTF_8);
             log.info("data: " + content);
             Assert.assertEquals("hell", content);
+        } catch (Exception unexpected) {
+            log.error("unexpected exception", unexpected);
+            Assert.fail("unexpected exception: " + unexpected);
+        }
+    }
+
+    @Test
+    public void testFailOnEmpty() {
+        String bucket = "not-found-" + UUID.randomUUID().toString();
+        try (ResourceIterator<StorageMetadata> iter = (ResourceIterator) eosAdapter.iterator(bucket)) {
+            Assert.fail("expected StorageEngageException, for iterator with hasNext=" + iter.hasNext());
+        } catch (StorageEngageException ex) {
+            log.info("caught expected: " + ex);
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
