@@ -73,10 +73,10 @@ import java.net.InetAddress;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.log4j.Level;
@@ -90,31 +90,35 @@ public class ProtocolsGeneratorTest {
     private static final Logger log = Logger.getLogger(ProtocolsGeneratorTest.class);
 
     static {
-        Log4jInit.setLevel("org.opencadc.raven", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
     }
 
     @Test
     public void testPrioritizePullFromSites() throws Exception {
-        List<StorageSite> sites = new ArrayList<>();
-        Random rd = new Random();
-        for (int i = 0; i < 10; i++) {
-            sites.add(new StorageSite(URI.create("ivo://site" + i), "site1" + i, true, rd.nextBoolean()));
+        ProtocolsGenerator gen = new ProtocolsGenerator(null);
+        Set<StorageSite> sites = new TreeSet<>();
+        for (int i = 0; i < 3; i++) {
+            sites.add(new StorageSite(URI.create("ivo://site" + i), "site" + i, true, true));
         }
-        List<StorageSite> result1 = ProtocolsGenerator.prioritizePullFromSites(sites);
+        List<StorageSite> result1 = gen.prioritizePullFromSites(sites, URI.create("foo:bar1/file.txt"));
         Assert.assertEquals(sites.size(), result1.size());
         Assert.assertTrue(result1.containsAll(sites));
         
-        List<StorageSite> result2 = ProtocolsGenerator.prioritizePullFromSites(sites);
+        List<StorageSite> result2 = gen.prioritizePullFromSites(sites, URI.create("foo:bar1/file.txt"));
         Assert.assertEquals(sites.size(), result2.size());
         Assert.assertTrue(result2.containsAll(sites));
         
-        // test random order
-        Assert.assertNotEquals(result1, result2);
+        int num = 1;
+        while (result1.get(0).equals(result2.get(0)) && num < 10) {
+            num++;
+            result2 = gen.prioritizePullFromSites(sites, URI.create("foo:bar1/file.txt"));
+        }
+        log.info("3 sites, no rules: random after " + num);
+        Assert.assertTrue("looks random", num < 5);
     }
 
     @Test
     public void testPrioritizingStorageSiteComparator() throws Exception {
-
         Map<URI, StorageSiteRule> siteRules = new HashMap<>();
         InetAddress clientIP = null;
 
@@ -144,7 +148,7 @@ public class ProtocolsGeneratorTest {
         List<Namespace> namespaces = new ArrayList<>();
         namespaces.add(new Namespace("ivo:aaa/"));
         siteRules.put(URI.create("ivo:site5"), new StorageSiteRule(namespaces));
-
+        
         actual = comparator.compare(new StorageSite(URI.create("ivo:site2"), "site2", true, true),
                                     new StorageSite(URI.create("ivo:site5"), "site5", true, true));
         Assert.assertTrue(actual > 0);
@@ -176,81 +180,82 @@ public class ProtocolsGeneratorTest {
 
     @Test
     public void testPrioritizePushToSites() throws Exception {
-        List<Namespace> readWriteNamespaces = new ArrayList<>();
-        readWriteNamespaces.add(new Namespace("readwrite:RW1/"));
-        readWriteNamespaces.add(new Namespace("readwrite:RW2/"));
-        readWriteNamespaces.add(new Namespace("readwrite:RW3/"));
-
-        List<Namespace> readOnlyNamespaces = new ArrayList<>();
-        readOnlyNamespaces.add(new Namespace("readonly:RO1/"));
-        readOnlyNamespaces.add(new Namespace("readonly:RO2/"));
-
-        List<Namespace> writeOnlyNamespaces = new ArrayList<>();
-        writeOnlyNamespaces.add(new Namespace("writeonly:WO1/"));
-        writeOnlyNamespaces.add(new Namespace("writeonly:WO2/"));
-
-        SortedSet<StorageSite> sites = new TreeSet<>();
+        final Namespace ns1 = new Namespace("foo:bar1/");
+        final Namespace ns2 = new Namespace("foo:bar2/");
+        final Namespace ns3 = new Namespace("foo:bar3/");
+        
+        Set<StorageSite> sites = new TreeSet<>();
         Map<URI, StorageSiteRule> siteRules = new HashMap<>();
-
-        // empty set of StorageSite's
-        SortedSet<StorageSite> actual = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("other:SITE/file.ext"), siteRules);
+        ProtocolsGenerator gen = new ProtocolsGenerator(siteRules);
+        
+        // no sites, no rules
+        List<StorageSite> actual = gen.prioritizePushToSites(sites, URI.create("foo:bar2/file.ext"));
         Assert.assertTrue(actual.isEmpty());
-        URI readWriteResourceID = URI.create("ivo://read-write-site");
-        StorageSite readWriteSite = new StorageSite(readWriteResourceID, "read-write-site", true, true);
-        // single StorageSite
-        sites.add(readWriteSite);
-        actual = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("other:SITE/file.ext"), siteRules);
+        URI rid1 = URI.create("ivo://site1");
+        StorageSite site1 = new StorageSite(rid1, "site1", true, true);
+        sites.add(site1);
+        
+        // 1 site, no rules
+        gen = new ProtocolsGenerator(siteRules);
+        actual = gen.prioritizePushToSites(sites, URI.create("foo:bar2/file.ext"));
         Assert.assertEquals(1, actual.size());
-        actual.clear();
 
-        URI readOnlyResourceID = URI.create("ivo://read-only-site");
-        URI writeOnlyResourceID = URI.create("ivo://write-only-site");
-        StorageSite readOnlySite = new StorageSite(readOnlyResourceID, "read-only-site", true, false);
-        StorageSite writeOnlySite = new StorageSite(writeOnlyResourceID, "write-only-site", false, true);
-        // artifact with no preferences in config, returns two read-write sites
-        sites.add(readOnlySite);
-        sites.add(writeOnlySite);
+        URI rid2 = URI.create("ivo://site2");
+        URI rid3 = URI.create("ivo://site3");
+        StorageSite site2 = new StorageSite(rid2, "site2", true, true);
+        StorageSite site3 = new StorageSite(rid3, "site3", true, true);
+        sites.add(site2);
+        sites.add(site3);
+        
+        // 3 sites, no rules
+        actual = gen.prioritizePushToSites(sites, URI.create("foo:bar2/file.ext"));
+        Assert.assertEquals(3, actual.size());
+        List<StorageSite> a2 = gen.prioritizePushToSites(sites, URI.create("foo:bar2/file.ext"));
+        int num = 1;
+        while (actual.get(0).equals(a2.get(0)) && num < 10) {
+            num++;
+            a2 = gen.prioritizePushToSites(sites, URI.create("foo:bar2/file.ext"));
+        }
+        log.info("3 sites, no rules: random after " + num);
+        Assert.assertTrue("looks random", num < 5);
+        
+        List<Namespace> nss;
+        nss = new ArrayList<>();
+        nss.add(ns1);
+        siteRules.put(rid1, new StorageSiteRule(nss));
+        nss = new ArrayList<>();
+        nss.add(ns2);
+        siteRules.put(rid2, new StorageSiteRule(nss));
+        
+        gen = new ProtocolsGenerator(siteRules);
 
-        siteRules.put(readWriteResourceID, new StorageSiteRule(readWriteNamespaces));
-        siteRules.put(readOnlyResourceID, new StorageSiteRule(readOnlyNamespaces));
-        siteRules.put(writeOnlyResourceID, new StorageSiteRule(writeOnlyNamespaces));
-
-        actual = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("other:SITE/file.ext"), siteRules);
-        Assert.assertEquals(2, actual.size());
-        Assert.assertFalse(actual.contains(readOnlySite));
-        actual.clear();
-
-        // artifact with namespace in read-only site, returns two read-write sites
-        actual = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("readonly:RO2/file.ext"), siteRules);
-        Assert.assertEquals(2, actual.size());
-        Assert.assertFalse(actual.contains(readOnlySite));
-        actual.clear();
-
-        // artifact with read-write namespace, returns two read-write sites, cadc-site first
-        actual = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("readwrite:RW3/file.ext"), siteRules);
-        Assert.assertEquals(2, actual.size());
-        Assert.assertEquals(readWriteSite, actual.first());
-        Assert.assertEquals(writeOnlySite, actual.last());
-        actual.clear();
-
-        // artifact with write-only namespace, return two read-write sites, write-only site first
-        actual = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("writeonly:WO1/file.ext"), siteRules);
-        Assert.assertEquals(2, actual.size());
-        Assert.assertEquals(writeOnlySite, actual.first());
-        Assert.assertEquals(readWriteSite, actual.last());
-
-        // two sites that both have a namespace matching the artifact URI
-        //sites.clear();
-        siteRules.clear();
-        siteRules.put(readWriteResourceID, new StorageSiteRule(readWriteNamespaces));
-        siteRules.put(writeOnlyResourceID, new StorageSiteRule(readWriteNamespaces));
-        siteRules.put(readOnlyResourceID, new StorageSiteRule(readOnlyNamespaces));
-
-        actual = ProtocolsGenerator.prioritizePushToSites(sites, URI.create("readwrite:RW2/file.ext"), siteRules);
-        Assert.assertEquals(2, actual.size());
-        // ivo://read-write-site orders higher than ivo://write-only-site
-        Assert.assertEquals(readWriteSite, actual.first());
-        Assert.assertEquals(writeOnlySite, actual.last());
+        // priority == non-random
+        for (int i = 0; i < 10; i++) {
+            actual = gen.prioritizePushToSites(sites, URI.create("foo:bar1/file.ext"));
+            Assert.assertEquals(3, actual.size());
+            Assert.assertEquals(site1, actual.get(0));
+            actual.clear();
+        }
+        
+        // priority == non-random
+        for (int i = 0; i < 10; i++) {
+            actual = gen.prioritizePushToSites(sites, URI.create("foo:bar2/file.ext"));
+            Assert.assertEquals(3, actual.size());
+            Assert.assertEquals(site2, actual.get(0));
+            actual.clear();
+        }
+        
+        // no rule match == random
+        actual = gen.prioritizePushToSites(sites, URI.create("foo:bar3/file.ext"));
+        Assert.assertEquals(3, actual.size());
+        a2 = gen.prioritizePushToSites(sites, URI.create("foo:bar3/file.ext"));
+        num = 0;
+        while (actual.get(0).equals(a2.get(0)) && num < 10) {
+            num++;
+            a2 = gen.prioritizePushToSites(sites, URI.create("foo:bar3/file.ext"));
+        }
+        log.info("3 sites, 2 rules, no match: random after " + num);
+        Assert.assertTrue("looks random", num < 5);
     }
 
 }
