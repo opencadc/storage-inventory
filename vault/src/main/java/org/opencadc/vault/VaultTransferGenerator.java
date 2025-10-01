@@ -98,6 +98,7 @@ import org.opencadc.vospace.VOSURI;
 import org.opencadc.vospace.server.PathResolver;
 import org.opencadc.vospace.server.auth.VOSpaceAuthorizer;
 import org.opencadc.vospace.server.transfers.TransferGenerator;
+import org.opencadc.vospace.transfer.Direction;
 import org.opencadc.vospace.transfer.Protocol;
 import org.opencadc.vospace.transfer.Transfer;
 
@@ -116,17 +117,19 @@ public class VaultTransferGenerator implements TransferGenerator {
     
     private final Map<URI, StorageSiteRule> siteRules = new HashMap<>();
     private final Map<URI, Availability> siteAvailabilities;
-    
+    private final List<URI> putAvoid;
     public Artifact resolvedArtifact;
     
     @SuppressWarnings("unchecked")
     public VaultTransferGenerator(NodePersistenceImpl nodePersistence, String appName, 
-            ArtifactDAO artifactDAO, TokenTool tokenTool, boolean preventNotFound) {
+            ArtifactDAO artifactDAO, TokenTool tokenTool, 
+            boolean preventNotFound, List<URI> putAvoid) {
         this.nodePersistence = nodePersistence;
         this.authorizer = new VOSpaceAuthorizer(nodePersistence);
         this.artifactDAO = artifactDAO;
         this.tokenTool = tokenTool;
         this.preventNotFound = preventNotFound;
+        this.putAvoid = putAvoid;
         
         // TODO: get appname from ???
         String siteAvailabilitiesKey = appName + "-" + StorageSiteAvailabilityCheck.class.getName();
@@ -187,6 +190,9 @@ public class VaultTransferGenerator implements TransferGenerator {
         pg.user = callingUser;
         pg.requirePreauthAnon = true;
         pg.preventNotFound = preventNotFound;
+        if (Direction.pushToVoSpace.equals(trans.getDirection())) {
+            pg.siteAvoid.addAll(putAvoid);
+        }
         
         Transfer artifactTrans = new Transfer(node.storageID, trans.getDirection());
         Set<URI> protoURIs = new HashSet<>();

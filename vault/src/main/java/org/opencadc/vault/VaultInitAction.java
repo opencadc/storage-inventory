@@ -128,6 +128,8 @@ public class VaultInitAction extends InitAction {
     static final String ROOT_OWNER = VAULT_KEY + ".root.owner";
     static final String STORAGE_NAMESPACE_KEY = VAULT_KEY + ".storage.namespace";
     static final String ENABLE_DATANODE_SIZE_WORKER_KEY = VAULT_KEY + ".enableDataNodeSizeWorker";
+    
+    static final String PUT_AVOID_KEY = VAULT_KEY + ".putAvoid";
 
     MultiValuedProperties props;
     private URI resourceID;
@@ -320,6 +322,20 @@ public class VaultInitAction extends InitAction {
         return getDaoConfig(props);
     }
     
+    static List<URI> getPutAvoid(MultiValuedProperties props) {
+        List<URI> ret = new ArrayList<>();
+        List<String> raw = props.getProperty(PUT_AVOID_KEY);
+        for (String s : raw) {
+            try {
+                URI u = new URI(s);
+                ret.add(u);
+            } catch (URISyntaxException ex) {
+                log.error("invalid " + PUT_AVOID_KEY + " value: " + s);
+            }
+        }
+        return ret;
+    }
+
     private void initConfig() {
         log.info("initConfig: START");
         this.props = getConfig();

@@ -157,6 +157,7 @@ public class NodePersistenceImpl implements NodePersistence {
     private final Map<String,Object> invDaoConfig;
     private final Map<String,Object> kpDaoConfig;
     private final boolean singlePool;
+    private final List<URI> putAvoid;
     
     private ContainerNode root;
     private final List<ContainerNode> allocationParents = new ArrayList<>();
@@ -185,7 +186,8 @@ public class NodePersistenceImpl implements NodePersistence {
         this.kpDaoConfig = VaultInitAction.getKeyPairConfig(config);
         this.singlePool = nodeDaoConfig.get("jndiDataSourceName").equals(invDaoConfig.get("jndiDataSourceName"));
         this.localGroupsOnly = false;
-        
+        this.putAvoid = VaultInitAction.getPutAvoid(config);
+
         initRootNode();
 
         String ns = config.getFirstPropertyValue(VaultInitAction.STORAGE_NAMESPACE_KEY);
@@ -285,7 +287,8 @@ public class NodePersistenceImpl implements NodePersistence {
         keyDAO.setConfig(kpDaoConfig);
         PreauthKeyPair kp = keyDAO.get(VaultInitAction.KEY_PAIR_NAME);
         TokenTool tt = new TokenTool(kp.getPublicKey(), kp.getPrivateKey());
-        return new VaultTransferGenerator(this, appName, getArtifactDAO(), tt, preventNotFound);
+        VaultTransferGenerator ret = new VaultTransferGenerator(this, appName, getArtifactDAO(), tt, preventNotFound, putAvoid);
+        return ret;
     }
     
     private NodeDAO getDAO() {
