@@ -191,7 +191,7 @@ public class VaultTransferGenerator implements TransferGenerator {
         pg.requirePreauthAnon = true;
         pg.preventNotFound = preventNotFound;
         if (Direction.pushToVoSpace.equals(trans.getDirection())) {
-            pg.siteAvoid.addAll(putAvoid);
+            pg.putAvoid.addAll(putAvoid);
         }
         
         Transfer artifactTrans = new Transfer(node.storageID, trans.getDirection());

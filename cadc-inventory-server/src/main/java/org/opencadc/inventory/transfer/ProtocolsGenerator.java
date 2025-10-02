@@ -129,7 +129,15 @@ public class ProtocolsGenerator {
     private final Map<URI, Availability> siteAvailabilities;
     private final Map<URI, StorageSiteRule> siteRules = new TreeMap<>();
     
-    public final List<URI> siteAvoid = new ArrayList<>();
+    /**
+     * Sites to avoid when generating GET URLs. 
+     */
+    public final List<URI> getAvoid = new ArrayList<>();
+    
+    /**
+     * Sites to avoid when generating PUT URLs.
+     */
+    public final List<URI> putAvoid = new ArrayList<>();
     
     /**
      * Optional StorageResolver to resolve Artifact.uri to an external data provider.
@@ -398,7 +406,7 @@ public class ProtocolsGenerator {
         List<Protocol> avoidable = new ArrayList<>();
         
         for (StorageSite storageSite : orderedSites) {
-            boolean avoid = siteAvoid.contains(storageSite.getResourceID());
+            boolean avoid = getAvoid.contains(storageSite.getResourceID());
             log.debug("trying site: " + storageSite.getResourceID());
             Capability filesCap = getFilesCapability(storageSite);
             if (artifact != null && filesCap != null) {
@@ -520,7 +528,7 @@ public class ProtocolsGenerator {
         while (iter.hasNext()) {
             StorageSite s = iter.next();
             boolean avail = isAvailable(s.getResourceID());
-            boolean avoid = siteAvoid.contains(s.getResourceID());
+            boolean avoid = putAvoid.contains(s.getResourceID());
             if (s.getAllowWrite() && avail && !avoid) {
                 log.debug("doPushTo: " + s.getResourceID() + " OK");
             } else {

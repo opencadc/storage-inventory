@@ -102,8 +102,6 @@ public class PostAction extends ArtifactAction {
     private static final String INLINE_CONTENT_TAG = "inputstream";
     private static final String CONTENT_TYPE = "text/xml";
 
-    private final List<URI> avoid = new ArrayList<>();
-
     /**
      * Default, no-arg constructor.
      */
@@ -121,13 +119,8 @@ public class PostAction extends ArtifactAction {
         transfer = reader.read(in, null);
 
         log.debug("transfer request: " + transfer);
-        if (Direction.pullFromVoSpace.equals(transfer.getDirection())) {
-            avoid.addAll(RavenInitAction.getGetAvoid(RavenInitAction.getConfig()));
-        } else if (Direction.pushToVoSpace.equals(transfer.getDirection())) {
-            avoid.addAll(RavenInitAction.getPutAvoid(RavenInitAction.getConfig()));
-        } else {
-            throw new IllegalArgumentException("direction not supported: " + transfer.getDirection());
-        }
+        
+        
         List<URI> targets = transfer.getTargets();
         if (targets.isEmpty() || targets.size() > 1) {
             throw new IllegalArgumentException("expected 1 target URI, found: " + targets.size());
@@ -169,7 +162,8 @@ public class PostAction extends ArtifactAction {
         pg.user = this.user;
         pg.preventNotFound = this.preventNotFound;
         pg.storageResolver = this.storageResolver;
-        pg.siteAvoid.addAll(avoid);
+        pg.getAvoid.addAll(RavenInitAction.getGetAvoid(RavenInitAction.getConfig()));
+        pg.putAvoid.addAll(RavenInitAction.getPutAvoid(RavenInitAction.getConfig()));
         Transfer ret = new Transfer(artifactURI, transfer.getDirection());
         // TODO: change from pg.getProtocols(transfer) to pg.getResolvedTransfer(transfer)??
         ret.getProtocols().addAll(pg.getProtocols(transfer));
