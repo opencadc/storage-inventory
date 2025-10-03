@@ -153,6 +153,15 @@ The _storage.namespace_ key configures `vault` to use the specified namespace in
 This only applies to new data nodes that are created and will not effect previously created nodes and artifacts.
 Probably don't want to change this... prevent change? TBD.
 
+The following optional key configure `vault` prioritize sites returned in transfer negotiation.
+```
+# (optional) avoid puts to these sites
+org.opencadc.vault.putAvoid={storage site minoc resourceID}
+```
+The _putAvoid_ key configures vault to **never** return PUT URLs to the specified site(s).
+
+TBD: support for PUT or GET preferences (like raven)? also use client IP address to prioritize?
+
 ### cadc-log.properties (optional)
 See <a href="https://github.com/opencadc/core/tree/master/cadc-log">cadc-log</a> for common 
 dynamic logging control.

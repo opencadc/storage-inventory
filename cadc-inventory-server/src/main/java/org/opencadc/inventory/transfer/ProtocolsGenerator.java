@@ -77,7 +77,6 @@ import ca.nrc.cadc.reg.Interface;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.vosi.Availability;
-import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.MalformedURLException;
@@ -91,6 +90,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
 import org.apache.log4j.Logger;
@@ -127,9 +127,17 @@ public class ProtocolsGenerator {
     private final DeletedArtifactEventDAO deletedArtifactEventDAO;
     
     private final Map<URI, Availability> siteAvailabilities;
-    private final Map<URI, StorageSiteRule> siteRules;
+    private final Map<URI, StorageSiteRule> siteRules = new TreeMap<>();
     
-    public final List<URI> siteAvoid = new ArrayList<>();
+    /**
+     * Sites to avoid when generating GET URLs. 
+     */
+    public final List<URI> getAvoid = new ArrayList<>();
+    
+    /**
+     * Sites to avoid when generating PUT URLs.
+     */
+    public final List<URI> putAvoid = new ArrayList<>();
     
     /**
      * Optional StorageResolver to resolve Artifact.uri to an external data provider.
@@ -162,16 +170,26 @@ public class ProtocolsGenerator {
     // for use by FilesAction subclasses to enhance logging
     boolean storageResolverAdded = false;
     
-    /**
-     * The resolved Artifact from the database or due to preventNotFound actions.
-     */
+    // needed by vault files:
     public Artifact resolvedArtifact;
 
     public ProtocolsGenerator(ArtifactDAO artifactDAO, Map<URI, Availability> siteAvailabilities, Map<URI, StorageSiteRule> siteRules) {
         this.artifactDAO = artifactDAO;
         this.deletedArtifactEventDAO = new DeletedArtifactEventDAO(this.artifactDAO);
         this.siteAvailabilities = siteAvailabilities;
-        this.siteRules = siteRules;
+        if (siteRules != null) {
+            this.siteRules.putAll(siteRules);
+        }
+    }
+
+    // unit testing
+    public ProtocolsGenerator(Map<URI, StorageSiteRule> siteRules) {
+        this.artifactDAO = null;
+        this.deletedArtifactEventDAO = null;
+        this.siteAvailabilities = null;
+        if (siteRules != null) {
+            this.siteRules.putAll(siteRules);
+        }
     }
     
     public boolean getStorageResolverAdded() {
@@ -306,10 +324,6 @@ public class ProtocolsGenerator {
     }
 
     private Capability getFilesCapability(StorageSite storageSite) {
-        if (!isAvailable(storageSite.getResourceID())) {
-            log.warn("storage site is offline: " + storageSite.getResourceID());
-            return null;
-        }
         Capability filesCap = null;
         try {
             RegistryClient regClient = new RegistryClient();
@@ -327,18 +341,10 @@ public class ProtocolsGenerator {
     }
 
     // contains the algorithm for prioritizing storage sites to get file
-    static List<StorageSite> prioritizePullFromSites(List<StorageSite> storageSites) {
-        // filter out non-readable
-        List<StorageSite> ret = new ArrayList<>(storageSites.size());
-        for (StorageSite s : storageSites) {
-            if (s.getAllowRead()) {
-                ret.add(s);
-            } else {
-                log.debug("storage site is not readable: " + s.getResourceID());
-            }
-        }
-        
+    List<StorageSite> prioritizePullFromSites(Set<StorageSite> storageSites, URI artifactURI) {
         // random
+        List<StorageSite> ret = new ArrayList<>(storageSites.size());
+        ret.addAll(storageSites);
         Collections.shuffle(ret);
         return ret;
     }
@@ -347,7 +353,9 @@ public class ProtocolsGenerator {
             throws ResourceNotFoundException, IOException {
         StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
         Set<StorageSite> sites = storageSiteDAO.list(); // this set could be cached
-
+        final int knownSites = sites.size();
+        
+        // find artifact
         Artifact artifact = artifactDAO.get(artifactURI);
         if (artifact == null) {
             if (this.preventNotFound) {
@@ -358,49 +366,52 @@ public class ProtocolsGenerator {
         log.debug(artifactURI + " found: " + artifact);
         this.resolvedArtifact = artifact;
         
-        List<StorageSite> storageSites = new ArrayList<>();
+        // filter sites for readable
+        Iterator<StorageSite> iter = sites.iterator();
+        while (iter.hasNext()) {
+            StorageSite s = iter.next();
+            boolean avail = isAvailable(s.getResourceID());
+            // siteAvoid is a soft-avoid so handled below
+            if (s.getAllowRead() && avail) {
+                log.debug("doPullFrom: " + s.getResourceID() + " OK");
+            } else {
+                log.debug("doPullFrom: "  + s.getResourceID() + " SKIP readable=" + s.getAllowRead() + " available=" + avail);
+                iter.remove();
+            }
+        }
+        
+        // filter sites for locations
         if (artifact != null) {
             if (artifact.storageLocation != null) {
-                // this is a single storage site
-                Iterator<StorageSite> iter = sites.iterator();
-                if (iter.hasNext()) {
-                    storageSites.add(iter.next());
-                }
-                if (iter.hasNext()) {
-                    log.error("BUG: found second StorageSite in database with assigned Artifact.storageLocation");
+                if (sites.size() > 1) {
+                    throw new RuntimeException("BUG: found second StorageSite in database with assigned Artifact.storageLocation");
                 }
             } else {
-                // this is a global inventory
-                for (SiteLocation site : artifact.siteLocations) {
-                    StorageSite storageSite = getSite(sites, site.getSiteID());
-                    storageSites.add(storageSite);
+                // global - find intersection: artifact.siteLocations X sites
+                iter = sites.iterator();
+                while (iter.hasNext()) {
+                    StorageSite s = iter.next();
+                    StorageSite ss = findSite(s, artifact.siteLocations);
+                    if (ss == null) {
+                        iter.remove();
+                    }
                 }
             }
         }
         
-        List<StorageSite> readableSites = prioritizePullFromSites(storageSites);
-        log.debug("pullFrom: known sites " + storageSites.size() + " -> readableSites " + readableSites.size());
+        List<StorageSite> orderedSites = prioritizePullFromSites(sites, artifactURI);
+        log.debug("pullFrom: known=" + knownSites + " -> usable=" + orderedSites.size());
         
         List<Protocol> protos = new ArrayList<>();
         List<Protocol> avoidable = new ArrayList<>();
-        for (StorageSite storageSite : readableSites) {
-            boolean avoid = siteAvoid.contains(storageSite.getResourceID());
-            log.debug("trying site: " + storageSite.getResourceID() + " allowRead=" + storageSite.getAllowRead());
-            Capability filesCap = getFilesCapability(storageSite); // checks availability
-            if (filesCap != null && storageSite.getAllowRead()) {
+        
+        for (StorageSite storageSite : orderedSites) {
+            boolean avoid = getAvoid.contains(storageSite.getResourceID());
+            log.debug("trying site: " + storageSite.getResourceID());
+            Capability filesCap = getFilesCapability(storageSite);
+            if (artifact != null && filesCap != null) {
                 for (Protocol proto : transfer.getProtocols()) {
                     log.debug("\tprotocol: " + proto);
-                    // less generic request for service that implements an API
-                    // HACK: this is filesCap specific in here
-                    if (proto.getUri().equals(filesCap.getStandardID())) {
-                        Protocol p = new Protocol(proto.getUri());
-                        p.setEndpoint(storageSite.getResourceID().toASCIIString());
-                        if (avoid) {
-                            avoidable.add(p);
-                        } else {
-                            protos.add(p);
-                        }
-                    }
                     URI sec = proto.getSecurityMethod();
                     if (sec == null) {
                         sec = Standards.SECURITY_METHOD_ANON;
@@ -492,64 +503,51 @@ public class ProtocolsGenerator {
         return protos;
     }
 
-    // the algorithm for prioritizing storage sites to put file
-    static SortedSet<StorageSite> prioritizePushToSites(Set<StorageSite> storageSites, URI artifactURI,
-                                                        Map<URI, StorageSiteRule> siteRules) {
-        PrioritizingStorageSiteComparator comparator = new PrioritizingStorageSiteComparator(siteRules, artifactURI, null);
-        TreeSet<StorageSite> orderedSet = new TreeSet<>(comparator);
-        for (StorageSite s : storageSites) {
-            if (s.getAllowWrite()) {
-                orderedSet.add(s);
-            } else {
-                log.debug("storage site is not writable: " + s.getResourceID());
-            }
+    // the algorithm for prioritizing storage sites to put file:
+    // use applicable site rule || random
+    List<StorageSite> prioritizePushToSites(Set<StorageSite> storageSites, URI artifactURI) {
+        List<StorageSite> ret = new ArrayList<>(storageSites.size());
+        ret.addAll(storageSites);
+        boolean siteRuleExists = findSiteRule(artifactURI);
+        if (siteRules.isEmpty() || !siteRuleExists) {
+            Collections.shuffle(ret);
+        } else {
+            PrioritizingStorageSiteComparator comparator = new PrioritizingStorageSiteComparator(siteRules, artifactURI, null);
+            Collections.sort(ret, comparator);
         }
-        return orderedSet;
+        return ret;
     }
 
     private List<Protocol> doPushTo(URI artifactURI, Transfer transfer, String authToken) throws IOException {
-        RegistryClient regClient = new RegistryClient();
         StorageSiteDAO storageSiteDAO = new StorageSiteDAO(artifactDAO);
-        Set<StorageSite> storageSites = storageSiteDAO.list(); // this set could be cached
+        Set<StorageSite> sites = storageSiteDAO.list(); // this set could be cached
+        final int knownSites = sites.size();
 
+        // filter sites for writable
+        Iterator<StorageSite> iter = sites.iterator();
+        while (iter.hasNext()) {
+            StorageSite s = iter.next();
+            boolean avail = isAvailable(s.getResourceID());
+            boolean avoid = putAvoid.contains(s.getResourceID());
+            if (s.getAllowWrite() && avail && !avoid) {
+                log.debug("doPushTo: " + s.getResourceID() + " OK");
+            } else {
+                log.debug("doPushTo: "  + s.getResourceID() 
+                        + " SKIP writable=" + s.getAllowWrite() + " available=" + avail + " avoid=" + avoid);
+                iter.remove();
+            }
+        }
+        
+        List<StorageSite> orderedSites = prioritizePushToSites(sites, artifactURI);
+        log.debug("pushTo: known sites " + knownSites + " -> writableSites " + orderedSites.size());
+        
         List<Protocol> protos = new ArrayList<>();
-        // prioritize also filters out non-writable sites
-        Set<StorageSite> orderedSites = prioritizePushToSites(storageSites, artifactURI, this.siteRules);
-        // produce URLs for all writable sites
-        log.debug("pushTo: known sites " + storageSites.size() + " -> writableSites " + orderedSites.size());
         for (StorageSite storageSite : orderedSites) {
-            // check if this site avoided
-            if (siteAvoid.contains(storageSite.getResourceID())) {
-                log.debug("avoid storage site: " + storageSite.getResourceID());
-                continue;
-            }
-            // check if site is currently offline
-            if (!isAvailable(storageSite.getResourceID())) {
-                log.warn("storage site is offline: " + storageSite.getResourceID());
-                continue;
-            }
-            
             log.debug("pushTo: trying site " + storageSite.getResourceID());
-            Capability filesCap = null;
-            try {
-                Capabilities caps = regClient.getCapabilities(storageSite.getResourceID());
-                filesCap = caps.findCapability(Standards.SI_FILES);
-                if (filesCap == null) {
-                    log.warn("service: " + storageSite.getResourceID() + " does not provide " + Standards.SI_FILES);
-                }
-            } catch (ResourceNotFoundException ex) {
-                log.warn("failed to find service: " + storageSite.getResourceID());
-            }
+            Capability filesCap = getFilesCapability(storageSite);
             if (filesCap != null) {
                 for (Protocol proto : transfer.getProtocols()) {
                     log.debug("pushTo: " + storageSite + " proto: " + proto);
-                    // less generic request for service that implements
-                    // HACK: this is filesCap specific in here
-                    if (proto.getUri().equals(filesCap.getStandardID())) {
-                        Protocol p = new Protocol(proto.getUri());
-                        p.setEndpoint(storageSite.getResourceID().toASCIIString());
-                        protos.add(p);
-                    }
                     URI sec = proto.getSecurityMethod();
                     if (sec == null) {
                         sec = Standards.SECURITY_METHOD_ANON;
@@ -593,13 +591,24 @@ public class ProtocolsGenerator {
         return protos;
     }
 
-    private StorageSite getSite(Set<StorageSite> sites, UUID id) {
-        for (StorageSite s : sites) {
-            if (s.getID().equals(id)) {
-                return s;
+    private StorageSite findSite(StorageSite site, Set<SiteLocation> locs) {
+        for (SiteLocation loc : locs) {
+            if (site.getID().equals(loc.getSiteID())) {
+                return site;
             }
         }
-        throw new IllegalStateException("BUG: could not find StorageSite with id=" +  id);
+        return null;
+    }
+    
+    private boolean findSiteRule(URI artifactURI) {
+        for (StorageSiteRule r : siteRules.values()) {
+            for (Namespace ns : r.getNamespaces()) {
+                if (ns.matches(artifactURI)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private boolean protocolCompat(Protocol p, URL u) {
