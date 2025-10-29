@@ -418,6 +418,9 @@ public class FilesTest extends RavenTest {
         Assert.assertEquals("File digest", checksum, request.getDigest());
         Assert.assertEquals("File type", contentType, request.getResponseHeader("Content-Type"));
         Assert.assertEquals("File encoding", contentEncoding, request.getResponseHeader("Content-Encoding"));
+        
+        String rangeSupport = request.getResponseHeader("accept-ranges");
+        Assert.assertEquals("accept-ranges", "bytes", rangeSupport);
 
     }
 

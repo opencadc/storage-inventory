@@ -2,6 +2,7 @@
 default: cadc
 
 EUCLID: esa
+EUCLID_DR1: esa
 
 HST: mast
 JWST: mast
