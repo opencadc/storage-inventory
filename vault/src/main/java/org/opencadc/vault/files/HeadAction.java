@@ -224,6 +224,7 @@ public class HeadAction extends RestAction {
         if (contentChecksum != null) {
             syncOutput.setDigest(contentChecksum);
         }
+        syncOutput.setHeader("Accept-Ranges", "bytes");
 
         syncOutput.setCode(200);
         return ret;

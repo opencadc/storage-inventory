@@ -175,6 +175,7 @@ public class HeadFilesAction extends FilesAction {
         if (artifact.contentType != null) {
             syncOutput.setHeader("Content-Type", artifact.contentType);
         }
+        syncOutput.setHeader("Accept-Ranges", "bytes");
     }
 
 }
