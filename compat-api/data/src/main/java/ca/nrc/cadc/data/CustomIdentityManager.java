@@ -131,7 +131,7 @@ public class CustomIdentityManager extends ACIdentityManager {
                     String creds = new String(b); // default charset
                     int colonIndex = creds.indexOf(":");
                     if (colonIndex < 1) {
-                        throw new NotAuthenticatedException("BUG: cannot parse user/passwd for basic challange");
+                        throw new NotAuthenticatedException("Incorrect user/password input in basic auth challenge");
                     }
                     username = creds.substring(0, colonIndex);
                     password = creds.substring(colonIndex + 1);
