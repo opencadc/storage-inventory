@@ -2,6 +2,6 @@
 # semantic version tag: major.minor[.patch]
 # build version tag: timestamp
 # tag: {semantic}-{build}
-VER=1.0.8
+VER=1.0.9
 TAGS="${VER} ${VER}-$(date --utc +"%Y%m%dT%H%M%S")"
 unset VER 

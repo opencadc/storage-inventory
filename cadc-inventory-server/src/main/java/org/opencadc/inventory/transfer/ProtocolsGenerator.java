@@ -224,6 +224,22 @@ public class ProtocolsGenerator {
         }
         return protos;
     }
+    
+    public void filterReadable(Set<StorageSite> sites) {
+        // filter sites for readable
+        Iterator<StorageSite> iter = sites.iterator();
+        while (iter.hasNext()) {
+            StorageSite s = iter.next();
+            boolean avail = isAvailable(s.getResourceID());
+            // getAvoid is a soft-avoid so handled below
+            if (s.getAllowRead() && avail) {
+                log.debug("doPullFrom: " + s.getResourceID() + " OK");
+            } else {
+                log.debug("doPullFrom: "  + s.getResourceID() + " SKIP readable=" + s.getAllowRead() + " available=" + avail);
+                iter.remove();
+            }
+        }
+    }
 
     public Artifact getUnsyncedArtifact(URI artifactURI, Transfer transfer, Set<StorageSite> storageSites, String authToken) {
         Artifact result = null;
@@ -238,7 +254,7 @@ public class ProtocolsGenerator {
             while (result == null && pi.hasNext()) {
                 Protocol proto = pi.next();
 
-                if (storageSite.getAllowRead()) {
+                if (storageSite.getAllowRead()) { // redundant: storageSites already filtered for readable
                     URI sec = proto.getSecurityMethod();
                     if (sec == null) {
                         sec = Standards.SECURITY_METHOD_ANON;
@@ -355,6 +371,8 @@ public class ProtocolsGenerator {
         Set<StorageSite> sites = storageSiteDAO.list(); // this set could be cached
         final int knownSites = sites.size();
         
+        filterReadable(sites);
+
         // find artifact
         Artifact artifact = artifactDAO.get(artifactURI);
         if (artifact == null) {
@@ -366,20 +384,6 @@ public class ProtocolsGenerator {
         log.debug(artifactURI + " found: " + artifact);
         this.resolvedArtifact = artifact;
         
-        // filter sites for readable
-        Iterator<StorageSite> iter = sites.iterator();
-        while (iter.hasNext()) {
-            StorageSite s = iter.next();
-            boolean avail = isAvailable(s.getResourceID());
-            // siteAvoid is a soft-avoid so handled below
-            if (s.getAllowRead() && avail) {
-                log.debug("doPullFrom: " + s.getResourceID() + " OK");
-            } else {
-                log.debug("doPullFrom: "  + s.getResourceID() + " SKIP readable=" + s.getAllowRead() + " available=" + avail);
-                iter.remove();
-            }
-        }
-        
         // filter sites for locations
         if (artifact != null) {
             if (artifact.storageLocation != null) {
@@ -388,7 +392,7 @@ public class ProtocolsGenerator {
                 }
             } else {
                 // global - find intersection: artifact.siteLocations X sites
-                iter = sites.iterator();
+                Iterator<StorageSite> iter = sites.iterator();
                 while (iter.hasNext()) {
                     StorageSite s = iter.next();
                     StorageSite ss = findSite(s, artifact.siteLocations);
