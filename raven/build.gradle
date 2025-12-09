@@ -33,7 +33,7 @@ dependencies {
     implementation 'org.opencadc:cadc-gms:[1.0.4,)'
     implementation 'org.opencadc:cadc-inventory:[1.0,2.0)'
     implementation 'org.opencadc:cadc-inventory-db:[1.0,2.0)'
-    implementation 'org.opencadc:cadc-inventory-server:[0.4.0,1.0)'
+    implementation 'org.opencadc:cadc-inventory-server:[0.4.1,1.0)'
     implementation 'org.opencadc:cadc-permissions:[0.3.5,)'
     implementation 'org.opencadc:cadc-permissions-client:[0.3,)'
     implementation 'org.opencadc:cadc-vos:[1.2,2.0)'

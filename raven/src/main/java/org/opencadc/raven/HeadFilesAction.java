@@ -130,6 +130,7 @@ public class HeadFilesAction extends FilesAction {
                 if (tokenGen != null) {
                     authToken = tokenGen.generateToken(artifactURI, ReadGrant.class, user);
                 }
+                pg.filterReadable(sites);
                 artifact = pg.getUnsyncedArtifact(artifactURI, transfer, sites, authToken);
             }
         }

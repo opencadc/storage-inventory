@@ -135,17 +135,17 @@ public class GetFilesAction extends FilesAction {
 
 
     URI getFirstURL() throws ResourceNotFoundException, IOException {
-        Transfer transfer = new Transfer(artifactURI, Direction.pullFromVoSpace);
+        Transfer xfer = new Transfer(artifactURI, Direction.pullFromVoSpace);
         Protocol proto = new Protocol(VOS.PROTOCOL_HTTPS_GET);
         proto.setSecurityMethod(Standards.SECURITY_METHOD_ANON);
-        transfer.getProtocols().add(proto);
+        xfer.getProtocols().add(proto);
 
         ProtocolsGenerator pg = new ProtocolsGenerator(this.artifactDAO, this.siteAvailabilities, this.siteRules);
         pg.tokenGen = this.tokenGen;
         pg.user = this.user;
         pg.preventNotFound = this.preventNotFound;
         pg.storageResolver = this.storageResolver;
-        List<Protocol> protos = pg.getProtocols(transfer);
+        List<Protocol> protos = pg.getProtocols(xfer);
         if (protos.isEmpty()) {
             throw new ResourceNotFoundException("not available: " + artifactURI);
         }
