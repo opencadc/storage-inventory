@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2022.                            (c) 2022.
+*  (c) 2025.                            (c) 2025.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -129,9 +129,12 @@ public class CustomIdentityManager extends ACIdentityManager {
                     Base64.Decoder dec = Base64.getDecoder();
                     byte[] b = dec.decode(ss[1]);
                     String creds = new String(b); // default charset
-                    String[] up = creds.split(":");
-                    username = up[0];
-                    password = up[1];
+                    int colonIndex = creds.indexOf(":");
+                    if (colonIndex < 1) {
+                        throw new NotAuthenticatedException("Incorrect user/password input in basic auth challenge");
+                    }
+                    username = creds.substring(0, colonIndex);
+                    password = creds.substring(colonIndex + 1);
                 }
                 if (username != null && password != null) {
                     LocalAuthority loc = new LocalAuthority();
