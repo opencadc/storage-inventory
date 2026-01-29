@@ -35,7 +35,7 @@ dependencies {
     implementation 'org.opencadc:cadc-uws-server:[1.2.18,)'
     implementation 'org.opencadc:cadc-dali:[1.2.25,)'
     implementation 'org.opencadc:cadc-tap-server:[1.1.31,)'
-    implementation 'org.opencadc:cadc-tap-schema:[1.2,)'
+    implementation 'org.opencadc:cadc-tap-schema:[1.2.15,)'
     implementation 'org.opencadc:cadc-tap-server-pg:[1.0.5,)'
 
     runtimeOnly 'org.opencadc:cadc-tap-tmp:[1.1,)'
