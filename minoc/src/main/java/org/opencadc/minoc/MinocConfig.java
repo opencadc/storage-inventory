@@ -113,8 +113,8 @@ public class MinocConfig {
     static final String READABLE_KEY = MINOC_KEY + ".readable";
     static final String WRITABLE_KEY = MINOC_KEY + ".writable";
     static final String RECOVERABLE_NS_KEY = MINOC_KEY + ".recoverableNamespace";
-    static final String ARCHIVE_OPS_KEY = MINOC_KEY + ".archiveOperatorX509";
-    static final String FILE_SYNC_OPS_KEY = MINOC_KEY + ".fileSyncOperatorX509";
+    static final String ARCHIVE_OPS_KEY = MINOC_KEY + ".archiveOperator";
+    static final String FILE_SYNC_OPS_KEY = MINOC_KEY + ".fileSyncOperator";
     
     static final String DEV_AUTH_ONLY_KEY = MINOC_KEY + ".authenticateOnly";
     
