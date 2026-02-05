@@ -124,6 +124,7 @@ public class PutTransactionTest extends MinocTest {
             // put with txn
             InputStream in = new ByteArrayInputStream(data);
             HttpUpload put = new HttpUpload(in, artifactURL);
+            put.setRequestProperty("content-length", Integer.toString(data.length));
             put.setRequestProperty(ArtifactAction.PUT_TXN_OP, ArtifactAction.PUT_TXN_OP_START);
             Subject.doAs(userSubject, new RunnableAction(put));
             Assert.assertNull(put.getThrowable());
@@ -228,6 +229,7 @@ public class PutTransactionTest extends MinocTest {
             // put with txn
             InputStream in = new ByteArrayInputStream(data);
             HttpUpload put = new HttpUpload(in, artifactURL);
+            put.setRequestProperty("content-length", Integer.toString(data.length));
             put.setRequestProperty(ArtifactAction.PUT_TXN_OP, ArtifactAction.PUT_TXN_OP_START);
             Subject.doAs(userSubject, new RunnableAction(put));
             Assert.assertNull(put.getThrowable());
@@ -299,6 +301,7 @@ public class PutTransactionTest extends MinocTest {
             final long expectedLength1 = data.length;
             InputStream in = new ByteArrayInputStream(data);
             HttpUpload put = new HttpUpload(in, artifactURL);
+            put.setRequestProperty("content-length", Integer.toString(data.length));
             put.setRequestProperty(ArtifactAction.PUT_TXN_OP, ArtifactAction.PUT_TXN_OP_START);
             Subject.doAs(userSubject, new RunnableAction(put));
             log.info("put 1: " + put.getResponseCode() + " " + put.getThrowable());
@@ -354,6 +357,7 @@ public class PutTransactionTest extends MinocTest {
             data = content1.getBytes();
             in = new ByteArrayInputStream(data);
             put = new HttpUpload(in, artifactURL);
+            put.setRequestProperty("content-length", Integer.toString(data.length));
             put.setRequestProperty(ArtifactAction.PUT_TXN_ID, txnID);
             Subject.doAs(userSubject, new RunnableAction(put));
             log.info("put 1 again: " + put.getResponseCode() + " " + put.getThrowable());
@@ -366,6 +370,7 @@ public class PutTransactionTest extends MinocTest {
             data = content2.getBytes();
             in = new ByteArrayInputStream(data);
             put = new HttpUpload(in, artifactURL);
+            put.setRequestProperty("content-length", Integer.toString(data.length));
             put.setRequestProperty(ArtifactAction.PUT_TXN_ID, txnID);
             Subject.doAs(userSubject, new RunnableAction(put));
             log.info("put 2: " + put.getResponseCode() + " " + put.getThrowable());
@@ -418,6 +423,7 @@ public class PutTransactionTest extends MinocTest {
             data = content2.getBytes();
             in = new ByteArrayInputStream(data);
             put = new HttpUpload(in, artifactURL);
+            put.setRequestProperty("content-length", Integer.toString(data.length));
             put.setRequestProperty(ArtifactAction.PUT_TXN_ID, txnID);
             Subject.doAs(userSubject, new RunnableAction(put));
             Assert.assertNull(put.getThrowable());
