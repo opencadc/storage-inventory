@@ -349,7 +349,6 @@ public class PutTransactionTest extends MinocTest {
             Subject.doAs(userSubject, new RunnableAction(revert));
             log.info("revert to zero-length: " + revert.getResponseCode() + " " + revert.getThrowable());
             Assert.assertEquals(202, revert.getResponseCode());
-            // same as head in txn above
             Assert.assertEquals("txnID", txnID, revert.getResponseHeader(ArtifactAction.PUT_TXN_ID));
             Assert.assertNull("digest", revert.getResponseHeader(HttpTransfer.DIGEST));
             

@@ -43,13 +43,13 @@ dependencies {
     implementation 'gov.nasa.gsfc.heasarc:nom-tam-fits:1.20.0'
 
     testImplementation 'junit:junit:[4.0,)'
-    testImplementation 'org.opencadc:cadc-storage-adapter-fs:[0.9.3,)'
+    testImplementation 'org.opencadc:cadc-storage-adapter-fs:[1.0,)'
 
     intTestImplementation 'org.opencadc:cadc-test-vosi:[1.0.11,)'
 
     runtimeOnly 'org.opencadc:cadc-access-control-identity:[1.2.1,2.0)'
-    runtimeOnly 'org.opencadc:cadc-storage-adapter-fs:[0.9.3,)'
-    runtimeOnly 'org.opencadc:cadc-storage-adapter-swift:[0.8.7,)'
+    runtimeOnly 'org.opencadc:cadc-storage-adapter-fs:[1.0,)'
+    runtimeOnly 'org.opencadc:cadc-storage-adapter-swift:[1.0,)'
     runtimeOnly 'org.opencadc:cadc-storage-adapter-eos:[0.1.0,)'
 }
 

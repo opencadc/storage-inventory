@@ -100,7 +100,7 @@ import org.apache.log4j.Logger;
 public abstract class MinocTest {
     
     private static final Logger log = Logger.getLogger(MinocTest.class);
-    public static final URI MINOC_SERVICE_ID = URI.create("ivo://opencadc.org/minoc");
+    public static final URI MINOC_SERVICE_ID = URI.create("ivo://opencadc.org/alt/minoc");
     
     protected URL filesURL;
     protected Subject anonSubject;
