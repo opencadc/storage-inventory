@@ -80,6 +80,12 @@ public class PutTransaction {
     private final Long minSegmentSize;
     private final Long maxSegmentSize;
     private boolean committed;
+    
+    /**
+     * The current state of stored bytes. This field is null for a transaction
+     * with zero bytes stored (either newly created or a transaction that was
+     * reverted to that state).
+     */
     public StorageMetadata storageMetadata;
     
     /**
