@@ -32,6 +32,9 @@ The *put with transaction* pattern allows a client to upload content, compute th
 checksum on-the-fly, and verify the upload before the commit. It works equally well for uploading 
 files and streaming dynamic content as far as verifying that the upload was successful.
 
+Transactions are created and committed using PUT; they are reverted (to previous state) or aborted
+with POST.
+
 upload request:
 ```
 HTTP PUT /minoc/files/{Artifact.uri}
@@ -53,6 +56,7 @@ state:
 HTTP HEAD /minoc/files/{Artifact.uri}
 x-put-txn-id={transaction id}
 content-length={current length in bytes}
+digest={checksum of bytes stored}
 ```
 response: same as above
 
@@ -111,8 +115,7 @@ HTTP PUT /minoc/files/{Artifact.uri}
 x-put-txn-op=start
 x-total-length={total number of bytes} (optional)
 content-length=0
-digest={checksum of bytes} (optional)
-{body}
+digest={checksum of bytes stored} (optional)
 ```
 
 successful response:
@@ -122,8 +125,9 @@ x-put-txn-id={transaction id}
 x-put-segment-minbytes={minimum segment size} (optional)
 x-put-segment-maxbytes={maximum segment size} (optional)
 content-length=0 (no response body)
-digest={checksum of bytes stored}
 ```
+with no digest header because there are 0 bytes.
+
 If the initial put has content-length=0 then this starts a transaction and gets server constraints
 without sending the first segment. The x-total-length header value helps the server decide how to
 store the data object and may effect constraints. The x-put-segment-minbytes and x-put-segment-maxbytes,
@@ -135,8 +139,8 @@ bytes); the server may respond with x-put-segment-minbytes=4GiB (in bytes) and x
 (in bytes). The client can then PUT 5, 5, 2 (GiB), or 5, 4, 3 (GiB), or 4, 4, 4 (GiB) segments. 
 
 When  uploading to a filesystem-backed minoc, the server may respond with x-put-segment-minbytes=1 (byte)
-and no x-put-segment-maxbytes, meaning that segments may be any size at all. Clients cannot simply use the 
-min or the max; they must chose a suitable and allowed size that balances overhead, throughput, and robustness.
+and no x-put-segment-maxbytes, meaning that segments may be any size at all. **Clients cannot simply use the 
+min or the max; they must chose a suitable and allowed size that balances overhead, throughput, and robustness.**
 
 state: as above
 
@@ -153,7 +157,7 @@ response:
 202 (Accepted)
 x-put-txn-id={transaction id}
 content-length=0 (no response body)
-digest={MD5 checksum of bytes stored}
+digest={checksum of bytes stored}
 ```
 
 revert last append:
@@ -167,10 +171,11 @@ response:
 202 (Accepted)
 x-put-txn-id={transaction id}
 content-length=0 (no response body)
-digest={MD5 checksum of bytes stored}
-
+digest={checksum of bytes stored}
 ```
-or, if the last append cannot be reverted:
+If the first "chunk" is reverted to 0 bytes, there will be no digest in the response.
+
+if the previous append cannot be reverted:
 ```
 400 (Bad Request)
 ```
@@ -190,7 +195,7 @@ commit and abort: as above
 
 This pattern defines one feature: PUT can append by uploading more content in the same transaction. 
 The client can make use of the content-length to decide if it needs to send more bytes. The client 
-can only feasibly use the MD5 to decide if it should commit or abort.
+can only feasibly use the checksum to decide if it should commit or abort.
 
 In the context of large files (~5GiB) the total length in the initial request is required so the
 implementation can decide (i) if resume will be supported, and (ii) how to store the data.
@@ -211,13 +216,13 @@ guide implementation choices, especially in the SwiftStorageAdapter and how CEPH
 1. The most simple put of a small file: client does not provide any metadata (length and md5)
 and simply streams the bytes. We want to store that in the lowest overhead way possible because there are 
 many such files, which means storing the small file as a single object in object store 
-(cadc-storage-adpater-swift).
+(cadc-storage-adapter-swift).
 
 2. Currently works: a TAP (youcat) query with output to VOSpace (vault) does not provide any 
 metadata (length and md5) and simply streams the bytes. For a query like `select * from cfht.megapipe` 
 the resulting file was ~40GiB. From the client side, this is not resumable. We want to store that in 
 the most flexible way possible because the byte stream may be large, so this identical-looking request 
-needs to be stored in multiple chunks in object store (cadc-storage-adpater-ceph).
+needs to be stored in multiple chunks in object store (cadc-storage-adapter-swift).
 
 *This use case justifies the definition of X-Large-Stream hint and associated behaviour.*
 

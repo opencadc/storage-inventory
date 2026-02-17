@@ -579,6 +579,21 @@ public class StorageAdapterPutTxnTest {
             Assert.assertEquals("checksum", expectedChecksum1, meta1.getContentChecksum());
             log.info("put 1");
             
+            // revert to 0
+            PutTransaction reverted = adapter.revertTransaction(txn.getID());
+            log.info("after revert part 1: " + reverted);
+            Assert.assertNull(reverted.storageMetadata); // size 0: no storage metadata
+            
+            // write part 1 again
+            data = dataString1.getBytes();
+            source = new ByteArrayInputStream(data);
+            meta1 = adapter.put(newArtifact, source, txn.getID());
+            log.info("meta1: " + meta1);
+            Assert.assertNotNull(meta1);
+            Assert.assertEquals("length", data.length, meta1.getContentLength().longValue());
+            Assert.assertEquals("checksum", expectedChecksum1, meta1.getContentChecksum());
+            log.info("put 1");
+            
             // write part 2            
             data = dataString2.getBytes();
             source = new ByteArrayInputStream(data);
@@ -600,7 +615,7 @@ public class StorageAdapterPutTxnTest {
             Assert.assertEquals("checksum", expectedChecksum2, txnMeta2.getContentChecksum());
 
             // revert to 1
-            PutTransaction reverted = adapter.revertTransaction(txn.getID());
+            reverted = adapter.revertTransaction(txn.getID());
             Assert.assertNotNull(reverted.storageMetadata);
             StorageMetadata revMeta = reverted.storageMetadata;
             log.info("after revert part 2: " + revMeta + " in " + txn.getID());

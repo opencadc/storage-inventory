@@ -634,9 +634,8 @@ abstract class AbstractStorageAdapter implements StorageAdapter {
                 // revert
                 RandomAccessFile raf = new RandomAccessFile(txnFile.toFile(), "rws");
                 log.debug("revertTransaction: " + transactionID + " from " + raf.length() + " to " + prevLength);
-                raf.setLength(prevLength);
+                raf.setLength(prevLength); // truncate
                 String curDigestState = prevDigestState;
-                long len = Files.size(txnFile);
                 setFileAttribute(txnFile, CUR_DIGEST_ATTR, curDigestState);
                 setFileAttribute(txnFile, PREV_DIGEST_ATTR, null);
                 setFileAttribute(txnFile, PREV_LENGTH_ATTR, null);
@@ -646,11 +645,10 @@ abstract class AbstractStorageAdapter implements StorageAdapter {
                 URI checksum = URI.create(md.getAlgorithmName() + ":" + md5Val);
                 setFileAttribute(txnFile, CHECKSUM_ATTR, checksum.toASCIIString());
                 
-                StorageMetadata ret = createStorageMetadata(txnPath, txnFile, false);
-                // txnPath does not have bucket dirs
-                //ret.getStorageLocation().storageBucket = InventoryUtil.computeBucket(ret.getStorageLocation().getStorageID(), bucketLength);
                 PutTransaction pt = new PutTransaction(transactionID, PT_MIN_BYTES, PT_MAX_BYTES);
-                pt.storageMetadata = ret;
+                if (prevLength > 0L) {
+                    pt.storageMetadata = createStorageMetadata(txnPath, txnFile, false);
+                }
                 return pt;
             }
         } catch (NoSuchAlgorithmException ex) {

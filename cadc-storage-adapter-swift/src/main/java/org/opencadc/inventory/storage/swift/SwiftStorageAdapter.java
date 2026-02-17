@@ -151,6 +151,9 @@ public class SwiftStorageAdapter  implements StorageAdapter {
     static final String CONF_SBLEN = SwiftStorageAdapter.class.getName() + ".bucketLength";
     static final String CONF_BUCKET = SwiftStorageAdapter.class.getName() + ".bucketName";
     static final String CONF_ENABLE_MULTI = SwiftStorageAdapter.class.getName() + ".multiBucket";
+    
+    // dev only for testing put transactions
+    static final String CONF_SEG_MIN_BYTES = SwiftStorageAdapter.class.getName() + ".segmentMinBytes";
 
     private static final String KEY_SCHEME = "id";
 
@@ -222,7 +225,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             MultiValuedProperties props = pr.getAllProperties();
             
             StringBuilder sb = new StringBuilder();
-            sb.append("incomplete config: ");
+            sb.append("config: ");
             boolean ok = true;
             
             final String suri = props.getFirstPropertyValue(CONF_ENDPOINT);
@@ -278,6 +281,20 @@ public class SwiftStorageAdapter  implements StorageAdapter {
             } else {
                 sb.append("OK");
             }
+            
+            final String smb = props.getFirstPropertyValue(CONF_SEG_MIN_BYTES);
+            
+            if (smb != null) {
+                sb.append("\n\t").append("WARN - DEV-ONLY -- ").append(CONF_SEG_MIN_BYTES).append(": ");
+                try {
+                    this.segmentMinBytes = Long.parseLong(smb);
+                    sb.append(" OK");
+                } catch (NumberFormatException ex) {
+                    sb.append(" ERROR: " + ex);
+                }
+            }
+            
+            log.info(sb.toString());
 
             if (!ok) {
                 throw new InvalidConfigException(sb.toString());
@@ -1009,7 +1026,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "transactionID", transactionID);
         UUID uuid = UUID.fromString(transactionID);
         try {
-            log.debug("getTransactionStatus: " + transactionID);
+            log.warn("getTransactionStatus: " + transactionID);
             StoredObject txn = txnContainer.getObject("txn:" + transactionID);
             if (txn.exists()) {
                 Map<String,Object> meta = txn.getMetadata();
@@ -1030,8 +1047,11 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 while (parts.hasNext()) {
                     last = parts.next();
                 }
-                log.debug("delete part: " + last.getName());
-                last.delete();
+                // check if there were any parts or size==0
+                if (last != null) {
+                    log.warn("delete part: " + last.getName());
+                    last.delete();
+                }
                 
                 String curDigestState = prevDigestState;
                 MessageDigestAPI md = MessageDigestAPI.getDigest(curDigestState);
@@ -1042,7 +1062,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 txn.setAndDoNotSaveMetadata(CONTENT_CHECKSUM_ATTR, checksum.toASCIIString());
                 txn.removeAndDoNotSaveMetadata(PREV_DIGEST_ATTR);
                 txn.saveMetadata();
-                
+                log.warn("return transaction status: " + transactionID);
                 return getTransactionStatusImpl(transactionID);
             }
         } catch (NoSuchAlgorithmException ex) {
