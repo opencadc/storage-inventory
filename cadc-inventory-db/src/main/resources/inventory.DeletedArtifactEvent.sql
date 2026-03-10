@@ -6,7 +6,7 @@ create table <schema>.DeletedArtifactEvent (
     metaChecksum varchar(136) not null
 );
 
-create unique index dae_uri_index on <schema>.DeletedArtifactEvent(uri)
+create index dae_uri_index on <schema>.DeletedArtifactEvent(uri)
     where uri is not null;
 
 create index dae_modified_index on <schema>.DeletedArtifactEvent(lastModified);

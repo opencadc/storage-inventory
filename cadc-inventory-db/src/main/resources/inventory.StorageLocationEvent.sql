@@ -6,7 +6,7 @@ create table <schema>.StorageLocationEvent (
     metaChecksum varchar(136) not null
 );
 
-create unique index sle_uri_index on <schema>.StorageLocationEvent(uri)
+create index sle_uri_index on <schema>.StorageLocationEvent(uri)
     where uri is not null;
 
 create index sle_modified_index on <schema>.StorageLocationEvent(lastModified);

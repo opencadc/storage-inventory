@@ -6,7 +6,7 @@ create table <schema>.DeletedStorageLocationEvent (
     metaChecksum varchar(136) not null
 );
 
-create unique index dsle_uri_index on <schema>.DeletedStorageLocationEvent(uri)
+create index dsle_uri_index on <schema>.DeletedStorageLocationEvent(uri)
     where uri is not null;
 
 create index dsle_modified_index on <schema>.DeletedStorageLocationEvent(lastModified);
