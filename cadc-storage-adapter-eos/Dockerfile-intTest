@@ -1,0 +1,27 @@
+FROM almalinux:9
+
+RUN groupadd --gid 1000 pdowler \
+    && useradd --uid 1000 --home-dir /home/pdowler --shell /bin/bash \
+        --no-create-home --no-user-group --no-log-init pdowler
+
+RUN mkdir -p /home/pdowler && chown pdowler:pdowler /home/pdowler
+
+# install repos
+RUN  dnf -y install epel-release
+RUN  dnf -y install 'dnf-command(config-manager)'
+RUN dnf config-manager --add-repo "https://storage-ci.web.cern.ch/storage-ci/eos/diopside/tag/testing/el-9/x86_64/"
+RUN echo "gpgcheck=1" >> /etc/yum.repos.d/storage-ci.web.cern.ch_storage-ci_eos_diopside_tag_testing_el-9_x86_64_.repo
+RUN dnf config-manager --add-repo "https://storage-ci.web.cern.ch/storage-ci/eos/diopside-depend/el-9/x86_64/"
+RUN echo "gpgcheck=1" >> /etc/yum.repos.d/storage-ci.web.cern.ch_storage-ci_eos_diopside-depend_el-9_x86_64_.repo
+RUN cd /tmp && curl -O -J https://storage-ci.web.cern.ch/storage-ci/storageci.key && rpm --import /tmp/storageci.key
+
+# install CA certs for EOS at UVic
+RUN dnf install -y ca-certificates && dnf clean all
+COPY GridCanada.crt /etc/pki/ca-trust/source/anchors/GridCanada.crt
+RUN update-ca-trust
+
+# install required software
+RUN dnf install -y java-21-openjdk.x86_64 java-21-openjdk-devel.x86_64 && dnf clean all
+RUN dnf install -y eos-client && dnf clean all
+
+

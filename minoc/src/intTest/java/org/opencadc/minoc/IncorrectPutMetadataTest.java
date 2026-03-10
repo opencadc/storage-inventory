@@ -68,25 +68,23 @@
 package org.opencadc.minoc;
 
 import ca.nrc.cadc.auth.RunnableAction;
+import ca.nrc.cadc.net.DigestUtil;
 import ca.nrc.cadc.net.HttpDelete;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpTransfer;
 import ca.nrc.cadc.net.HttpUpload;
 import ca.nrc.cadc.net.ResourceNotFoundException;
+import ca.nrc.cadc.util.Base64;
 import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.Log4jInit;
-
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URL;
 import java.security.PrivilegedExceptionAction;
-
 import javax.security.auth.Subject;
-
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.apache.xerces.impl.dv.util.Base64;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -378,9 +376,8 @@ public class IncorrectPutMetadataTest extends MinocTest {
                     // temporary: put file with digest serialized correctly
                     in = new ByteArrayInputStream(bytes);
                     put = new HttpUpload(in, artifactURL);
-                    byte[] cs = HexUtil.toBytes(checksumURI.getSchemeSpecificPart());
-                    String b64 = Base64.encode(cs);
-                    put.setRequestProperty("digest", "md5=" + b64);
+                    String b64 = DigestUtil.toDigest(checksumURI);
+                    put.setRequestProperty("digest", b64);
                     put.run();
                     log.info("response code: " + put.getResponseCode() + " " + put.getThrowable());
                     Assert.assertNull(put.getThrowable());

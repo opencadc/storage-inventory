@@ -384,7 +384,9 @@ public class VaultInitAction extends InitAction {
         try {
             log.info("initDatabase: " + JNDI_UWS_DATASOURCE + " uws START");
             DataSource uws = DBUtil.findJNDIDataSource(JNDI_UWS_DATASOURCE);
-            InitDatabaseUWS uwsi = new InitDatabaseUWS(uws, null, "uws");
+            // 1.3 changes jobInfo database; backfill expensive
+            boolean forceRolloverBeforeMinorUpgrade = true; 
+            InitDatabaseUWS uwsi = new InitDatabaseUWS(uws, null, "uws", forceRolloverBeforeMinorUpgrade);
             uwsi.doInit();
             log.info("initDatabase: " + JNDI_UWS_DATASOURCE + " uws OK");
         } catch (Exception ex) {
