@@ -1,0 +1,93 @@
+Certificate:
+    Data:
+        Version: 3 (0x2)
+        Serial Number: 9473 (0x2501)
+        Signature Algorithm: sha256WithRSAEncryption
+        Issuer: C=CA, O=Grid, CN=Grid Canada Certificate Authority
+        Validity
+            Not Before: Jan 12 21:29:07 2006 GMT
+            Not After : Jul 12 21:29:07 2027 GMT
+        Subject: C=CA, O=Grid, CN=Grid Canada Certificate Authority
+        Subject Public Key Info:
+            Public Key Algorithm: rsaEncryption
+            RSA Public Key: (2048 bit)
+                Modulus (2048 bit):
+                    00:ba:d8:6e:26:f3:5f:1b:72:a2:3a:28:94:a7:a2:
+                    bf:37:9a:87:7f:49:d7:50:0a:7f:21:ec:f9:b7:e5:
+                    bf:d2:d4:1a:92:21:7d:b9:90:f5:f0:b5:1d:ac:2d:
+                    a8:d4:f6:cb:5e:57:23:de:a4:2b:b8:d5:5b:bb:22:
+                    e8:1a:54:3c:0b:2b:2a:cc:6f:cf:bc:ab:58:77:f9:
+                    0b:aa:82:60:2b:91:42:10:f3:49:a6:dc:2e:a0:4e:
+                    d7:bc:7f:d7:59:53:4f:50:5b:10:9a:0a:43:70:52:
+                    bb:38:74:d9:ec:2a:03:80:a2:38:f6:58:70:bd:fc:
+                    db:11:4d:08:0e:53:7f:81:4d:68:24:fe:c5:7b:83:
+                    fc:cc:2c:a3:69:16:cc:7f:2b:00:f0:e0:b2:5c:0a:
+                    75:4e:c3:6e:61:e1:8a:ad:80:ff:0f:ac:ba:71:7a:
+                    f5:19:78:f9:9f:68:a3:b9:21:75:89:4d:ea:b9:d9:
+                    72:6f:2a:1b:c4:91:ae:9b:7d:82:01:cc:a5:8f:4b:
+                    54:ca:7f:33:c6:b3:ea:c7:d3:bf:ba:a5:5a:55:cc:
+                    b4:72:34:bd:45:41:4d:9a:f2:4f:f3:71:8b:ee:8a:
+                    25:da:f0:de:89:b5:57:fd:2b:b7:c7:1f:da:09:b0:
+                    fd:a8:9b:ac:4f:aa:ab:b9:45:29:2b:e8:cc:04:96:
+                    fd:4b
+                Exponent: 65537 (0x10001)
+        X509v3 extensions:
+            X509v3 Basic Constraints: critical
+                CA:TRUE
+            X509v3 Subject Key Identifier: 
+                E8:AC:12:F1:20:EE:C8:D7:8F:4C:6A:01:D1:A6:02:BF:CE:AE:99:18
+            X509v3 Authority Key Identifier: 
+                keyid:E8:AC:12:F1:20:EE:C8:D7:8F:4C:6A:01:D1:A6:02:BF:CE:AE:99:18
+                DirName:/C=CA/O=Grid/CN=Grid Canada Certificate Authority
+                serial:25:01
+
+            X509v3 Key Usage: critical
+                Certificate Sign, CRL Sign
+            X509v3 Subject Alternative Name: 
+                email:ca@gridcanada.ca
+            X509v3 Issuer Alternative Name: 
+                email:ca@gridcanada.ca
+            X509v3 CRL Distribution Points: 
+                URI:http://www.gridcanada.ca/ca/bffbd7d0.r0
+
+    Signature Algorithm: sha256WithRSAEncryption
+        2d:1c:0a:09:3c:88:86:64:3a:dc:d6:a5:64:c1:8a:b3:a5:2c:
+        6f:e7:c4:be:78:1e:29:bd:8a:04:fe:87:cb:49:ae:c9:d1:a0:
+        82:e0:e4:3e:bc:15:c1:65:76:1d:29:d8:3f:a6:e7:a0:25:3f:
+        40:bf:d4:4d:53:74:92:66:02:cd:cb:71:34:7d:dc:7f:05:01:
+        5e:78:df:84:97:0f:db:81:c8:56:7d:a4:29:b5:c4:67:48:a1:
+        1b:b7:bf:4a:a1:18:b6:af:ba:77:b0:83:dc:f8:f5:d6:5c:27:
+        dd:6d:e6:b6:88:2c:41:cb:09:13:32:98:47:98:ef:0b:2c:63:
+        1f:60:70:a1:07:50:32:8e:0d:07:a3:17:65:e6:1b:89:b1:db:
+        a1:3e:34:02:4e:59:b4:6d:72:e7:95:49:40:a4:e5:f2:b7:a5:
+        6f:e9:7e:28:c0:61:fc:44:97:c2:8b:f6:38:d6:2c:8c:ee:b7:
+        cd:a5:38:ed:78:b2:4e:32:f2:bb:98:47:d7:be:f2:6b:e2:60:
+        6a:1a:55:f0:59:fc:d1:94:cc:ba:5f:48:dd:e9:de:6e:a1:c0:
+        5d:d2:c2:b1:85:41:66:13:a6:61:fa:81:be:74:97:05:d1:e1:
+        a1:12:63:8f:48:07:9d:ad:b9:16:ee:9c:ab:13:6a:42:01:73:
+        8e:e4:26:8a
+-----BEGIN CERTIFICATE-----
+MIIEOTCCAyGgAwIBAgICJQEwDQYJKoZIhvcNAQELBQAwSDELMAkGA1UEBhMCQ0Ex
+DTALBgNVBAoTBEdyaWQxKjAoBgNVBAMTIUdyaWQgQ2FuYWRhIENlcnRpZmljYXRl
+IEF1dGhvcml0eTAeFw0wNjAxMTIyMTI5MDdaFw0yNzA3MTIyMTI5MDdaMEgxCzAJ
+BgNVBAYTAkNBMQ0wCwYDVQQKEwRHcmlkMSowKAYDVQQDEyFHcmlkIENhbmFkYSBD
+ZXJ0aWZpY2F0ZSBBdXRob3JpdHkwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEK
+AoIBAQC62G4m818bcqI6KJSnor83mod/SddQCn8h7Pm35b/S1BqSIX25kPXwtR2s
+LajU9steVyPepCu41Vu7IugaVDwLKyrMb8+8q1h3+QuqgmArkUIQ80mm3C6gTte8
+f9dZU09QWxCaCkNwUrs4dNnsKgOAojj2WHC9/NsRTQgOU3+BTWgk/sV7g/zMLKNp
+Fsx/KwDw4LJcCnVOw25h4YqtgP8PrLpxevUZePmfaKO5IXWJTeq52XJvKhvEka6b
+fYIBzKWPS1TKfzPGs+rH07+6pVpVzLRyNL1FQU2a8k/zcYvuiiXa8N6JtVf9K7fH
+H9oJsP2om6xPqqu5RSkr6MwElv1LAgMBAAGjggErMIIBJzAPBgNVHRMBAf8EBTAD
+AQH/MB0GA1UdDgQWBBTorBLxIO7I149MagHRpgK/zq6ZGDBxBgNVHSMEajBogBTo
+rBLxIO7I149MagHRpgK/zq6ZGKFMpEowSDELMAkGA1UEBhMCQ0ExDTALBgNVBAoT
+BEdyaWQxKjAoBgNVBAMTIUdyaWQgQ2FuYWRhIENlcnRpZmljYXRlIEF1dGhvcml0
+eYICJQEwDgYDVR0PAQH/BAQDAgEGMBsGA1UdEQQUMBKBEGNhQGdyaWRjYW5hZGEu
+Y2EwGwYDVR0SBBQwEoEQY2FAZ3JpZGNhbmFkYS5jYTA4BgNVHR8EMTAvMC2gK6Ap
+hidodHRwOi8vd3d3LmdyaWRjYW5hZGEuY2EvY2EvYmZmYmQ3ZDAucjAwDQYJKoZI
+hvcNAQELBQADggEBAC0cCgk8iIZkOtzWpWTBirOlLG/nxL54Him9igT+h8tJrsnR
+oILg5D68FcFldh0p2D+m56AlP0C/1E1TdJJmAs3LcTR93H8FAV5434SXD9uByFZ9
+pCm1xGdIoRu3v0qhGLavunewg9z49dZcJ91t5raILEHLCRMymEeY7wssYx9gcKEH
+UDKODQejF2XmG4mx26E+NAJOWbRtcueVSUCk5fK3pW/pfijAYfxEl8KL9jjWLIzu
+t82lOO14sk4y8ruYR9e+8mviYGoaVfBZ/NGUzLpfSN3p3m6hwF3SwrGFQWYTpmH6
+gb50lwXR4aESY49IB52tuRbunKsTakIBc47kJoo=
+-----END CERTIFICATE-----
