@@ -394,7 +394,7 @@ public class FilesTest extends RavenTest {
 
         DeletedArtifactEventDAO daeDAO = new DeletedArtifactEventDAO(false);
         daeDAO.setConfig(config);
-        DeletedArtifactEvent dae = new DeletedArtifactEvent(artifactID);
+        DeletedArtifactEvent dae = new DeletedArtifactEvent(artifactID, artifactURI);
         daeDAO.put(dae);
 
         HttpGet globalHead = new HttpGet(globalArtifactURL, false);

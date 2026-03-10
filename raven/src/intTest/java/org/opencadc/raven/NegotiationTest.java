@@ -724,7 +724,7 @@ public class NegotiationTest extends RavenTest {
 
         DeletedArtifactEventDAO daeDAO = new DeletedArtifactEventDAO(false);
         daeDAO.setConfig(config);
-        DeletedArtifactEvent dae = new DeletedArtifactEvent(artifactID);
+        DeletedArtifactEvent dae = new DeletedArtifactEvent(artifactID, artifactURI);
         daeDAO.put(dae);
 
         Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
