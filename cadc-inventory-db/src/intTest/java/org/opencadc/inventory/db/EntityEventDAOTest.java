@@ -147,6 +147,7 @@ public class EntityEventDAOTest {
     
     @Test
     public void testPutGetDeletedArtifactEvent() {
+        URI uri = URI.create("foo:collection/filename");
         try {
             DeletedArtifactEvent expected = new DeletedArtifactEvent(UUID.randomUUID(), null);
             log.info("expected: " + expected);
@@ -181,6 +182,16 @@ public class EntityEventDAOTest {
             // idempotent includes not updating timestamp
             Assert.assertEquals("lastModified", expected.getLastModified(), fid2.getLastModified());
             
+            // create a new instance with a URI
+            DeletedArtifactEvent dupe2 = new DeletedArtifactEvent(expected.getID(), uri);
+            Thread.sleep(10L);
+            daeDAO.put(dupe2);
+            
+            DeletedArtifactEvent fid3 = (DeletedArtifactEvent) daeDAO.get(expected.getID());
+            Assert.assertNotNull(fid3);
+            Assert.assertEquals(uri, fid3.uri);
+            Assert.assertTrue("lastModified", fid3.getLastModified().after(fid2.getLastModified()));
+            
             // no delete
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
@@ -189,9 +200,10 @@ public class EntityEventDAOTest {
     }
     
     @Test
-    public void testPutDeletedArtifactEvent_LastModifiedUpdate() {
+    public void testPutDeletedArtifactEvent_ForceLastModifiedUpdate() {
+        URI uri = URI.create("foo:collection/filename");
         try {
-            DeletedArtifactEvent expected = new DeletedArtifactEvent(UUID.randomUUID(), null);
+            DeletedArtifactEvent expected = new DeletedArtifactEvent(UUID.randomUUID(), uri);
             log.info("expected: " + expected);
             
             DeletedArtifactEvent notFound = daeDAO.get(expected.getID());
@@ -212,8 +224,6 @@ public class EntityEventDAOTest {
             // get by ID
             DeletedArtifactEvent fid = (DeletedArtifactEvent) daeDAO.get(expected.getID());
             Assert.assertNotNull(fid);
-            Assert.assertNull(fid.uri);
-            
             Assert.assertTrue("lastModified", fid.getLastModified().after(now));
             
             // idempotent put: put again, try to force, but no update
@@ -222,7 +232,6 @@ public class EntityEventDAOTest {
             
             DeletedArtifactEvent fid2 = (DeletedArtifactEvent) daeDAO.get(expected.getID());
             Assert.assertNotNull(fid2);
-            Assert.assertNull(fid2.uri);
             Assert.assertEquals("lastModified", fid.getLastModified(), fid2.getLastModified());
             
             // no delete
@@ -234,6 +243,7 @@ public class EntityEventDAOTest {
     
     @Test
     public void testPutGetDeletedStorageLocationEvent() {
+        URI uri = URI.create("foo:collection/filename");
         try {
             DeletedStorageLocationEvent expected = new DeletedStorageLocationEvent(UUID.randomUUID(), null);
             log.info("expected: " + expected);
@@ -266,10 +276,17 @@ public class EntityEventDAOTest {
             // idempotent includes not updating timestamp
             Assert.assertEquals("lastModified", expected.getLastModified(), fid2.getLastModified());
             
-            // delete
-            dslDAO.delete(expected.getID());
-            DeletedStorageLocationEvent fid3 = dslDAO.get(expected.getID());
-            Assert.assertNull(fid3);
+            // create a new instance with a URI
+            DeletedStorageLocationEvent dupe2 = new DeletedStorageLocationEvent(expected.getID(), uri);
+            Thread.sleep(10L);
+            dslDAO.put(dupe2);
+            
+            DeletedStorageLocationEvent fid3 = (DeletedStorageLocationEvent) dslDAO.get(expected.getID());
+            Assert.assertNotNull(fid3);
+            Assert.assertEquals(uri, fid3.uri);
+            Assert.assertTrue("lastModified", fid3.getLastModified().after(fid2.getLastModified()));
+            
+            // no delete
         } catch (Exception unexpected) {
             log.error("unexpected exception", unexpected);
             Assert.fail("unexpected exception: " + unexpected);
@@ -278,6 +295,7 @@ public class EntityEventDAOTest {
     
     @Test
     public void testPutGetStorageLocationEvent() {
+        URI uri = URI.create("foo:collection/filename");
         try {
             StorageLocationEvent expected = new StorageLocationEvent(UUID.randomUUID(), null);
             log.info("expected: " + expected);
@@ -309,6 +327,16 @@ public class EntityEventDAOTest {
             Assert.assertNull(fid2.uri);
             // idempotent includes not updating timestamp
             Assert.assertEquals("lastModified", expected.getLastModified(), fid2.getLastModified());
+            
+            // create a new instance with a URI
+            StorageLocationEvent dupe2 = new StorageLocationEvent(expected.getID(), uri);
+            Thread.sleep(10L);
+            slDAO.put(dupe2);
+            
+            StorageLocationEvent fid3 = (StorageLocationEvent) slDAO.get(expected.getID());
+            Assert.assertNotNull(fid3);
+            Assert.assertEquals(uri, fid3.uri);
+            Assert.assertTrue("lastModified", fid3.getLastModified().after(fid2.getLastModified()));
             
             // no delete
         } catch (Exception unexpected) {
