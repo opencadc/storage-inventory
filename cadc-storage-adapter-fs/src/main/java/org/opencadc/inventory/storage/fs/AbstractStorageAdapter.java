@@ -685,15 +685,15 @@ abstract class AbstractStorageAdapter implements StorageAdapter {
             // validate
             UUID.fromString(transactionID);
             Path txnFile = txnPath.resolve(transactionID);
+            
             if (Files.exists(txnFile)) {
-                StorageMetadata ret = createStorageMetadata(txnPath, txnFile, false);
-                // txnPath does not have bucket dirs
-                //ret.getStorageLocation().storageBucket = InventoryUtil.computeBucket(ret.getStorageLocation().getStorageID(), bucketLength);
                 PutTransaction pt = new PutTransaction(transactionID, PT_MIN_BYTES, PT_MAX_BYTES);
-                pt.storageMetadata = ret;
+                if (Files.size(txnFile) > 0) {
+                    pt.storageMetadata = createStorageMetadata(txnPath, txnFile, false);
+                }
                 return pt;
             }
-        } catch (InvalidPathException e) {
+        } catch (InvalidPathException | IOException e) {
             throw new RuntimeException("BUG: invalid path: " + txnPath, e);
         }
         throw new IllegalArgumentException("unknown transaction: " + transactionID);
