@@ -104,6 +104,7 @@ public class PutAction extends ArtifactAction {
     private static final Logger log = Logger.getLogger(PutAction.class);
     
     private static final String INLINE_CONTENT_TAG = "inputstream";
+    public static final String TOTAL_LENGTH_HEADER = "x-total-length";
 
     public PutAction() {
         super();
@@ -156,13 +157,13 @@ public class PutAction extends ArtifactAction {
         
         String txnID = syncInput.getHeader(PUT_TXN_ID);
         String txnOP = syncInput.getHeader(PUT_TXN_OP);
-        String totalLengthHeader = syncInput.getHeader("x-total-length");
+        String totalLengthHeader = syncInput.getHeader(TOTAL_LENGTH_HEADER);
         Long totalLength = null;
         if (totalLengthHeader != null) {
             try {
                 totalLength = Long.parseLong(totalLengthHeader);
             } catch (NumberFormatException e) {
-                throw new IllegalArgumentException("Illegal x-total-length header: " + totalLengthHeader);
+                throw new IllegalArgumentException("Illegal " + TOTAL_LENGTH_HEADER + " header: " + totalLengthHeader);
             }
         } 
         if (PUT_TXN_OP_START.equals(txnOP)) {
@@ -171,6 +172,8 @@ public class PutAction extends ArtifactAction {
                 throw new IllegalArgumentException(PUT_TXN_OP + "=" + txnOP + " cannot include " + PUT_TXN_ID + "=" + txnID);
             }
             if (totalLength == null && contentLength != null && contentLength.longValue() != 0) {
+                // this essentially makes x-total-length required for multi part put
+                // for all StorageAdapter impls
                 totalLength = contentLength;
             }
             PutTransaction t = storageAdapter.startTransaction(artifactURI, totalLength);
