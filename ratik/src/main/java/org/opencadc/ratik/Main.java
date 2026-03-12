@@ -69,10 +69,12 @@ package org.opencadc.ratik;
 
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.util.BucketSelector;
+import ca.nrc.cadc.util.ConfigFileReader;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 
+import java.io.File;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -124,14 +126,6 @@ public class Main {
         URI_BUCKETS_CONFIG_KEY
     };
     
-    private static final Map<String, Class> selectorMap;
-
-    static {
-        selectorMap = new HashMap<String,Class>();
-        selectorMap.put("all", AllEvents.class);
-        selectorMap.put("filter", FilterEvents.class);
-    }
-
     public static void main(final String[] args) {
         Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
         Log4jInit.setLevel("org.opencadc", Level.WARN);
@@ -178,11 +172,13 @@ public class Main {
             final BucketSelector bucketSelector = new BucketSelector(configuredUriBuckets);
 
             EventSelector artifactSelector = null;
-            String configuredArtifactSelector = props.getFirstPropertyValue(ARTIFACT_SELECTOR_CONFIG_KEY);
-            if (configuredArtifactSelector != null) {
-                Class asc = selectorMap.get(configuredArtifactSelector);
-                artifactSelector = (EventSelector) InventoryUtil.loadPlugin(asc);
-            }
+            String asel = props.getFirstPropertyValue(ARTIFACT_SELECTOR_CONFIG_KEY);
+            if ("all".equals(asel)) {
+                artifactSelector = new AllEvents();
+            } else if ("filter".equals(asel)) {
+                File f = ConfigFileReader.findConfigFile("artifact-filter.sql");
+                artifactSelector = new FilterEvents(f);
+            } // else: null and fail later
 
             final String configuredTrackSiteLocations = props.getFirstPropertyValue(TRACK_SITE_LOCATIONS_CONFIG_KEY);
             final boolean trackSiteLocations = Boolean.parseBoolean(configuredTrackSiteLocations);

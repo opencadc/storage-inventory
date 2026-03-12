@@ -68,13 +68,14 @@
 package org.opencadc.fenwick;
 
 import ca.nrc.cadc.db.ConnectionConfig;
+import ca.nrc.cadc.util.ConfigFileReader;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.util.StringUtil;
+import java.io.File;
 import java.net.URI;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -125,14 +126,6 @@ public class Main {
         MAX_RETRY_INTERVAL_CONFIG_KEY
     };
 
-    private static final Map<String, Class> selectorMap;
-
-    static {
-        selectorMap = new HashMap<String,Class>();
-        selectorMap.put("all", AllEvents.class);
-        selectorMap.put("filter", FilterEvents.class);
-    }
-
     public static void main(final String[] args) {
         Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
         Log4jInit.setLevel("org.opencadc", Level.WARN);
@@ -179,19 +172,23 @@ public class Main {
 
             String instanceName = props.getFirstPropertyValue(INSTANCE_NAME_CONFIG_KEY);
             
-            EventSelector artSelector = null;
-            String configuredArtifactSelector = props.getFirstPropertyValue(ARTIFACT_SELECTOR_CONFIG_KEY);
-            if (configuredArtifactSelector != null) {
-                Class asc = selectorMap.get(configuredArtifactSelector);
-                artSelector = (EventSelector) InventoryUtil.loadPlugin(asc);
+            EventSelector artifactSelector = null;
+            String asel = props.getFirstPropertyValue(ARTIFACT_SELECTOR_CONFIG_KEY);
+            if ("all".equals(asel)) {
+                artifactSelector = new AllEvents();
+            } else if ("filter".equals(asel)) {
+                File f = ConfigFileReader.findConfigFile("artifact-filter.sql");
+                artifactSelector = new FilterEvents(f);
             }
             
-            EventSelector evSelector = null;
-            String configuredEventSelector = props.getFirstPropertyValue(EVENT_SELECTOR_CONFIG_KEY);
-            if (configuredEventSelector != null) {
-                Class esc = selectorMap.get(configuredEventSelector);
-                evSelector = (EventSelector) InventoryUtil.loadPlugin(esc);
-            }
+            EventSelector eventSelector = null;
+            String esel = props.getFirstPropertyValue(EVENT_SELECTOR_CONFIG_KEY);
+            if ("all".equals(esel)) {
+                eventSelector = new AllEvents();
+            } else if ("filter".equals(esel)) {
+                File f = ConfigFileReader.findConfigFile("event-filter.sql");
+                eventSelector = new FilterEvents(f);
+            } // else: null and fail later
             
             final String configuredTrackSiteLocations = props.getFirstPropertyValue(TRACK_SITE_LOCATIONS_CONFIG_KEY);
             final boolean trackSiteLocations = Boolean.parseBoolean(configuredTrackSiteLocations);
@@ -201,7 +198,7 @@ public class Main {
 
 
             final InventoryHarvester doit = new InventoryHarvester(daoConfig, cc, 
-                    resourceID, instanceName, artSelector, evSelector, trackSiteLocations, maxRetryInterval);
+                    resourceID, instanceName, artifactSelector, eventSelector, trackSiteLocations, maxRetryInterval);
             doit.run();
         } catch (Throwable unexpected) {
             log.fatal("Unexpected failure", unexpected);
