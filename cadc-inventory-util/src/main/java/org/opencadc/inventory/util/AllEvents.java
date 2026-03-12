@@ -67,25 +67,24 @@
 
 package org.opencadc.inventory.util;
 
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import java.io.IOException;
-
 
 /**
- * A Selector to provide the InventoryHarvester with a means to gather include (additive) clauses to select appropriate
- * Artifacts to be included in the metadata sync merge.
+ * Selector that does not constrain Artifact selection.
  *
  * @author pdowler
  */
-public interface ArtifactSelector {
+public class AllEvents implements EventSelector {
+
+    public AllEvents() {
+    }
+
     /**
-     * Obtain a condition used to build a query to include the Artifacts being merged that can be added to the WHERE
-     * clause of artifact sync queries.
-     *
-     * @return SQL constraint for use in the WHERE clause; possibly null
-     * @throws ResourceNotFoundException    For any missing required configuration that is missing.
-     * @throws IOException      For unreadable configuration files.
-     * @throws IllegalStateException    For any invalid configuration.
+     * This implementation returns an empty list: no constraints. 
+     * 
+     * @return empty list
      */
-    String getConstraint() throws ResourceNotFoundException, IOException, IllegalStateException;
+    @Override
+    public String getConstraint() {
+        return null;
+    }
 }
