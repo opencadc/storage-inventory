@@ -138,7 +138,7 @@ public class DeletedArtifactEventSync extends AbstractSync {
         if (harvestState.curLastModified == null) {
             HarvestState bc = harvestStateDAO.get(DeletedArtifactEvent.class.getSimpleName(), resourceID);
             if (bc.curLastModified != null) {
-                log.debug("previous state: " + bc.getName() + " " + bc.getResourceID() + " " + bc.getID());
+                log.warn("migrate previous state: " + bc.getName() + " " + bc.getResourceID() + " " + bc.getID());
                 harvestState.curID = bc.curID;
                 harvestState.curLastModified = bc.curLastModified;
                 harvestStateDAO.put(harvestState);

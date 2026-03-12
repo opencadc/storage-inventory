@@ -153,13 +153,20 @@ public class ArtifactSync extends AbstractSync {
 
         final SiteLocation remoteSiteLocation = (storageSite == null ? null : new SiteLocation(storageSite.getID()));
         
-        // backwards compat:
-        HarvestState harvestState = this.harvestStateDAO.get(Artifact.class.getSimpleName(), resourceID);
-        if (harvestState != null) {
-            harvestState.setName(getHarvestStateName());
-            harvestStateDAO.put(harvestState);
+        HarvestState harvestState = harvestStateDAO.get(getHarvestStateName(), resourceID);
+        // migrate backwards compat
+        if (harvestState.curLastModified == null) {
+            HarvestState bc = harvestStateDAO.get(Artifact.class.getSimpleName(), resourceID);
+            if (bc.curLastModified != null) {
+                log.warn("migrate previous state: " + bc.getName() + " " + bc.getResourceID() + " " + bc.getID());
+                harvestState.curID = bc.curID;
+                harvestState.curLastModified = bc.curLastModified;
+                harvestStateDAO.put(harvestState);
+            }
+            harvestStateDAO.delete(bc.getID());
         }
-        harvestState = harvestStateDAO.get(getHarvestStateName(), resourceID);
+        // end of migrate
+        log.debug("state: " + harvestState.getName() + " " + harvestState.getResourceID() + " " + harvestState.getID());
         harvestStateDAO.setUpdateBufferCount(99); // buffer 99 updates, do every 100
         harvestStateDAO.setMaintCount(999); // buffer 999 so every 1000 real updates aka every 1e5 events
         
