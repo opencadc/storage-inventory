@@ -104,9 +104,9 @@ public class DeletedArtifactEventSync extends AbstractSync {
     // package access for intTest code
     boolean enableSkipOldEvents = true;
 
-    public DeletedArtifactEventSync(ArtifactDAO artifactDAO, URI resourceID, boolean isGlobal,
-            int querySleepInterval, int maxRetryInterval) {
-        super(artifactDAO, resourceID, querySleepInterval, maxRetryInterval);
+    public DeletedArtifactEventSync(ArtifactDAO artifactDAO, URI resourceID, String instanceName,
+            boolean isGlobal, int querySleepInterval, int maxRetryInterval) {
+        super(artifactDAO, resourceID, instanceName, querySleepInterval, maxRetryInterval);
         this.isGlobal = isGlobal;
         this.deletedDAO = new DeletedArtifactEventDAO(artifactDAO);
         try {
@@ -119,6 +119,11 @@ public class DeletedArtifactEventSync extends AbstractSync {
     }
 
     @Override
+    public String getHarvestStateName() {
+        return instanceName + "/" + DeletedArtifactEvent.class.getSimpleName();
+    }
+
+    @Override
     void doit() throws ResourceNotFoundException, IOException, IllegalStateException, 
             TransientException, InterruptedException {
         final MessageDigest messageDigest;
@@ -128,18 +133,30 @@ public class DeletedArtifactEventSync extends AbstractSync {
             throw new RuntimeException("BUG: failed to get instance of MD5", e);
         }
         
-        HarvestState hs = harvestStateDAO.get(DeletedArtifactEvent.class.getSimpleName(), resourceID);
-        if (enableSkipOldEvents && hs.curLastModified == null) {
+        HarvestState harvestState = harvestStateDAO.get(getHarvestStateName(), resourceID);
+        // migrate backwards compat
+        if (harvestState.curLastModified == null) {
+            HarvestState bc = harvestStateDAO.get(DeletedArtifactEvent.class.getSimpleName(), resourceID);
+            if (bc.curLastModified != null) {
+                log.debug("previous state: " + bc.getName() + " " + bc.getResourceID() + " " + bc.getID());
+                harvestState.curID = bc.curID;
+                harvestState.curLastModified = bc.curLastModified;
+                harvestStateDAO.put(harvestState);
+            }
+            harvestStateDAO.delete(bc.getID());
+        }
+        // end of migrate
+        log.debug("state: " + harvestState.getName() + " " + harvestState.getResourceID() + " " + harvestState.getID());
+        if (enableSkipOldEvents && harvestState.curLastModified == null) {
             // first harvest: ignore old deleted events?
-            HarvestState artifactHS = harvestStateDAO.get(Artifact.class.getSimpleName(), resourceID);
+            HarvestState artifactHS = harvestStateDAO.get(ArtifactSync.getHarvestStateName(instanceName), resourceID);
             if (artifactHS.curLastModified == null) {
-                // never harvested artifacts: ignore old deleted events
-                hs.curLastModified = new Date();
-                harvestStateDAO.put(hs);
-                hs = harvestStateDAO.get(hs.getID());
+                log.warn("never harvested artifacts: ignore old deleted events");
+                harvestState.curLastModified = new Date();
+                harvestStateDAO.put(harvestState);
+                harvestState = harvestStateDAO.get(harvestState.getID());
             }
         }
-        final HarvestState harvestState = hs;
         harvestStateDAO.setUpdateBufferCount(99); // buffer 99 updates, do every 100
         
         final TransactionManager transactionManager = artifactDAO.getTransactionManager();

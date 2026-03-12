@@ -69,14 +69,11 @@
 
 package org.opencadc.fenwick;
 
-import ca.nrc.cadc.auth.AuthenticationUtil;
-import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
-import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.security.MessageDigest;
@@ -108,9 +105,9 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
     // package access for intTest code
     boolean enableSkipOldEvents = true;
 
-    public DeletedStorageLocationEventSync(ArtifactDAO artifactDAO, URI resourceID, 
+    public DeletedStorageLocationEventSync(ArtifactDAO artifactDAO, URI resourceID, String instanceName,
             int querySleepInterval, int maxRetryInterval, StorageSite storageSite) {
-        super(artifactDAO, resourceID, querySleepInterval, maxRetryInterval);
+        super(artifactDAO, resourceID, instanceName, querySleepInterval, maxRetryInterval);
         InventoryUtil.assertNotNull(DeletedStorageLocationEventSync.class, "storageSite", storageSite);
         this.storageSite = storageSite;
         try {
@@ -124,6 +121,11 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
     }
 
     @Override
+    public String getHarvestStateName() {
+        return instanceName + "/" + DeletedStorageLocationEvent.class.getSimpleName();
+    }
+
+    @Override
     void doit() throws ResourceNotFoundException, IOException, IllegalStateException, 
             TransientException, InterruptedException {
         final MessageDigest messageDigest;
@@ -133,18 +135,30 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
             throw new RuntimeException("BUG: failed to get instance of MD5", e);
         }
         
-        HarvestState hs = harvestStateDAO.get(DeletedStorageLocationEvent.class.getSimpleName(), resourceID);
-        if (enableSkipOldEvents && hs.curLastModified == null) { 
+        HarvestState harvestState = harvestStateDAO.get(getHarvestStateName(), resourceID);
+        // migrate backwards compat
+        if (harvestState.curLastModified == null) {
+            HarvestState bc = harvestStateDAO.get(DeletedStorageLocationEvent.class.getSimpleName(), resourceID);
+            if (bc.curLastModified != null) {
+                log.debug("previous state: " + bc.getName() + " " + bc.getResourceID() + " " + bc.getID());
+                harvestState.curID = bc.curID;
+                harvestState.curLastModified = bc.curLastModified;
+                harvestStateDAO.put(harvestState);
+            }
+            harvestStateDAO.delete(bc.getID());
+        }
+        // end of migrate
+        log.debug("state: " + harvestState.getName() + " " + harvestState.getResourceID() + " " + harvestState.getID());
+        if (enableSkipOldEvents && harvestState.curLastModified == null) { 
             // first harvest: ignore old deleted events?
-            HarvestState artifactHS = harvestStateDAO.get(Artifact.class.getSimpleName(), resourceID);
+            HarvestState artifactHS = harvestStateDAO.get(ArtifactSync.getHarvestStateName(instanceName), resourceID);
             if (artifactHS.curLastModified == null) {
-                // never artifacts harvested: ignore old deleted events
-                hs.curLastModified = new Date();
-                harvestStateDAO.put(hs);
-                hs = harvestStateDAO.get(hs.getID());
+                log.warn("never harvested artifacts: ignore old deleted events");
+                harvestState.curLastModified = new Date();
+                harvestStateDAO.put(harvestState);
+                harvestState = harvestStateDAO.get(harvestState.getID());
             }
         }
-        final HarvestState harvestState = hs;
         harvestStateDAO.setUpdateBufferCount(99); // buffer 99 updates, do every 100
         
         final TransactionManager transactionManager = artifactDAO.getTransactionManager();

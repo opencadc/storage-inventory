@@ -90,7 +90,7 @@ import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.HarvestState;
 import org.opencadc.inventory.query.ArtifactRowMapper;
-import org.opencadc.inventory.util.ArtifactSelector;
+import org.opencadc.inventory.util.EventSelector;
 import org.opencadc.tap.TapClient;
 
 /**
@@ -105,10 +105,10 @@ public class ArtifactSync extends AbstractSync {
     private final TapClient<Artifact> tapClient;
     private final String includeClause;
 
-    public ArtifactSync(ArtifactDAO artifactDAO, URI resourceID, 
+    public ArtifactSync(ArtifactDAO artifactDAO, URI resourceID, String instanceName,
             int querySleepInterval, int maxRetryInterval, 
-            ArtifactSelector selector, StorageSite storageSite) {
-        super(artifactDAO, resourceID, querySleepInterval, maxRetryInterval);
+            EventSelector selector, StorageSite storageSite) {
+        super(artifactDAO, resourceID, instanceName, querySleepInterval, maxRetryInterval);
         this.storageSite = storageSite;
         try {
             this.tapClient = new TapClient<>(resourceID);
@@ -131,7 +131,17 @@ public class ArtifactSync extends AbstractSync {
         this.tapClient = null;
         this.includeClause = includeClause;
     }
+
+    @Override
+    public String getHarvestStateName() {
+        return getHarvestStateName(instanceName);
+    }
     
+    // used by other event streams init
+    static String getHarvestStateName(String instanceName) {
+        return instanceName + "/" + Artifact.class.getSimpleName();
+    }
+
     @Override
     void doit() throws ResourceNotFoundException, IOException, IllegalStateException, TransientException, InterruptedException {
         final MessageDigest messageDigest;
@@ -143,7 +153,13 @@ public class ArtifactSync extends AbstractSync {
 
         final SiteLocation remoteSiteLocation = (storageSite == null ? null : new SiteLocation(storageSite.getID()));
         
-        final HarvestState harvestState = this.harvestStateDAO.get(Artifact.class.getSimpleName(), resourceID);
+        // backwards compat:
+        HarvestState harvestState = this.harvestStateDAO.get(Artifact.class.getSimpleName(), resourceID);
+        if (harvestState != null) {
+            harvestState.setName(getHarvestStateName());
+            harvestStateDAO.put(harvestState);
+        }
+        harvestState = harvestStateDAO.get(getHarvestStateName(), resourceID);
         harvestStateDAO.setUpdateBufferCount(99); // buffer 99 updates, do every 100
         harvestStateDAO.setMaintCount(999); // buffer 999 so every 1000 real updates aka every 1e5 events
         

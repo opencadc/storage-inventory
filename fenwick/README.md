@@ -18,18 +18,20 @@ org.opencadc.fenwick.inventory.password={password for inventory admin}
 org.opencadc.fenwick.inventory.url=jdbc:postgresql://{server}/{database}
 
 # Enable Storage Site lookup to synchronize site locations on Artifacts
-# this should be treu in global inventory and false in a storage site
+# this should be true in global inventory and false in a storage site
 org.opencadc.fenwick.trackSiteLocations = true | false
 
 # remote inventory query service (luskan)
 org.opencadc.fenwick.queryService={resourceID of remote TAP service with inventory data model}
 
-# selectivity
-org.opencadc.fenwick.artifactSelector = all | filter
-org.opencadc.fenwick.eventSelector = all | filter
-
-# optional: instance name when selector(s) above are filter
+# instance name
 org.opencadc.fenwick.instanceName = {name}
+
+# artifact selectivity
+org.opencadc.fenwick.artifactSelector = all | filter
+
+# event selectvitity
+org.opencadc.fenwick.eventSelector = all | filter
 
 # optional: threads (default: 1)
 org.opencadc.fenwick.artifactThreads = 1 | 2 | 4 | 8
@@ -51,18 +53,18 @@ query service at the (a) global inventory. For a global inventory, this is the q
 instance of fenwick is needed for each storage site.
 
 If `artifactSelector` is `all` then fenwick harvests all artifacts from remote. If it is `filter` then fenwick harvests selected artifacts from remote as specified in `artifact-filter.sql` (see below). A global inventory and a
-storage site that should get all Artifacts (files) would run with `all`. Specialised instances that want to select a
-subset of all files would use the explicit filtering.
+storage site that should get all Artifacts (files) would normally run with `all`. Specialised instances that want to
+select a subset of all files would use the explicit filtering.
 
 If `eventSelector` is `all` then all events (DeletedArtifactEvent, DeletedStorageLocationEvent, and
 StorageLocationEvent) are synced. If the value is `filter` then fenwick harvests selected events from the remote
 as specified in `event-filter.sql` (see below).
 **NEW in 1.1**.
 
-The optional `instanceName` must be set if one or both of the above selector(s) is set to `filter`. The value is a
-simple name for this instance so it can track progress without interfering with other instances. _Changing the name
-of an instance can discard progress tracking_ and cause the instance to start over (at the beginning of time); it is
-possible (undocumented) to work around this, but there is currently no mechansim to do this gracefully. 
+The `instanceName` is a simple name for this instance so it can track progress without interfering with other
+instances. _Changing the name of an instance can discard progress tracking_ and cause the instance to start over (at
+the beginning of time); it is possible (undocumented) to work around this, but there is currently no mechansim to do
+this gracefully.
 **NEW in 1.1**.
 
 If `artifactThreads` is set, fenwick will run this number of threads when syncing artifacts. It will subdivide the
@@ -100,7 +102,7 @@ specifying the included events is required. The single clause in the SQL file *M
 ```sql
 WHERE uri LIKE 'some:prefix/%'
 ```
-can refer to any fields common to the various events (effectively, that means `uri` and `lastModified` only), and will restrict the included events to _only_ those that match the SQL condition. If the event-filter.sql only restricts based on uri, then the same constraints can be applied in both files to implement namespace-based filtering.
+can refer to any fields common to the various events (effectively, that means `uri` only), and will restrict the included events to _only_ those that match the SQL condition. If the event-filter.sql only restricts based on uri, then the same constraints can be applied in both files to implement namespace-based filtering.
 
 ## building it
 ```

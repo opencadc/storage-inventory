@@ -122,7 +122,7 @@ public class DeletedStorageLocationEventSyncTest {
 
                     StorageSite site1 = new StorageSite(URI.create("cadc:TEST/siteone"), "Test Site", true, false);
                     final DeletedStorageLocationEventSync sync = new DeletedStorageLocationEventSync(
-                        inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, 6, 6, site1);
+                        inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, "test", 6, 6, site1);
                     
                     Calendar now = Calendar.getInstance();
                     now.add(Calendar.DAY_OF_MONTH, -1);
@@ -203,7 +203,7 @@ public class DeletedStorageLocationEventSyncTest {
             
             // doit
             DeletedStorageLocationEventSync sync = new DeletedStorageLocationEventSync(
-                    inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, 6, 6, site1);
+                    inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, "test", 6, 6, site1);
             sync.enableSkipOldEvents = false;
             Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
                 sync.doit();
@@ -230,7 +230,7 @@ public class DeletedStorageLocationEventSyncTest {
             DeletedStorageLocationEvent actual = inventoryEnvironment.deletedStorageLocationEventDAO.get(dsle2.getID());
             Assert.assertNull(actual);
             
-            HarvestState hs = inventoryEnvironment.harvestStateDAO.get(DeletedStorageLocationEvent.class.getSimpleName(), TestUtil.LUSKAN_URI);
+            HarvestState hs = inventoryEnvironment.harvestStateDAO.get(sync.getHarvestStateName(), TestUtil.LUSKAN_URI);
             Assert.assertNotNull(hs);
             Assert.assertEquals(dsle2.getLastModified(), hs.curLastModified);
             
@@ -240,7 +240,7 @@ public class DeletedStorageLocationEventSyncTest {
                 return null;
             });
             
-            hs = inventoryEnvironment.harvestStateDAO.get(DeletedStorageLocationEvent.class.getSimpleName(), TestUtil.LUSKAN_URI);
+            hs = inventoryEnvironment.harvestStateDAO.get(sync.getHarvestStateName(), TestUtil.LUSKAN_URI);
             Assert.assertNotNull(hs);
             Assert.assertEquals(dsle2.getLastModified(), hs.curLastModified);
         } catch (Exception ex) {

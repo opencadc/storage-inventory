@@ -80,7 +80,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.StorageSite;
-import org.opencadc.inventory.util.AllArtifacts;
+import org.opencadc.inventory.util.AllEvents;
 
 
 /**
@@ -115,7 +115,7 @@ public class InventoryHarvesterTest {
     //@Test
     public void testMissingStorageSiteSync() throws Exception {
         final InventoryHarvester testSubject = new InventoryHarvester(inventoryEnvironment.daoConfig,
-                inventoryEnvironment.connectionConfig, TestUtil.LUSKAN_URI, new AllArtifacts(), true, 20);
+                inventoryEnvironment.connectionConfig, TestUtil.LUSKAN_URI, "test", new AllEvents(), new AllEvents(), true, 20);
         try {
             // TODO: need to run this is separate thread so we can verify and terminate
             Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
@@ -139,7 +139,7 @@ public class InventoryHarvesterTest {
         luskanEnvironment.storageSiteDAO.put(storageSite);
         
         final InventoryHarvester testSubject = new InventoryHarvester(inventoryEnvironment.daoConfig,
-                inventoryEnvironment.connectionConfig, TestUtil.LUSKAN_URI, new AllArtifacts(), true, 20);
+                inventoryEnvironment.connectionConfig, TestUtil.LUSKAN_URI, "test", new AllEvents(), new AllEvents(), true, 20);
         try {
             // TODO: need to run this is separate thread so we can verify and terminate
             Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {

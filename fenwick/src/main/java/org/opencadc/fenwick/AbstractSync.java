@@ -100,6 +100,7 @@ abstract class AbstractSync implements Runnable {
     protected static final long LOOKBACK_TIME_MS = 60 * 1000L;
     
     protected final URI resourceID;
+    protected final String instanceName;
     protected final int querySleepInterval;
     protected final int maxRetryInterval;
     protected final ArtifactDAO artifactDAO;
@@ -112,18 +113,20 @@ abstract class AbstractSync implements Runnable {
     
     private Exception fail;
     
-    protected AbstractSync(ArtifactDAO artifactDAO, URI resourceID, int querySleepInterval, int maxRetryInterval) {
+    protected AbstractSync(ArtifactDAO artifactDAO, URI resourceID, String instanceName, int querySleepInterval, int maxRetryInterval) {
         this.artifactDAO = artifactDAO;
         this.resourceID = resourceID;
+        this.instanceName = instanceName;
         this.querySleepInterval = querySleepInterval;
         this.maxRetryInterval = maxRetryInterval;
         this.harvestStateDAO = new HarvestStateDAO(artifactDAO);
     }
     
     // for StorageSiteSync only
-    protected AbstractSync(URI resourceID, int querySleepInterval, int maxRetryInterval) {
+    protected AbstractSync(URI resourceID, String instanceName, int querySleepInterval, int maxRetryInterval) {
         this.artifactDAO = null;
         this.resourceID = resourceID;
+        this.instanceName = instanceName;
         this.querySleepInterval = querySleepInterval;
         this.maxRetryInterval = maxRetryInterval;
         this.harvestStateDAO = null;
@@ -132,6 +135,7 @@ abstract class AbstractSync implements Runnable {
     // unit test ctor
     protected AbstractSync(boolean unitTestOnly) {
         this.resourceID = null;
+        this.instanceName = null;
         this.querySleepInterval = 10;
         this.maxRetryInterval = 10;
         this.artifactDAO = null;
@@ -141,6 +145,8 @@ abstract class AbstractSync implements Runnable {
     public Exception getFail() {
         return fail;
     }
+    
+    public abstract String getHarvestStateName();
     
     public void run() {
         boolean retry;

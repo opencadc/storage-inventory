@@ -82,7 +82,9 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.SQLGenerator;
-import org.opencadc.inventory.util.ArtifactSelector;
+import org.opencadc.inventory.util.AllEvents;
+import org.opencadc.inventory.util.EventSelector;
+import org.opencadc.inventory.util.FilterEvents;
 
 /**
  * Main entry point for fenwick.
@@ -104,6 +106,8 @@ public class Main {
     private static final String QUERY_SERVICE_CONFIG_KEY = CONFIG_PREFIX + ".queryService";
     private static final String TRACK_SITE_LOCATIONS_CONFIG_KEY = CONFIG_PREFIX + ".trackSiteLocations";
     private static final String ARTIFACT_SELECTOR_CONFIG_KEY = CONFIG_PREFIX + ".artifactSelector";
+    private static final String EVENT_SELECTOR_CONFIG_KEY = CONFIG_PREFIX + ".eventSelector";
+    private static final String INSTANCE_NAME_CONFIG_KEY = CONFIG_PREFIX + ".instanceName";
     private static final String MAX_RETRY_INTERVAL_CONFIG_KEY = CONFIG_PREFIX + ".maxRetryInterval";
 
 
@@ -121,12 +125,12 @@ public class Main {
         MAX_RETRY_INTERVAL_CONFIG_KEY
     };
 
-    private static final Map<String, String> selectorMap;
+    private static final Map<String, Class> selectorMap;
 
     static {
-        selectorMap = new HashMap<>();
-        selectorMap.put("all", "org.opencadc.inventory.util.AllArtifacts");
-        selectorMap.put("filter", "org.opencadc.inventory.util.IncludeArtifacts");
+        selectorMap = new HashMap<String,Class>();
+        selectorMap.put("all", AllEvents.class);
+        selectorMap.put("filter", FilterEvents.class);
     }
 
     public static void main(final String[] args) {
@@ -173,10 +177,22 @@ public class Main {
             final String configuredQueryService = props.getFirstPropertyValue(QUERY_SERVICE_CONFIG_KEY);
             final URI resourceID = URI.create(configuredQueryService);
 
-            final String configuredArtifactSelector = props.getFirstPropertyValue(ARTIFACT_SELECTOR_CONFIG_KEY);
-            final String selectorClass = selectorMap.get(configuredArtifactSelector);
-            final ArtifactSelector selector = InventoryUtil.loadPlugin(selectorClass);
-
+            String instanceName = props.getFirstPropertyValue(INSTANCE_NAME_CONFIG_KEY);
+            
+            EventSelector artSelector = null;
+            String configuredArtifactSelector = props.getFirstPropertyValue(ARTIFACT_SELECTOR_CONFIG_KEY);
+            if (configuredArtifactSelector != null) {
+                Class asc = selectorMap.get(configuredArtifactSelector);
+                artSelector = (EventSelector) InventoryUtil.loadPlugin(asc);
+            }
+            
+            EventSelector evSelector = null;
+            String configuredEventSelector = props.getFirstPropertyValue(EVENT_SELECTOR_CONFIG_KEY);
+            if (configuredEventSelector != null) {
+                Class esc = selectorMap.get(configuredEventSelector);
+                evSelector = (EventSelector) InventoryUtil.loadPlugin(esc);
+            }
+            
             final String configuredTrackSiteLocations = props.getFirstPropertyValue(TRACK_SITE_LOCATIONS_CONFIG_KEY);
             final boolean trackSiteLocations = Boolean.parseBoolean(configuredTrackSiteLocations);
 
@@ -185,7 +201,7 @@ public class Main {
 
 
             final InventoryHarvester doit = new InventoryHarvester(daoConfig, cc, 
-                    resourceID, selector, trackSiteLocations, maxRetryInterval);
+                    resourceID, instanceName, artSelector, evSelector, trackSiteLocations, maxRetryInterval);
             doit.run();
         } catch (Throwable unexpected) {
             log.fatal("Unexpected failure", unexpected);

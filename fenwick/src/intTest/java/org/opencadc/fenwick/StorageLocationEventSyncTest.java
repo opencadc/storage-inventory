@@ -123,7 +123,7 @@ public class StorageLocationEventSyncTest {
 
                     StorageSite site1 = new StorageSite(URI.create("cadc:TEST/siteone"), "Test Site", true, false);
                     final StorageLocationEventSync sync = new StorageLocationEventSync(
-                        inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, 6, 6, site1);
+                        inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, "test", 6, 6, site1);
                     
                     Calendar now = Calendar.getInstance();
                     now.add(Calendar.DAY_OF_MONTH, -1);
@@ -210,7 +210,7 @@ public class StorageLocationEventSyncTest {
             
             // doit
             StorageLocationEventSync sync = new StorageLocationEventSync(
-                    inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, 6, 6, site1);
+                    inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, "test", 6, 6, site1);
             Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
                 sync.doit();
                 return null;
@@ -246,7 +246,7 @@ public class StorageLocationEventSyncTest {
             sle = inventoryEnvironment.storageLocationEventDAO.get(sle3.getID());
             Assert.assertNull(sle);
             
-            HarvestState hs = inventoryEnvironment.harvestStateDAO.get(StorageLocationEvent.class.getSimpleName(), TestUtil.LUSKAN_URI);
+            HarvestState hs = inventoryEnvironment.harvestStateDAO.get(sync.getHarvestStateName(), TestUtil.LUSKAN_URI);
             Assert.assertNotNull(hs);
             log.info("found: " + hs);
             Assert.assertEquals(sle3.getLastModified(), hs.curLastModified);
@@ -257,7 +257,7 @@ public class StorageLocationEventSyncTest {
                 return null;
             });
             
-            hs = inventoryEnvironment.harvestStateDAO.get(StorageLocationEvent.class.getSimpleName(), TestUtil.LUSKAN_URI);
+            hs = inventoryEnvironment.harvestStateDAO.get(sync.getHarvestStateName(), TestUtil.LUSKAN_URI);
             Assert.assertNotNull(hs);
             Assert.assertEquals(sle3.getLastModified(), hs.curLastModified);
         } catch (Exception ex) {
