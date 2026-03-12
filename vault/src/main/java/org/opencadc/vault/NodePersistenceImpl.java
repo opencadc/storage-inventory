@@ -837,7 +837,7 @@ public class NodePersistenceImpl implements NodePersistence {
                 if (singlePool && a != null) {
                     // inventory ops inside main txn
                     DeletedArtifactEventDAO daeDAO = new DeletedArtifactEventDAO(artifactDAO);
-                    DeletedArtifactEvent dae = new DeletedArtifactEvent(a.getID());
+                    DeletedArtifactEvent dae = new DeletedArtifactEvent(a.getID(), a.getURI());
                     daeDAO.put(dae);
                     artifactDAO.delete(a.getID());
                 }
@@ -860,7 +860,7 @@ public class NodePersistenceImpl implements NodePersistence {
                 Artifact alock = artifactDAO.lock(a);
                 if (alock != null) {
                     DeletedArtifactEventDAO daeDAO = new DeletedArtifactEventDAO(artifactDAO);
-                    DeletedArtifactEvent dae = new DeletedArtifactEvent(alock.getID());
+                    DeletedArtifactEvent dae = new DeletedArtifactEvent(alock.getID(), alock.getURI());
                     daeDAO.put(dae);
                     artifactDAO.delete(alock.getID());
                 }
