@@ -105,7 +105,7 @@ import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.db.version.InitDatabaseSI;
 import org.opencadc.inventory.query.ArtifactRowMapper;
-import org.opencadc.inventory.util.ArtifactSelector;
+import org.opencadc.inventory.util.EventSelector;
 import org.opencadc.tap.TapClient;
 import org.opencadc.tap.TapRowMapper;
 
@@ -121,7 +121,7 @@ public class InventoryValidator implements Runnable {
     private final URI resourceID;
     
     private final boolean trackSiteLocations;
-    private final ArtifactSelector artifactSelector;
+    private final EventSelector artifactSelector;
     private final BucketSelector bucketSelector;
     private final ArtifactValidator artifactValidator;
     private final MessageDigest messageDigest;
@@ -154,7 +154,7 @@ public class InventoryValidator implements Runnable {
      * @param trackSiteLocations local site type
      */
     public InventoryValidator(ConnectionConfig connectionConfig, Map<String, Object> daoConfig, 
-            URI resourceID, ArtifactSelector artifactSelector,
+            URI resourceID, EventSelector artifactSelector,
             BucketSelector bucketSelector, boolean trackSiteLocations) {
         InventoryUtil.assertNotNull(InventoryValidator.class, "connectionConfig", connectionConfig);
         InventoryUtil.assertNotNull(InventoryValidator.class, "daoConfig", daoConfig);
@@ -212,7 +212,7 @@ public class InventoryValidator implements Runnable {
 
         ArtifactDAO txnDAO = new ArtifactDAO(false);
         txnDAO.setConfig(txnConfig);
-        this.artifactValidator = new ArtifactValidator(txnDAO, resourceID, this.artifactSelector);
+        this.artifactValidator = new ArtifactValidator(txnDAO, resourceID, artifactSelector);
 
         try {
             this.messageDigest = MessageDigest.getInstance("MD5");

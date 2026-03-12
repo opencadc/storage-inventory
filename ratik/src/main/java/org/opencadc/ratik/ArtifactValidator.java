@@ -91,7 +91,7 @@ import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.DeletedStorageLocationEventDAO;
 import org.opencadc.inventory.query.ArtifactRowMapper;
 import org.opencadc.inventory.query.DeletedArtifactEventRowMapper;
-import org.opencadc.inventory.util.ArtifactSelector;
+import org.opencadc.inventory.util.EventSelector;
 import org.opencadc.tap.TapClient;
 import org.opencadc.tap.TapRowMapper;
 
@@ -105,7 +105,7 @@ public class ArtifactValidator {
     private final ArtifactDAO artifactDAO;
     private final URI resourceID;
     private StorageSite remoteSite;
-    private final ArtifactSelector artifactSelector;
+    private final EventSelector artifactSelector;
     private Date raceConditionStart;
 
     private final DeletedArtifactEventDAO deletedArtifactEventDAO;
@@ -121,7 +121,7 @@ public class ArtifactValidator {
      * @param resourceID    identifier for the remote query service
      * @param artifactSelector selection policy implementation
      */
-    public ArtifactValidator(ArtifactDAO artifactDAO, URI resourceID, ArtifactSelector artifactSelector) {
+    public ArtifactValidator(ArtifactDAO artifactDAO, URI resourceID, EventSelector artifactSelector) {
         this.artifactDAO = artifactDAO;
         this.resourceID = resourceID;
         this.artifactSelector = artifactSelector;
