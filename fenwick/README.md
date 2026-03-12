@@ -33,9 +33,6 @@ org.opencadc.fenwick.artifactSelector = all | filter
 # event selectvitity
 org.opencadc.fenwick.eventSelector = all | filter
 
-# optional: threads (default: 1)
-org.opencadc.fenwick.artifactThreads = 1 | 2 | 4 | 8
-
 # time in seconds to retry processing after encountering an error.
 org.opencadc.fenwick.maxRetryInterval={max sleep before retry}
 
@@ -71,7 +68,7 @@ If `artifactThreads` is set, fenwick will run this number of threads when syncin
 workload using the Artifact.uriBucket field so each thread has the same number of events to process. Setting this to
 a value above 1 is not normally necessary, but can accelerate the building of a new storage site or global inventory 
 in an existing system with many artifacts.
-**NEW in 1.1**.
+**PLANNED for a future update**.
 
 `maxRetryInterval` is the maximum number of seconds fenwick sleep between runs after encountering an error.
 If fenwick encounters a non-fatal error, it sleeps for an initial timeout value, and runs again. 
