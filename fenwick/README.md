@@ -56,17 +56,20 @@ subset of all files would use the explicit filtering.
 
 If `eventSelector` is `all` then all events (DeletedArtifactEvent, DeletedStorageLocationEvent, and
 StorageLocationEvent) are synced. If the value is `filter` then fenwick harvests selected events from the remote
-as specified in `event-filter.sql` (see below). **NEW in 1.1**.
+as specified in `event-filter.sql` (see below).
+**NEW in 1.1**.
 
 The optional `instanceName` must be set if one or both of the above selector(s) is set to `filter`. The value is a
 simple name for this instance so it can track progress without interfering with other instances. _Changing the name
 of an instance can discard progress tracking_ and cause the instance to start over (at the beginning of time); it is
-possible (undocumented) to work around this, but there is currently no mechansim to do this gracefully.
+possible (undocumented) to work around this, but there is currently no mechansim to do this gracefully. 
+**NEW in 1.1**.
 
 If `artifactThreads` is set, fenwick will run this number of threads when syncing artifacts. It will subdivide the
 workload using the Artifact.uriBucket field so each thread has the same number of events to process. Setting this to
 a value above 1 is not normally necessary, but can accelerate the building of a new storage site or global inventory 
-in an existing system with many artifacts. **NEW in 1.1**.
+in an existing system with many artifacts.
+**NEW in 1.1**.
 
 `maxRetryInterval` is the maximum number of seconds fenwick sleep between runs after encountering an error.
 If fenwick encounters a non-fatal error, it sleeps for an initial timeout value, and runs again. 
@@ -97,7 +100,7 @@ specifying the included events is required. The single clause in the SQL file *M
 ```sql
 WHERE uri LIKE 'some:prefix/%'
 ```
-can refer to any fields common to the various events (effectively, that means `uri` only), and will restrict the included Artifacts to _only_ those that match the SQL condition. If the artifact-filter.sql only restricts based on uri, then the same constraints can be applied in both files to implement namespace-based filtering.
+can refer to any fields common to the various events (effectively, that means `uri` and `lastModified` only), and will restrict the included events to _only_ those that match the SQL condition. If the event-filter.sql only restricts based on uri, then the same constraints can be applied in both files to implement namespace-based filtering.
 
 ## building it
 ```
