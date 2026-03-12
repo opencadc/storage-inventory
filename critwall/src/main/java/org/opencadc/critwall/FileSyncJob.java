@@ -389,7 +389,7 @@ public class FileSyncJob implements Runnable {
         if (transferURL == null) {
             transferURL = regClient.getServiceURL(resource, Standards.VOSPACE_SYNC_21, am);
         }
-        log.debug("certURL: " + transferURL);
+        log.debug("locator URL: " + transferURL);
 
         // request all protocols that can be used
         List<Protocol> protocolList = new ArrayList<>();
