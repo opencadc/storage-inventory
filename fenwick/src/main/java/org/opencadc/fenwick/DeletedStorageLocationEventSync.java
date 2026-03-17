@@ -74,6 +74,7 @@ import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.util.StringUtil;
 import java.io.IOException;
 import java.net.URI;
 import java.security.MessageDigest;
@@ -89,6 +90,7 @@ import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.HarvestState;
 import org.opencadc.inventory.query.DeletedStorageLocationEventRowMapper;
+import org.opencadc.inventory.util.EventSelector;
 import org.opencadc.tap.TapClient;
 
 /**
@@ -101,12 +103,13 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
 
     private final StorageSite storageSite;
     private final TapClient<DeletedStorageLocationEvent> tapClient;
+    private final String includeClause;
     
     // package access for intTest code
     boolean enableSkipOldEvents = true;
 
     public DeletedStorageLocationEventSync(ArtifactDAO artifactDAO, URI resourceID, String instanceName,
-            int querySleepInterval, int maxRetryInterval, StorageSite storageSite) {
+            EventSelector selector, int querySleepInterval, int maxRetryInterval, StorageSite storageSite) {
         super(artifactDAO, resourceID, instanceName, querySleepInterval, maxRetryInterval);
         InventoryUtil.assertNotNull(DeletedStorageLocationEventSync.class, "storageSite", storageSite);
         this.storageSite = storageSite;
@@ -117,9 +120,20 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
         } catch (ResourceNotFoundException ex) {
             throw new IllegalArgumentException("invalid config: query service not found: " + resourceID);
         }
-        
+        try {
+            this.includeClause = selector.getConstraint();
+        } catch (IOException | ResourceNotFoundException ex) {
+            throw new IllegalArgumentException("invalid config: failed to read event selector config: " + ex);
+        }
     }
 
+    public DeletedStorageLocationEventSync(String includeClause) {
+        super(true);
+        this.storageSite = null;
+        this.tapClient = null;
+        this.includeClause = includeClause;
+    }
+    
     @Override
     public String getHarvestStateName() {
         return instanceName + "/" + DeletedStorageLocationEvent.class.getSimpleName();
@@ -262,8 +276,9 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
         return tapClient.query(adql, new DeletedStorageLocationEventRowMapper());
     }
 
+    // unit test
     String buildQuery(Date startTime, Date endTime) {
-        DateFormat df = DateUtil.getDateFormat(DateUtil.ISO_DATE_FORMAT, DateUtil.UTC);
+        DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
         StringBuilder query = new StringBuilder();
         query.append(DeletedStorageLocationEventRowMapper.BASE_QUERY);
         String pre = " WHERE";
@@ -274,6 +289,19 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
         if (endTime != null) {
             query.append(pre).append(" lastModified < '").append(df.format(endTime)).append("'");
         }
+        
+        if (StringUtil.hasText(includeClause)) {
+            log.debug("\nInjecting clause '" + includeClause + "'\n");
+
+            if (query.indexOf("WHERE") < 0) {
+                query.append(" WHERE ");
+            } else {
+                query.append(" AND ");
+            }
+
+            query.append("(").append(includeClause.trim()).append(")");
+        }
+        
         query.append(" ORDER BY lastModified");
         
         return query.toString();

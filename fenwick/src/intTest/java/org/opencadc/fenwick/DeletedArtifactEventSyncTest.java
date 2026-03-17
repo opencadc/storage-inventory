@@ -85,6 +85,7 @@ import org.junit.Test;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.db.HarvestState;
+import org.opencadc.inventory.util.AllEvents;
 import org.opencadc.tap.TapClient;
 
 public class DeletedArtifactEventSyncTest {
@@ -117,7 +118,8 @@ public class DeletedArtifactEventSyncTest {
         try {
             log.info("testGetEventStream");
             DeletedArtifactEventSync sync = 
-                    new DeletedArtifactEventSync(inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, "test", false, 6, 6);
+                    new DeletedArtifactEventSync(inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, "test", 
+                            new AllEvents(), false, 6, 6);
             Subject.doAs(testUser, new PrivilegedExceptionAction<Object>() {
 
                 public Object run() throws Exception {
@@ -185,7 +187,8 @@ public class DeletedArtifactEventSyncTest {
             Thread.sleep(10L);
             
             // doit
-            DeletedArtifactEventSync sync = new DeletedArtifactEventSync(inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, "test", false, 6, 6);
+            DeletedArtifactEventSync sync = new DeletedArtifactEventSync(inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, "test",
+                    new AllEvents(), false, 6, 6);
             sync.enableSkipOldEvents = false;
             Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
                 sync.doit();

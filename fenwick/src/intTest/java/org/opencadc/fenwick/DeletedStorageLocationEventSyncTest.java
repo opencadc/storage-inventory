@@ -87,6 +87,7 @@ import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.HarvestState;
+import org.opencadc.inventory.util.AllEvents;
 
 public class DeletedStorageLocationEventSyncTest {
 
@@ -122,7 +123,7 @@ public class DeletedStorageLocationEventSyncTest {
 
                     StorageSite site1 = new StorageSite(URI.create("cadc:TEST/siteone"), "Test Site", true, false);
                     final DeletedStorageLocationEventSync sync = new DeletedStorageLocationEventSync(
-                        inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, "test", 6, 6, site1);
+                        inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, "test", new AllEvents(), 6, 6, site1);
                     
                     Calendar now = Calendar.getInstance();
                     now.add(Calendar.DAY_OF_MONTH, -1);
@@ -203,7 +204,7 @@ public class DeletedStorageLocationEventSyncTest {
             
             // doit
             DeletedStorageLocationEventSync sync = new DeletedStorageLocationEventSync(
-                    inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, "test", 6, 6, site1);
+                    inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, "test", new AllEvents(), 6, 6, site1);
             sync.enableSkipOldEvents = false;
             Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
                 sync.doit();

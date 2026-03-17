@@ -220,18 +220,18 @@ public class InventoryHarvester implements Runnable {
                     storageSite = siteSync.getCurrentStorageSite();
                 }
             
-                AbstractSync r0 = new DeletedStorageLocationEventSync(dsleArtifactDAO, resourceID, instanceName,
+                AbstractSync r0 = new DeletedStorageLocationEventSync(dsleArtifactDAO, resourceID, instanceName, eventSelector,
                         SYNC_SLEEP, maxRetryInterval, storageSite);
                 tasks.add(r0);
                 threads.add(createThread("dsle-thread", r0));
                 
-                AbstractSync r3 = new StorageLocationEventSync(sleArtifactDAO, resourceID, instanceName,
+                AbstractSync r3 = new StorageLocationEventSync(sleArtifactDAO, resourceID, instanceName, eventSelector,
                         SYNC_SLEEP, maxRetryInterval, storageSite);
                 tasks.add(r3);
                 threads.add(createThread("sle-thread", r3));
             }
             
-            AbstractSync r1 = new DeletedArtifactEventSync(daeArtifactDAO, resourceID, instanceName, 
+            AbstractSync r1 = new DeletedArtifactEventSync(daeArtifactDAO, resourceID, instanceName, eventSelector,
                     trackSiteLocations, SYNC_SLEEP, maxRetryInterval);
             tasks.add(r1);
             threads.add(createThread("dae-thread", r1));
