@@ -3,8 +3,9 @@
 # phase 1: upgrade services
 1. stop all validation jobs (`ratik`, `tantar`)
 2. stop/disable all sync jobs (`fenwick`, `critwall`)
-3. global: upgrade services (`luskan`, `raven`) to **1.1** and restart
+3. global: upgrade services (`luskan`, `raven`, `vault`) to **1.1** and restart
 4. for each storage site: upgrade services (`luskan`, `minoc`) to **1.1** and restart
+5. check service `/availability`
 
 # phase 2: upgrade sync and validation
 
@@ -33,7 +34,8 @@ where `{name}` could be something simple like "all" or "single" or "the-only-one
 
 4. upgrade `fenwick`(s) (+config) to version to **1.1** and restart
 5. upgrade `critwall` to version to **1.1** and restart
-6. upgrade `ratik` and `tantar` to **1.1** and re-enable schedule
+6. check logs for unexpected warnings/errors
+7. upgrade `ratik` and `tantar` to **1.1** and re-enable schedule
 
 # Out of scope:
 - using new `fenwick` features to run multiple instances
