@@ -211,6 +211,7 @@ public class StorageSiteSync extends AbstractSync {
                                                              ByteLimitExceededException, NotAuthenticatedException,
                                                              IllegalArgumentException, TransientException, IOException,
                                                              InterruptedException {
+        log.debug("adql:" + STORAGE_SITE_QUERY);
         return tapClient.query(STORAGE_SITE_QUERY, row -> {
             int index = 0;
             // column order folllowing model declarations

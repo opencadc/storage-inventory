@@ -346,7 +346,7 @@ public class ArtifactSync extends AbstractSync {
             throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                    InterruptedException {
         final String query = buildQuery(start, end);
-        log.debug("\nExecuting query '" + query + "'\n");
+        log.debug("adql:" + query);
         return tapClient.query(query, new ArtifactRowMapper());
     }
 
