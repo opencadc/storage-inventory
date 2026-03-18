@@ -294,8 +294,6 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 }
             }
             
-            log.info(sb.toString());
-
             if (!ok) {
                 throw new InvalidConfigException(sb.toString());
             }
@@ -1026,7 +1024,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
         InventoryUtil.assertNotNull(SwiftStorageAdapter.class, "transactionID", transactionID);
         UUID uuid = UUID.fromString(transactionID);
         try {
-            log.warn("getTransactionStatus: " + transactionID);
+            log.debug("getTransactionStatus: " + transactionID);
             StoredObject txn = txnContainer.getObject("txn:" + transactionID);
             if (txn.exists()) {
                 Map<String,Object> meta = txn.getMetadata();
@@ -1049,7 +1047,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 }
                 // check if there were any parts or size==0
                 if (last != null) {
-                    log.warn("delete part: " + last.getName());
+                    log.debug("delete part: " + last.getName());
                     last.delete();
                 }
                 
@@ -1062,7 +1060,7 @@ public class SwiftStorageAdapter  implements StorageAdapter {
                 txn.setAndDoNotSaveMetadata(CONTENT_CHECKSUM_ATTR, checksum.toASCIIString());
                 txn.removeAndDoNotSaveMetadata(PREV_DIGEST_ATTR);
                 txn.saveMetadata();
-                log.warn("return transaction status: " + transactionID);
+                log.debug("return transaction status: " + transactionID);
                 return getTransactionStatusImpl(transactionID);
             }
         } catch (NoSuchAlgorithmException ex) {

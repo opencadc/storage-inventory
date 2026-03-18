@@ -82,17 +82,21 @@ import org.opencadc.tap.TapRowMapper;
  */
 public class DeletedArtifactEventRowMapper implements TapRowMapper<DeletedArtifactEvent> {
 
-    public static final String BASE_QUERY = "SELECT id, lastModified, metaChecksum "
+    public static final String BASE_QUERY = "SELECT uri, id, lastModified, metaChecksum "
         + "FROM inventory.DeletedArtifactEvent";
 
     @Override
     public DeletedArtifactEvent mapRow(List<Object> row) {
         int index = 0;
-        final UUID id = (UUID) row.get(index++);
+        URI uri = (URI) row.get(index++);
+        UUID id = (UUID) row.get(index++);
+        Date lastModified = (Date) row.get(index++);
+        URI metaChecksum = (URI) row.get(index++);
 
-        final DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(id);
-        InventoryUtil.assignLastModified(deletedArtifactEvent, (Date) row.get(index++));
-        InventoryUtil.assignMetaChecksum(deletedArtifactEvent, (URI) row.get(index));
+        DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(id, uri);
+        InventoryUtil.assignLastModified(deletedArtifactEvent, lastModified);
+        InventoryUtil.assignMetaChecksum(deletedArtifactEvent, metaChecksum);
+        
         return deletedArtifactEvent;
     }
 

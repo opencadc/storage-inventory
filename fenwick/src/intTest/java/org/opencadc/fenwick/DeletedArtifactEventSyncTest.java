@@ -73,10 +73,8 @@ import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
 import java.security.PrivilegedExceptionAction;
-import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
-import java.util.List;
 import java.util.UUID;
 import javax.security.auth.Subject;
 import org.apache.log4j.Level;
@@ -87,9 +85,8 @@ import org.junit.Test;
 import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.DeletedArtifactEvent;
 import org.opencadc.inventory.db.HarvestState;
-import org.opencadc.inventory.query.DeletedArtifactEventRowMapper;
+import org.opencadc.inventory.util.AllEvents;
 import org.opencadc.tap.TapClient;
-import org.opencadc.tap.TapRowMapper;
 
 public class DeletedArtifactEventSyncTest {
 
@@ -121,7 +118,8 @@ public class DeletedArtifactEventSyncTest {
         try {
             log.info("testGetEventStream");
             DeletedArtifactEventSync sync = 
-                    new DeletedArtifactEventSync(inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, false, 6, 6);
+                    new DeletedArtifactEventSync(inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, "test", 
+                            new AllEvents(), false, 6, 6);
             Subject.doAs(testUser, new PrivilegedExceptionAction<Object>() {
 
                 public Object run() throws Exception {
@@ -135,8 +133,8 @@ public class DeletedArtifactEventSyncTest {
                     Assert.assertNotNull(emptyIterator);
                     Assert.assertFalse(emptyIterator.hasNext());
 
-                    DeletedArtifactEvent expected1 = new DeletedArtifactEvent(UUID.randomUUID());
-                    DeletedArtifactEvent expected2 = new DeletedArtifactEvent(UUID.randomUUID());
+                    DeletedArtifactEvent expected1 = new DeletedArtifactEvent(UUID.randomUUID(), URI.create("cadc:TEST/alpha"));
+                    DeletedArtifactEvent expected2 = new DeletedArtifactEvent(UUID.randomUUID(), URI.create("cadc:TEST/beta"));
 
                     luskanEnvironment.deletedArtifactEventDAO.put(expected1);
                     luskanEnvironment.deletedArtifactEventDAO.put(expected2);
@@ -184,12 +182,13 @@ public class DeletedArtifactEventSyncTest {
             Thread.sleep(10L);
             
             // insert 1 dae in luskan
-            DeletedArtifactEvent dae2 = new DeletedArtifactEvent(a2.getID());
+            DeletedArtifactEvent dae2 = new DeletedArtifactEvent(a2.getID(), a2.getURI());
             luskanEnvironment.deletedArtifactEventDAO.put(dae2);
             Thread.sleep(10L);
             
             // doit
-            DeletedArtifactEventSync sync = new DeletedArtifactEventSync(inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, false, 6, 6);
+            DeletedArtifactEventSync sync = new DeletedArtifactEventSync(inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, "test",
+                    new AllEvents(), false, 6, 6);
             sync.enableSkipOldEvents = false;
             Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
                 sync.doit();
@@ -210,7 +209,7 @@ public class DeletedArtifactEventSyncTest {
             Assert.assertNotNull(actual);
             Assert.assertEquals(dae2.getLastModified(), actual.getLastModified());
             
-            HarvestState hs = inventoryEnvironment.harvestStateDAO.get(DeletedArtifactEvent.class.getSimpleName(), TestUtil.LUSKAN_URI);
+            HarvestState hs = inventoryEnvironment.harvestStateDAO.get(sync.getHarvestStateName(), TestUtil.LUSKAN_URI);
             Assert.assertNotNull(hs);
             Assert.assertEquals(dae2.getLastModified(), hs.curLastModified);
             Assert.assertEquals(dae2.getID(), hs.curID);
@@ -221,7 +220,7 @@ public class DeletedArtifactEventSyncTest {
                 return null;
             });
             
-            hs = inventoryEnvironment.harvestStateDAO.get(DeletedArtifactEvent.class.getSimpleName(), TestUtil.LUSKAN_URI);
+            hs = inventoryEnvironment.harvestStateDAO.get(sync.getHarvestStateName(), TestUtil.LUSKAN_URI);
             Assert.assertNotNull(hs);
             Assert.assertEquals(dae2.getLastModified(), hs.curLastModified);
             Assert.assertEquals(dae2.getID(), hs.curID);

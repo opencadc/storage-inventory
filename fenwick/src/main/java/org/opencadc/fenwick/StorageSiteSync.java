@@ -83,6 +83,7 @@ import java.text.DateFormat;
 import java.util.Date;
 import java.util.UUID;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.Artifact;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.StorageSiteDAO;
@@ -106,9 +107,9 @@ public class StorageSiteSync extends AbstractSync {
     
     private StorageSite currentStorageSite;
 
-    public StorageSiteSync(final StorageSiteDAO storageSiteDAO, URI resourceID, 
+    public StorageSiteSync(final StorageSiteDAO storageSiteDAO, URI resourceID, String instanceName,
             int querySleepInterval, int maxRetryInterval) {
-        super(resourceID, querySleepInterval, maxRetryInterval);
+        super(resourceID, instanceName, querySleepInterval, maxRetryInterval);
         this.storageSiteDAO = storageSiteDAO;
         try {
             this.tapClient = new TapClient<>(resourceID);
@@ -139,6 +140,12 @@ public class StorageSiteSync extends AbstractSync {
         return currentStorageSite;
     }
     
+    @Override
+    public String getHarvestStateName() {
+        // not currently tracked via HarvestState
+        return instanceName + "/" + StorageSite.class.getSimpleName();
+    }
+
     @Override
     public void doit() throws AccessControlException, ResourceNotFoundException, NotAuthenticatedException, 
             IllegalArgumentException, TransientException, IOException, InterruptedException {
@@ -204,6 +211,7 @@ public class StorageSiteSync extends AbstractSync {
                                                              ByteLimitExceededException, NotAuthenticatedException,
                                                              IllegalArgumentException, TransientException, IOException,
                                                              InterruptedException {
+        log.debug("adql:" + STORAGE_SITE_QUERY);
         return tapClient.query(STORAGE_SITE_QUERY, row -> {
             int index = 0;
             // column order folllowing model declarations

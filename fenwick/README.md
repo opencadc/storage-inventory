@@ -13,20 +13,25 @@ Runtime configuration must be made available via the `/config` directory.
 org.opencadc.fenwick.logging = {info|debug}
 
 # inventory database settings
-org.opencadc.inventory.db.SQLGenerator=org.opencadc.inventory.db.SQLGenerator
-org.opencadc.fenwick.inventory.schema={schema for inventory database objects}
 org.opencadc.fenwick.inventory.username={username for inventory admin}
 org.opencadc.fenwick.inventory.password={password for inventory admin}
 org.opencadc.fenwick.inventory.url=jdbc:postgresql://{server}/{database}
 
 # Enable Storage Site lookup to synchronize site locations on Artifacts
-org.opencadc.fenwick.trackSiteLocations={true|false}
+# this should be true in global inventory and false in a storage site
+org.opencadc.fenwick.trackSiteLocations = true | false
 
 # remote inventory query service (luskan)
 org.opencadc.fenwick.queryService={resourceID of remote TAP service with inventory data model}
 
-# selectivity
-org.opencadc.fenwick.artifactSelector={all|filter}
+# instance name
+org.opencadc.fenwick.instanceName = {name}
+
+# artifact selectivity
+org.opencadc.fenwick.artifactSelector = all | filter
+
+# event selectvitity
+org.opencadc.fenwick.eventSelector = all | filter
 
 # time in seconds to retry processing after encountering an error.
 org.opencadc.fenwick.maxRetryInterval={max sleep before retry}
@@ -44,10 +49,26 @@ The `queryService` is the remote TAP service from which Artifacts are harvested.
 query service at the (a) global inventory. For a global inventory, this is the query service at a storage site; one
 instance of fenwick is needed for each storage site.
 
-If `artifactSelector` is `all` (was: `org.opencadc.fenwick.AllArtifacts`) then fenwick harvests all artifacts from
-remote. If it is `filter` (was: `org.opencadc.fenwick.IncludeArtifacts`) then fenwick harvests selected artifacts 
-from remote (see artifact-filter.sql below). A global inventory and a storage site that should get all Artifacts 
-(files) would run with `all`. Specialised instances that want to select a subset of all files would use the explicit filtering. 
+If `artifactSelector` is `all` then fenwick harvests all artifacts from remote. If it is `filter` then fenwick harvests selected artifacts from remote as specified in `artifact-filter.sql` (see below). A global inventory and a
+storage site that should get all Artifacts (files) would normally run with `all`. Specialised instances that want to
+select a subset of all files would use the explicit filtering.
+
+If `eventSelector` is `all` then all events (DeletedArtifactEvent, DeletedStorageLocationEvent, and
+StorageLocationEvent) are synced. If the value is `filter` then fenwick harvests selected events from the remote
+as specified in `event-filter.sql` (see below).
+**NEW in 1.1**.
+
+The `instanceName` is a simple name for this instance so it can track progress without interfering with other
+instances. _Changing the name of an instance can discard progress tracking_ and cause the instance to start over (at
+the beginning of time); it is possible (undocumented) to work around this, but there is currently no mechansim to do
+this gracefully.
+**NEW in 1.1**.
+
+If `artifactThreads` is set, fenwick will run this number of threads when syncing artifacts. It will subdivide the
+workload using the Artifact.uriBucket field so each thread has the same number of events to process. Setting this to
+a value above 1 is not normally necessary, but can accelerate the building of a new storage site or global inventory 
+in an existing system with many artifacts.
+**PLANNED for a future update**.
 
 `maxRetryInterval` is the maximum number of seconds fenwick sleep between runs after encountering an error.
 If fenwick encounters a non-fatal error, it sleeps for an initial timeout value, and runs again. 
@@ -60,17 +81,25 @@ in /config to authenticate. If the file is not found, `fenwick` will make anonym
 service.
 
 ### artifact-filter.sql (optional)
-When `org.opencadc.fenwick.artifactSelector=filter` is specified, this config file
+When `org.opencadc.fenwick.artifactSelector = filter` is specified, this config file
 specifying the included Artifacts is required. The single clause in the SQL file *MUST* begin with the 
-`WHERE` keyword.
+`WHERE` keyword, for example:
 
-> `artifact-filter.sql`
 ```sql
-WHERE uri LIKE '%SOME CONDITION%'
+WHERE uri LIKE 'some:prefix/%'
 ```
+can refer to any fields in the Artifact, and will restrict the included Artifacts to _only_ those that match the SQL
+condition.
 
-Will restrict the included Artifacts to _only_ those that match the SQL condition.
+### event-filter.sql (optional)
+When `org.opencadc.fenwick.eventSelector = filter` is specified, this config file
+specifying the included events is required. The single clause in the SQL file *MUST* begin with the 
+`WHERE` keyword, for example:
 
+```sql
+WHERE uri LIKE 'some:prefix/%'
+```
+can refer to any fields common to the various events (effectively, that means `uri` only), and will restrict the included events to _only_ those that match the SQL condition. If the event-filter.sql only restricts based on uri, then the same constraints can be applied in both files to implement namespace-based filtering.
 
 ## building it
 ```
@@ -88,12 +117,3 @@ docker run -it fenwick:latest /bin/bash
 docker run --user opencadc:opencadc -v /path/to/external/config:/config:ro --name fenwick fenwick:latest
 ```
 
-## apply version tags
-```bash
-. VERSION && echo "tags: $TAGS" 
-for t in $TAGS; do
-   docker image tag fenwick:latest fenwick:$t
-done
-unset TAGS
-docker image list fenwick
-```

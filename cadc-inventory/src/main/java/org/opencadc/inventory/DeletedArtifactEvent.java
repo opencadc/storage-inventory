@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2019.                            (c) 2019.
+*  (c) 2026.                            (c) 2026.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,6 +67,7 @@
 
 package org.opencadc.inventory;
 
+import java.net.URI;
 import java.util.UUID;
 
 /**
@@ -77,13 +78,19 @@ import java.util.UUID;
  */
 public class DeletedArtifactEvent extends Entity {
     
-    public DeletedArtifactEvent(UUID id) {
+    public final URI uri;
+
+    public DeletedArtifactEvent(UUID id, URI uri) {
         super(id);
         InventoryUtil.assertNotNull(DeletedArtifactEvent.class, "id", id);
+        this.uri = uri; // currently allowed to be null for backwards compat
     }
 
     @Override
     public String toString() {
-        return DeletedArtifactEvent.class.getSimpleName() + "[" + getID() + "]";
+        StringBuilder sb = new StringBuilder();
+        sb.append(DeletedArtifactEvent.class.getSimpleName());
+        sb.append("[").append(getID()).append(",").append(uri).append("]");
+        return  sb.toString();
     }
 }

@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2026.                            (c) 2026.
+*  (c) 2025.                            (c) 2025.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -63,116 +63,71 @@
 *                                       <http://www.gnu.org/licenses/>.
 *
 ************************************************************************
- */
+*/
 
-package org.opencadc.inventory;
+package org.opencadc.fenwick;
 
-import ca.nrc.cadc.util.FileUtil;
+import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.util.Log4jInit;
-import ca.nrc.cadc.vodml.SchematronValidationException;
-import ca.nrc.cadc.vodml.VOModelReader;
-import ca.nrc.cadc.vodml.VOModelWriter;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
+import java.text.DateFormat;
+import java.util.Date;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.jdom2.Document;
 import org.junit.Assert;
 import org.junit.Test;
+import org.opencadc.inventory.query.DeletedStorageLocationEventRowMapper;
 
 /**
  *
  * @author pdowler
  */
-public class VODMLValidationTest {
-
-    private static final Logger log = Logger.getLogger(VODMLValidationTest.class);
-
-    private static final String VODML_FILE_06 = "storage-inventory-0.6-vodml.xml";
-    private static final String VODML_FILE_07 = "storage-inventory-0.7-vodml.xml";
-    
-    private static final String VODML_CUR = VODML_FILE_07;
-
-    private static final String[] VODML_FILES = new String[]{
-        VODML_FILE_06, VODML_CUR
-    };
+public class DeletedStorageLocationEventSyncTest {
+    private static final Logger log = Logger.getLogger(DeletedStorageLocationEventSyncTest.class);
 
     static {
-        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
-        Log4jInit.setLevel("ca.nrc.cadc.vodml", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.fenwick", Level.INFO);
     }
 
-    public VODMLValidationTest() {
-    }
-
-    @Test
-    public void testWellFormed() {
-        for (String vodmlFile : VODML_FILES) {
-            try {
-                File testVODML = FileUtil.getFileFromResource(vodmlFile, VODMLValidationTest.class);
-                log.info("testWellFormed VO-DML/XML doc: " + testVODML);
-
-                VOModelReader wf = new VOModelReader(false, false, false);
-                Document doc = wf.read(new FileInputStream(testVODML));
-                Assert.assertNotNull(doc);
-
-                VOModelWriter w = new VOModelWriter();
-                ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                w.write(doc, bos);
-                log.debug("well-formed document:\n" + bos.toString());
-                log.info("testWellFormed VO-DML/XML doc: OK");
-            } catch (Exception unexpected) {
-                log.error("unexpected exception", unexpected);
-                Assert.fail("unexpected exception: " + unexpected);
-            }
-        }
+    public DeletedStorageLocationEventSyncTest() { 
     }
 
     @Test
-    public void testSchemaValid() {
-        for (String vodmlFile : VODML_FILES) {
-            try {
-                File testVODML = FileUtil.getFileFromResource(vodmlFile, VODMLValidationTest.class);
-                log.info("testSchemaValid VO-DML/XML doc: " + testVODML);
+    public void testBuildQuery() throws Exception {
+        String expected = DeletedStorageLocationEventRowMapper.BASE_QUERY + " ORDER BY lastModified";
+        
+        DeletedStorageLocationEventSync sync = new DeletedStorageLocationEventSync(null);
+        String adql = sync.buildQuery(null, null);
 
-                VOModelReader wf = new VOModelReader(true, false, false);
-                Document doc = wf.read(new FileInputStream(testVODML));
-                Assert.assertNotNull(doc);
-
-                VOModelWriter w = new VOModelWriter();
-                ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                w.write(doc, bos);
-                log.debug("schema-valid document:\n" + bos.toString());
-                log.info("testSchemaValid VO-DML/XML doc: OK");
-
-            } catch (Exception unexpected) {
-                log.error("unexpected exception", unexpected);
-                Assert.fail("unexpected exception: " + unexpected);
-            }
-        }
+        Assert.assertEquals(expected, adql);
     }
-
+    
     @Test
-    public void testSchematronValid() {
-        for (String vodmlFile : VODML_FILES) {
-            try {
-                File testVODML = FileUtil.getFileFromResource(vodmlFile, VODMLValidationTest.class);
-                log.info("testSchematronValid VO-DML/XML doc: " + testVODML);
-
-                VOModelReader wf = new VOModelReader(true, true, true);
-                Document doc = wf.read(new FileInputStream(testVODML));
-                Assert.assertNotNull(doc);
-                log.info("testSchematronValid VO-DML/XML doc: OK");
-            } catch (SchematronValidationException ex) {
-                for (String msg : ex.getFailures()) {
-                    log.error(msg);
-                }
-                Assert.fail("schematron validation failed: " + ex);
-            } catch (Exception unexpected) {
-                log.error("unexpected exception", unexpected);
-                Assert.fail("unexpected exception: " + unexpected);
-            }
-        }
+    public void testBuildQueryIncremental() throws Exception {
+        Date now = new Date();
+        DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+        String expected = DeletedStorageLocationEventRowMapper.BASE_QUERY 
+                + " WHERE lastModified >= '" + df.format(now) + "'"
+                + " ORDER BY lastModified";
+        
+        DeletedStorageLocationEventSync sync = new DeletedStorageLocationEventSync(null);
+        String adql = sync.buildQuery(now, null);
+        
+        Assert.assertEquals(expected, adql);
+    }
+    
+    @Test
+    public void testBuildQueryIncrementalPattern() throws Exception {
+        String whereClause = "uri LIKE 'cadc:special/%'";
+        Date now = new Date();
+        DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+        String expected = DeletedStorageLocationEventRowMapper.BASE_QUERY 
+                + " WHERE lastModified >= '" + df.format(now) + "'"
+                + " AND (" + whereClause + ")" // brackets
+                + " ORDER BY lastModified";
+        
+        DeletedStorageLocationEventSync sync = new DeletedStorageLocationEventSync(whereClause);
+        String adql = sync.buildQuery(now, null);
+        
+        Assert.assertEquals(expected, adql);
     }
 }

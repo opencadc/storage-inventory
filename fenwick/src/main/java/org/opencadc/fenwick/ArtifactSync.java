@@ -90,7 +90,7 @@ import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.HarvestState;
 import org.opencadc.inventory.query.ArtifactRowMapper;
-import org.opencadc.inventory.util.ArtifactSelector;
+import org.opencadc.inventory.util.EventSelector;
 import org.opencadc.tap.TapClient;
 
 /**
@@ -105,10 +105,10 @@ public class ArtifactSync extends AbstractSync {
     private final TapClient<Artifact> tapClient;
     private final String includeClause;
 
-    public ArtifactSync(ArtifactDAO artifactDAO, URI resourceID, 
+    public ArtifactSync(ArtifactDAO artifactDAO, URI resourceID, String instanceName,
             int querySleepInterval, int maxRetryInterval, 
-            ArtifactSelector selector, StorageSite storageSite) {
-        super(artifactDAO, resourceID, querySleepInterval, maxRetryInterval);
+            EventSelector selector, StorageSite storageSite) {
+        super(artifactDAO, resourceID, instanceName, querySleepInterval, maxRetryInterval);
         this.storageSite = storageSite;
         try {
             this.tapClient = new TapClient<>(resourceID);
@@ -131,7 +131,17 @@ public class ArtifactSync extends AbstractSync {
         this.tapClient = null;
         this.includeClause = includeClause;
     }
+
+    @Override
+    public String getHarvestStateName() {
+        return getHarvestStateName(instanceName);
+    }
     
+    // used by other event streams init
+    static String getHarvestStateName(String instanceName) {
+        return instanceName + "/" + Artifact.class.getSimpleName();
+    }
+
     @Override
     void doit() throws ResourceNotFoundException, IOException, IllegalStateException, TransientException, InterruptedException {
         final MessageDigest messageDigest;
@@ -143,7 +153,20 @@ public class ArtifactSync extends AbstractSync {
 
         final SiteLocation remoteSiteLocation = (storageSite == null ? null : new SiteLocation(storageSite.getID()));
         
-        final HarvestState harvestState = this.harvestStateDAO.get(Artifact.class.getSimpleName(), resourceID);
+        HarvestState harvestState = harvestStateDAO.get(getHarvestStateName(), resourceID);
+        // migrate backwards compat
+        if (harvestState.curLastModified == null) {
+            HarvestState bc = harvestStateDAO.get(Artifact.class.getSimpleName(), resourceID);
+            if (bc.curLastModified != null) {
+                log.warn("migrate previous state: " + bc.getName() + " " + bc.getResourceID() + " " + bc.getID());
+                harvestState.curID = bc.curID;
+                harvestState.curLastModified = bc.curLastModified;
+                harvestStateDAO.put(harvestState);
+            }
+            harvestStateDAO.delete(bc.getID());
+        }
+        // end of migrate
+        log.debug("state: " + harvestState.getName() + " " + harvestState.getResourceID() + " " + harvestState.getID());
         harvestStateDAO.setUpdateBufferCount(99); // buffer 99 updates, do every 100
         harvestStateDAO.setMaintCount(999); // buffer 999 so every 1000 real updates aka every 1e5 events
         
@@ -223,11 +246,11 @@ public class ArtifactSync extends AbstractSync {
                     if (collidingArtifact != null && currentArtifact != null) {
                         // resolve collision
                         if (isRemoteWinner(currentArtifact, artifact, (remoteSiteLocation != null))) {
-                            DeletedArtifactEvent dae = new DeletedArtifactEvent(currentArtifact.getID());
+                            DeletedArtifactEvent dae = new DeletedArtifactEvent(currentArtifact.getID(), currentArtifact.getURI());
                             log.info("ArtifactSync.createDeletedArtifactEvent id=" + dae.getID()
-                                    + " uri=" + currentArtifact.getURI()
+                                    + " uri=" + dae.uri
                                     + " reason=resolve-collision");
-                            daeDAO.put(new DeletedArtifactEvent(currentArtifact.getID()));
+                            daeDAO.put(dae);
                             log.info("ArtifactSync.deleteArtifact id=" + currentArtifact.getID()
                                     + " uri=" + currentArtifact.getURI()
                                     + " contentLastModified=" + df.format(currentArtifact.getContentLastModified())
@@ -323,7 +346,7 @@ public class ArtifactSync extends AbstractSync {
             throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                    InterruptedException {
         final String query = buildQuery(start, end);
-        log.debug("\nExecuting query '" + query + "'\n");
+        log.debug("adql:" + query);
         return tapClient.query(query, new ArtifactRowMapper());
     }
 

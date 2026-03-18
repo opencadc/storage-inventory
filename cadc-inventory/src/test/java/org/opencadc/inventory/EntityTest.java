@@ -304,11 +304,14 @@ public class EntityTest {
     @Test
     public void testDeletedArtifactEvent() {
         try {
-            DeletedArtifactEvent ok = new DeletedArtifactEvent(UUID.randomUUID());
+            DeletedArtifactEvent compat = new DeletedArtifactEvent(UUID.randomUUID(), null);
+            log.info("created: " + compat);
+            
+            DeletedArtifactEvent ok = new DeletedArtifactEvent(UUID.randomUUID(), URI.create("foo:collection/filename.ext"));
             log.info("created: " + ok);
             
             try {
-                DeletedArtifactEvent invalid = new DeletedArtifactEvent(null);
+                DeletedArtifactEvent invalid = new DeletedArtifactEvent(null, null);
                 Assert.fail("created: " + invalid);
             } catch (IllegalArgumentException expected) {
                 log.info("expected: " + expected);
@@ -322,11 +325,14 @@ public class EntityTest {
     @Test
     public void testStorageLocationEvent() {
         try {
-            StorageLocationEvent ok = new StorageLocationEvent(UUID.randomUUID());
+            StorageLocationEvent compat = new StorageLocationEvent(UUID.randomUUID(), null);
+            log.info("created: " + compat);
+            
+            StorageLocationEvent ok = new StorageLocationEvent(UUID.randomUUID(), URI.create("foo:collection/filename.ext"));
             log.info("created: " + ok);
             
             try {
-                StorageLocationEvent invalid = new StorageLocationEvent(null);
+                StorageLocationEvent invalid = new StorageLocationEvent(null, null);
                 Assert.fail("created: " + invalid);
             } catch (IllegalArgumentException expected) {
                 log.info("expected: " + expected);
@@ -340,11 +346,14 @@ public class EntityTest {
     @Test
     public void testDeletedStorageLocationEvent() {
         try {
-            DeletedStorageLocationEvent ok = new DeletedStorageLocationEvent(UUID.randomUUID());
+            DeletedStorageLocationEvent compat = new DeletedStorageLocationEvent(UUID.randomUUID(), null);
+            log.info("created: " + compat);
+            
+            DeletedStorageLocationEvent ok = new DeletedStorageLocationEvent(UUID.randomUUID(), URI.create("foo:collection/filename.ext"));
             log.info("created: " + ok);
             
             try {
-                DeletedStorageLocationEvent invalid = new DeletedStorageLocationEvent(null);
+                DeletedStorageLocationEvent invalid = new DeletedStorageLocationEvent(null, null);
                 Assert.fail("created: " + invalid);
             } catch (IllegalArgumentException expected) {
                 log.info("expected: " + expected);

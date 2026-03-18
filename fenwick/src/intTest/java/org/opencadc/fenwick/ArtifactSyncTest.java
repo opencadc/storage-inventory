@@ -90,8 +90,8 @@ import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.HarvestState;
-import org.opencadc.inventory.util.AllArtifacts;
-import org.opencadc.inventory.util.IncludeArtifacts;
+import org.opencadc.inventory.util.AllEvents;
+import org.opencadc.inventory.util.FilterEvents;
 
 /**
  *
@@ -144,7 +144,7 @@ public class ArtifactSyncTest {
         if (track) {
             trackSite = site1;
         }
-        final ArtifactSync sync = new ArtifactSync(inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, 6, 6, new AllArtifacts(), trackSite);
+        final ArtifactSync sync = new ArtifactSync(inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, "test", 6, 6, new AllEvents(), trackSite);
         Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
             sync.doit();
             return null;
@@ -249,7 +249,7 @@ public class ArtifactSyncTest {
             Assert.assertEquals(a3.getLastModified(), actual3.getLastModified());
         }
         
-        HarvestState hs = inventoryEnvironment.harvestStateDAO.get(Artifact.class.getSimpleName(), TestUtil.LUSKAN_URI);
+        HarvestState hs = inventoryEnvironment.harvestStateDAO.get(sync.getHarvestStateName(), TestUtil.LUSKAN_URI);
         Assert.assertNotNull(hs);
         Assert.assertEquals(a3.getID(), hs.curID);
         Assert.assertEquals(a3.getLastModified(), hs.curLastModified);
@@ -261,7 +261,7 @@ public class ArtifactSyncTest {
             return null;
         });
 
-        hs = inventoryEnvironment.harvestStateDAO.get(Artifact.class.getSimpleName(), TestUtil.LUSKAN_URI);
+        hs = inventoryEnvironment.harvestStateDAO.get(sync.getHarvestStateName(), TestUtil.LUSKAN_URI);
         Assert.assertNotNull(hs);
         Assert.assertEquals(a3.getID(), hs.curID);
         Assert.assertEquals(a3.getLastModified(), hs.curLastModified);
@@ -302,7 +302,7 @@ public class ArtifactSyncTest {
         luskanEnvironment.artifactDAO.put(artifactTwo);
 
         final ArtifactSync testSubject = new ArtifactSync(inventoryEnvironment.artifactDAO, 
-                TestUtil.LUSKAN_URI, 6, 6, new IncludeArtifacts(includeFile), null);
+                TestUtil.LUSKAN_URI, "test", 6, 6, new FilterEvents(includeFile), null);
         
         Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
             testSubject.doit();
@@ -348,7 +348,7 @@ public class ArtifactSyncTest {
         Thread.sleep(20L);
         
         final ArtifactSync testSubject = new ArtifactSync(inventoryEnvironment.artifactDAO, 
-                TestUtil.LUSKAN_URI, 6, 6, new AllArtifacts(), expectedSite);
+                TestUtil.LUSKAN_URI, "test", 6, 6, new AllEvents(), expectedSite);
         
         Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
             testSubject.doit();
@@ -413,7 +413,7 @@ public class ArtifactSyncTest {
         Thread.sleep(20L);
         
         final ArtifactSync testSubject = new ArtifactSync(inventoryEnvironment.artifactDAO, 
-                TestUtil.LUSKAN_URI, 6, 6, new AllArtifacts(), null);
+                TestUtil.LUSKAN_URI, "test", 6, 6, new AllEvents(), null);
         
         Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
             testSubject.doit();

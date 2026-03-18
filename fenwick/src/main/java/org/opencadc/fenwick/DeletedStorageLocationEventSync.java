@@ -69,14 +69,12 @@
 
 package org.opencadc.fenwick;
 
-import ca.nrc.cadc.auth.AuthenticationUtil;
-import ca.nrc.cadc.auth.SSLUtil;
 import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
-import java.io.File;
+import ca.nrc.cadc.util.StringUtil;
 import java.io.IOException;
 import java.net.URI;
 import java.security.MessageDigest;
@@ -92,6 +90,7 @@ import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.HarvestState;
 import org.opencadc.inventory.query.DeletedStorageLocationEventRowMapper;
+import org.opencadc.inventory.util.EventSelector;
 import org.opencadc.tap.TapClient;
 
 /**
@@ -104,13 +103,14 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
 
     private final StorageSite storageSite;
     private final TapClient<DeletedStorageLocationEvent> tapClient;
+    private final String includeClause;
     
     // package access for intTest code
     boolean enableSkipOldEvents = true;
 
-    public DeletedStorageLocationEventSync(ArtifactDAO artifactDAO, URI resourceID, 
-            int querySleepInterval, int maxRetryInterval, StorageSite storageSite) {
-        super(artifactDAO, resourceID, querySleepInterval, maxRetryInterval);
+    public DeletedStorageLocationEventSync(ArtifactDAO artifactDAO, URI resourceID, String instanceName,
+            EventSelector selector, int querySleepInterval, int maxRetryInterval, StorageSite storageSite) {
+        super(artifactDAO, resourceID, instanceName, querySleepInterval, maxRetryInterval);
         InventoryUtil.assertNotNull(DeletedStorageLocationEventSync.class, "storageSite", storageSite);
         this.storageSite = storageSite;
         try {
@@ -120,7 +120,23 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
         } catch (ResourceNotFoundException ex) {
             throw new IllegalArgumentException("invalid config: query service not found: " + resourceID);
         }
-        
+        try {
+            this.includeClause = selector.getConstraint();
+        } catch (IOException | ResourceNotFoundException ex) {
+            throw new IllegalArgumentException("invalid config: failed to read event selector config: " + ex);
+        }
+    }
+
+    public DeletedStorageLocationEventSync(String includeClause) {
+        super(true);
+        this.storageSite = null;
+        this.tapClient = null;
+        this.includeClause = includeClause;
+    }
+    
+    @Override
+    public String getHarvestStateName() {
+        return instanceName + "/" + DeletedStorageLocationEvent.class.getSimpleName();
     }
 
     @Override
@@ -133,18 +149,30 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
             throw new RuntimeException("BUG: failed to get instance of MD5", e);
         }
         
-        HarvestState hs = harvestStateDAO.get(DeletedStorageLocationEvent.class.getSimpleName(), resourceID);
-        if (enableSkipOldEvents && hs.curLastModified == null) { 
+        HarvestState harvestState = harvestStateDAO.get(getHarvestStateName(), resourceID);
+        // migrate backwards compat
+        if (harvestState.curLastModified == null) {
+            HarvestState bc = harvestStateDAO.get(DeletedStorageLocationEvent.class.getSimpleName(), resourceID);
+            if (bc.curLastModified != null) {
+                log.warn("migrate previous state: " + bc.getName() + " " + bc.getResourceID() + " " + bc.getID());
+                harvestState.curID = bc.curID;
+                harvestState.curLastModified = bc.curLastModified;
+                harvestStateDAO.put(harvestState);
+            }
+            harvestStateDAO.delete(bc.getID());
+        }
+        // end of migrate
+        log.debug("state: " + harvestState.getName() + " " + harvestState.getResourceID() + " " + harvestState.getID());
+        if (enableSkipOldEvents && harvestState.curLastModified == null) { 
             // first harvest: ignore old deleted events?
-            HarvestState artifactHS = harvestStateDAO.get(Artifact.class.getSimpleName(), resourceID);
+            HarvestState artifactHS = harvestStateDAO.get(ArtifactSync.getHarvestStateName(instanceName), resourceID);
             if (artifactHS.curLastModified == null) {
-                // never artifacts harvested: ignore old deleted events
-                hs.curLastModified = new Date();
-                harvestStateDAO.put(hs);
-                hs = harvestStateDAO.get(hs.getID());
+                log.warn("never harvested artifacts: ignore old deleted events");
+                harvestState.curLastModified = new Date();
+                harvestStateDAO.put(harvestState);
+                harvestState = harvestStateDAO.get(harvestState.getID());
             }
         }
-        final HarvestState harvestState = hs;
         harvestStateDAO.setUpdateBufferCount(99); // buffer 99 updates, do every 100
         
         final TransactionManager transactionManager = artifactDAO.getTransactionManager();
@@ -248,8 +276,9 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
         return tapClient.query(adql, new DeletedStorageLocationEventRowMapper());
     }
 
+    // unit test
     String buildQuery(Date startTime, Date endTime) {
-        DateFormat df = DateUtil.getDateFormat(DateUtil.ISO_DATE_FORMAT, DateUtil.UTC);
+        DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
         StringBuilder query = new StringBuilder();
         query.append(DeletedStorageLocationEventRowMapper.BASE_QUERY);
         String pre = " WHERE";
@@ -260,6 +289,19 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
         if (endTime != null) {
             query.append(pre).append(" lastModified < '").append(df.format(endTime)).append("'");
         }
+        
+        if (StringUtil.hasText(includeClause)) {
+            log.debug("\nInjecting clause '" + includeClause + "'\n");
+
+            if (query.indexOf("WHERE") < 0) {
+                query.append(" WHERE ");
+            } else {
+                query.append(" AND ");
+            }
+
+            query.append("(").append(includeClause.trim()).append(")");
+        }
+        
         query.append(" ORDER BY lastModified");
         
         return query.toString();

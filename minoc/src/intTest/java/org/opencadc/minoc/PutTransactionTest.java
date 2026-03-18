@@ -295,16 +295,20 @@ public class PutTransactionTest extends MinocTest {
             
             log.info("put part 1 with txn");
             data = content1.getBytes();
+            String len = Integer.toString(data.length);
             md.reset();
             md.update(data);
             final URI expectedChecksum1 = URI.create("md5:" + HexUtil.toHex(md.digest()));
             final long expectedLength1 = data.length;
             InputStream in = new ByteArrayInputStream(data);
             HttpUpload put = new HttpUpload(in, artifactURL);
-            put.setRequestProperty("content-length", Integer.toString(data.length));
+            put.setRequestProperty("content-length", len);
+            // multipart requires total length??
+            put.setRequestProperty("x-total-length", Long.toString(expectedLength));
+            
             put.setRequestProperty(ArtifactAction.PUT_TXN_OP, ArtifactAction.PUT_TXN_OP_START);
             Subject.doAs(userSubject, new RunnableAction(put));
-            log.info("put 1: " + put.getResponseCode() + " " + put.getThrowable());
+            log.info("put 1: " + len + " bytes "+ put.getResponseCode() + " " + put.getThrowable());
             Assert.assertNull(put.getThrowable());
             Assert.assertEquals("Accepted", 202, put.getResponseCode());
             Assert.assertNotNull("digest", put.getResponseHeader(HttpTransfer.DIGEST));
@@ -354,12 +358,13 @@ public class PutTransactionTest extends MinocTest {
             
             log.info("put part 1 again");
             data = content1.getBytes();
+            len = Integer.toString(data.length);
             in = new ByteArrayInputStream(data);
             put = new HttpUpload(in, artifactURL);
-            put.setRequestProperty("content-length", Integer.toString(data.length));
+            put.setRequestProperty("content-length", len);
             put.setRequestProperty(ArtifactAction.PUT_TXN_ID, txnID);
             Subject.doAs(userSubject, new RunnableAction(put));
-            log.info("put 1 again: " + put.getResponseCode() + " " + put.getThrowable());
+            log.info("put 1 again: " + len + " bytes " + put.getResponseCode() + " " + put.getThrowable());
             Assert.assertNull(put.getThrowable());
             Assert.assertEquals("Accepted", 202, put.getResponseCode());
             Assert.assertNotNull("digest", put.getResponseHeader(HttpTransfer.DIGEST));
@@ -367,12 +372,13 @@ public class PutTransactionTest extends MinocTest {
             
             log.info("put part 2 with txn");
             data = content2.getBytes();
+            len = Integer.toString(data.length);
             in = new ByteArrayInputStream(data);
             put = new HttpUpload(in, artifactURL);
             put.setRequestProperty("content-length", Integer.toString(data.length));
             put.setRequestProperty(ArtifactAction.PUT_TXN_ID, txnID);
             Subject.doAs(userSubject, new RunnableAction(put));
-            log.info("put 2: " + put.getResponseCode() + " " + put.getThrowable());
+            log.info("put 2: " + len + " bytes " + put.getResponseCode() + " " + put.getThrowable());
             Assert.assertNull(put.getThrowable());
             Assert.assertEquals("Accepted", 202, put.getResponseCode());
             Assert.assertNotNull("digest", put.getResponseHeader(HttpTransfer.DIGEST));
@@ -425,6 +431,7 @@ public class PutTransactionTest extends MinocTest {
             put.setRequestProperty("content-length", Integer.toString(data.length));
             put.setRequestProperty(ArtifactAction.PUT_TXN_ID, txnID);
             Subject.doAs(userSubject, new RunnableAction(put));
+            log.info("put 2 again: " + len + " bytes " + put.getResponseCode() + " " + put.getThrowable());
             Assert.assertNull(put.getThrowable());
             Assert.assertEquals("Accepted", 202, put.getResponseCode());
             Assert.assertNotNull("digest", put.getResponseHeader(HttpTransfer.DIGEST));

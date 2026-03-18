@@ -171,7 +171,7 @@ public class InventoryValidator implements Runnable {
 
                     Artifact cur = this.artifactDAO.lock(artifact);
                     if (cur != null) {
-                        DeletedStorageLocationEvent deletedStorageLocationEvent = new DeletedStorageLocationEvent(cur.getID());
+                        DeletedStorageLocationEvent deletedStorageLocationEvent = new DeletedStorageLocationEvent(cur.getID(), cur.getURI());
                         deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
 
                         this.artifactDAO.delete(cur.getID());

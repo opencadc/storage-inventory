@@ -19,8 +19,8 @@ mainClassName = 'org.opencadc.ringhold.Main'
 
 dependencies {
     implementation 'org.opencadc:cadc-util:[1.6,2.0)'
-    implementation 'org.opencadc:cadc-inventory:[1.0,2.0)'
-    implementation 'org.opencadc:cadc-inventory-db:[1.0,2.0)'
+    implementation 'org.opencadc:cadc-inventory:[1.1,2.0)'
+    implementation 'org.opencadc:cadc-inventory-db:[1.1,2.0)'
 
     testImplementation 'junit:junit:[4.12,5.0)'
 }

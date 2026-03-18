@@ -128,7 +128,7 @@ public class StorageSiteSyncTest {
 
         Assert.assertTrue("Sites should be empty.", inventoryEnvironment.storageSiteDAO.list().isEmpty());
 
-        final StorageSiteSync sync = new StorageSiteSync(inventoryEnvironment.storageSiteDAO, TestUtil.LUSKAN_URI, 6, 6);
+        final StorageSiteSync sync = new StorageSiteSync(inventoryEnvironment.storageSiteDAO, TestUtil.LUSKAN_URI, "test", 6, 6);
         Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
             sync.doit();
             return null;
@@ -164,7 +164,7 @@ public class StorageSiteSyncTest {
                                               + "SET metaChecksum = '" + TestUtil.ZERO_BYTES_MD5 + "' WHERE resourceID = "
                                               + "'cadc:TESTSITE/one_1'") > 0);
 
-        final StorageSiteSync sync = new StorageSiteSync(inventoryEnvironment.storageSiteDAO, TestUtil.LUSKAN_URI, 6, 6);
+        final StorageSiteSync sync = new StorageSiteSync(inventoryEnvironment.storageSiteDAO, TestUtil.LUSKAN_URI, "test", 6, 6);
 
         try {
             // Should throw an error.
@@ -188,7 +188,7 @@ public class StorageSiteSyncTest {
     public void intTestSiteSyncMultiple() throws Exception {
         LOGGER.info("intTestSiteSyncMultiple");
         final StorageSiteSync sync =
-                new StorageSiteSync(inventoryEnvironment.storageSiteDAO, TestUtil.LUSKAN_URI, 6, 6);
+                new StorageSiteSync(inventoryEnvironment.storageSiteDAO, TestUtil.LUSKAN_URI, "test", 6, 6);
 
         final StorageSite storageSite = new StorageSite(URI.create("cadc:TESTSITE/one_1"),
                                                         StorageSiteSyncTest.class.getSimpleName(), true, false);
@@ -219,7 +219,7 @@ public class StorageSiteSyncTest {
         Assert.assertTrue("Sites should be empty.", inventoryEnvironment.storageSiteDAO.list().isEmpty());
 
         final StorageSiteSync sync =
-                new StorageSiteSync(inventoryEnvironment.storageSiteDAO, TestUtil.LUSKAN_URI, 6, 6);
+                new StorageSiteSync(inventoryEnvironment.storageSiteDAO, TestUtil.LUSKAN_URI, "test", 6, 6);
 
         try {
             // Should throw an error.

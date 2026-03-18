@@ -78,23 +78,26 @@ import org.junit.Assert;
 import org.junit.Test;
 
 
-public class IncludeArtifactsTest {
-    private static final Logger log = Logger.getLogger(IncludeArtifactsTest.class);
+public class FilterEventsTest {
+    private static final Logger log = Logger.getLogger(FilterEventsTest.class);
     
     static {
         Log4jInit.setLevel("org.opencadc.inventory.util", Level.DEBUG);
     }
 
+    private String filterFilename = "my-filter.sql";
+
     @Test
     public void iterator() throws Exception {
         final String currUserHome = System.getProperty("user.home");
+        
         try {
-            final Path tmpConfDirPath = Files.createTempDirectory(IncludeArtifactsTest.class.getName());
+            final Path tmpConfDirPath = Files.createTempDirectory(FilterEventsTest.class.getName());
             // Create the expected layout.
             final File includeDir = new File(tmpConfDirPath.toFile(), "config");
             includeDir.mkdirs();
 
-            final Path filterFilePath = new File(includeDir, "artifact-filter.sql").toPath();
+            final Path filterFilePath = new File(includeDir, filterFilename).toPath();
 
             System.setProperty("user.home", tmpConfDirPath.toFile().toString());
 
@@ -102,7 +105,7 @@ public class IncludeArtifactsTest {
                                      + "AND column between (45, 60) AND column_type = 'PROJECT'\nAND year = 2020";
             Files.write(filterFilePath, clauseOne.getBytes());
 
-            final IncludeArtifacts includeArtifacts = new IncludeArtifacts();
+            final FilterEvents includeArtifacts = new FilterEvents(filterFilePath.toFile());
 
             Assert.assertEquals("Wrong clause", "a = b AND c < 8 AND column between (45, 60) AND "
                                                 + "column_type = 'PROJECT' AND year = 2020",
@@ -125,18 +128,18 @@ public class IncludeArtifactsTest {
     public void iteratorMissingWhereException() throws Exception {
         final String currUserHome = System.getProperty("user.home");
         try {
-            final Path tmpConfDirPath = Files.createTempDirectory(IncludeArtifactsTest.class.getName());
+            final Path tmpConfDirPath = Files.createTempDirectory(FilterEventsTest.class.getName());
             // Create the expected layout.
             final File includeDir = new File(tmpConfDirPath.toFile(), "config");
             includeDir.mkdirs();
-            final Path filterFilePath = new File(includeDir, "artifact-filter.sql").toPath();
+            final Path filterFilePath = new File(includeDir, filterFilename).toPath();
 
             System.setProperty("user.home", tmpConfDirPath.toFile().toString());
 
             final String clause = "OR B < 9";
             final Path tmpFilePath = Files.write(filterFilePath, clause.getBytes());
 
-            final IncludeArtifacts includeArtifacts = new IncludeArtifacts();
+            final FilterEvents includeArtifacts = new FilterEvents(filterFilePath.toFile());
             try {
                 includeArtifacts.getConstraint();
                 Assert.fail("Should throw IllegalStateException for missing where.");
@@ -156,18 +159,18 @@ public class IncludeArtifactsTest {
     public void iteratorMoreThanOneWhereException() throws Exception {
         final String currUserHome = System.getProperty("user.home");
         try {
-            final Path tmpConfDirPath = Files.createTempDirectory(IncludeArtifactsTest.class.getName());
+            final Path tmpConfDirPath = Files.createTempDirectory(FilterEventsTest.class.getName());
             // Create the expected layout.
             final File includeDir = new File(tmpConfDirPath.toFile(), "config");
             includeDir.mkdirs();
-            final Path filterFilePath = new File(includeDir, "artifact-filter.sql").toPath();
+            final Path filterFilePath = new File(includeDir, filterFilename).toPath();
 
             System.setProperty("user.home", tmpConfDirPath.toFile().toString());
 
             final String clause = "WHERE B < 9 -- first where\nwhere z == 9 -- should fail here";
             Files.write(filterFilePath, clause.getBytes());
 
-            final IncludeArtifacts includeArtifacts = new IncludeArtifacts();
+            final FilterEvents includeArtifacts = new FilterEvents(filterFilePath.toFile());
             try {
                 includeArtifacts.getConstraint();
                 Assert.fail("Should throw IllegalStateException for too many wheres.");
@@ -183,37 +186,21 @@ public class IncludeArtifactsTest {
     
     @Test
     public void testMissingConfigFile() throws Exception {
-        final String oldSetting = System.getProperty("user.home");
         try {
-            final Path tempLocation = Files.createTempDirectory(IncludeArtifactsTest.class.getName());
-            System.setProperty("user.home", tempLocation.toString());
-            log.debug("Now looking for includes in " + System.getProperty("user.home") + "/config");
-            Files.createDirectories(new File(System.getProperty("user.home") + "/config").toPath());
-            
-            IncludeArtifacts o = new IncludeArtifacts();
+            FilterEvents o = new FilterEvents(new File("/tmp/not-found"));
             Assert.fail("expected IllegalStateException, got: " + o);
         } catch (IllegalStateException expected) {
             log.info("caught expected: " + expected);
-        } finally {
-            System.setProperty("user.home", oldSetting);
         }
     }
     
     @Test
     public void testMissingConfigDir() throws Exception {
-        final String oldSetting = System.getProperty("user.home");
         try {
-            final Path tempLocation = Files.createTempDirectory(IncludeArtifactsTest.class.getName());
-            System.setProperty("user.home", tempLocation.toString());
-            log.debug("Now looking for includes in non-existent " + System.getProperty("user.home") + "/config");
-            Files.createDirectories(new File(System.getProperty("user.home")).toPath());
-            
-            IncludeArtifacts o = new IncludeArtifacts();
+            FilterEvents o = new FilterEvents(new File("/tmp/not-found/config-file"));
             Assert.fail("expected IllegalStateException, got: " + o);
         } catch (IllegalStateException expected) {
             log.info("caught expected: " + expected);
-        } finally {
-            System.setProperty("user.home", oldSetting);
         }
     }
 }

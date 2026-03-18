@@ -82,29 +82,18 @@ import org.apache.log4j.Logger;
  *
  * @author pdowler
  */
-public class IncludeArtifacts implements ArtifactSelector {
-    private static final Logger log = Logger.getLogger(IncludeArtifacts.class);
+public class FilterEvents implements EventSelector {
+    private static final Logger log = Logger.getLogger(FilterEvents.class);
     static final String COMMENT_PREFIX = "--";
-    static final String SQL_FILTER_FILE_NAME = "artifact-filter.sql";
 
     private final File filterFile;
 
-    /**
-     * Constructor for default filter file. The default filter file is
-     * {user.home}/config/artifact-filter.sql and must be readable.
-     */
-    public IncludeArtifacts() {
-        String filePath = System.getProperty("user.home") + "/config/" + SQL_FILTER_FILE_NAME;
-        this.filterFile = new File(filePath);
-        checkFilterFile();
-    }
-    
     /**
      * Use specified file as source of filter conditions.
      * 
      * @param filterFile the partial sql file to use
      */
-    public IncludeArtifacts(File filterFile) {
+    public FilterEvents(File filterFile) {
         this.filterFile = filterFile;
         checkFilterFile();
     }

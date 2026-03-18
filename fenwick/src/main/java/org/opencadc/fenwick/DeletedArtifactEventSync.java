@@ -74,6 +74,7 @@ import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.util.StringUtil;
 import java.io.IOException;
 import java.net.URI;
 import java.security.MessageDigest;
@@ -87,6 +88,7 @@ import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.DeletedArtifactEventDAO;
 import org.opencadc.inventory.db.HarvestState;
 import org.opencadc.inventory.query.DeletedArtifactEventRowMapper;
+import org.opencadc.inventory.util.EventSelector;
 import org.opencadc.tap.TapClient;
 
 /**
@@ -100,13 +102,14 @@ public class DeletedArtifactEventSync extends AbstractSync {
     private final DeletedArtifactEventDAO deletedDAO;
     private final TapClient<DeletedArtifactEvent> tapClient;
     private final boolean isGlobal;
+    private final String includeClause;
     
     // package access for intTest code
     boolean enableSkipOldEvents = true;
 
-    public DeletedArtifactEventSync(ArtifactDAO artifactDAO, URI resourceID, boolean isGlobal,
-            int querySleepInterval, int maxRetryInterval) {
-        super(artifactDAO, resourceID, querySleepInterval, maxRetryInterval);
+    public DeletedArtifactEventSync(ArtifactDAO artifactDAO, URI resourceID, String instanceName,
+            EventSelector selector, boolean isGlobal, int querySleepInterval, int maxRetryInterval) {
+        super(artifactDAO, resourceID, instanceName, querySleepInterval, maxRetryInterval);
         this.isGlobal = isGlobal;
         this.deletedDAO = new DeletedArtifactEventDAO(artifactDAO);
         try {
@@ -116,6 +119,25 @@ public class DeletedArtifactEventSync extends AbstractSync {
         } catch (ResourceNotFoundException ex) {
             throw new IllegalArgumentException("invalid config: query service not found: " + resourceID);
         }
+        try {
+            this.includeClause = selector.getConstraint();
+        } catch (IOException | ResourceNotFoundException ex) {
+            throw new IllegalArgumentException("invalid config: failed to read event selector config: " + ex);
+        }
+    }
+
+    // unit test ctor
+    DeletedArtifactEventSync(String includeClause) {
+        super(true);
+        this.deletedDAO = null;
+        this.isGlobal = false;
+        this.tapClient = null;
+        this.includeClause = includeClause;
+    }
+
+    @Override
+    public String getHarvestStateName() {
+        return instanceName + "/" + DeletedArtifactEvent.class.getSimpleName();
     }
 
     @Override
@@ -128,18 +150,30 @@ public class DeletedArtifactEventSync extends AbstractSync {
             throw new RuntimeException("BUG: failed to get instance of MD5", e);
         }
         
-        HarvestState hs = harvestStateDAO.get(DeletedArtifactEvent.class.getSimpleName(), resourceID);
-        if (enableSkipOldEvents && hs.curLastModified == null) {
+        HarvestState harvestState = harvestStateDAO.get(getHarvestStateName(), resourceID);
+        // migrate backwards compat
+        if (harvestState.curLastModified == null) {
+            HarvestState bc = harvestStateDAO.get(DeletedArtifactEvent.class.getSimpleName(), resourceID);
+            if (bc.curLastModified != null) {
+                log.warn("migrate previous state: " + bc.getName() + " " + bc.getResourceID() + " " + bc.getID());
+                harvestState.curID = bc.curID;
+                harvestState.curLastModified = bc.curLastModified;
+                harvestStateDAO.put(harvestState);
+            }
+            harvestStateDAO.delete(bc.getID());
+        }
+        // end of migrate
+        log.debug("state: " + harvestState.getName() + " " + harvestState.getResourceID() + " " + harvestState.getID());
+        if (enableSkipOldEvents && harvestState.curLastModified == null) {
             // first harvest: ignore old deleted events?
-            HarvestState artifactHS = harvestStateDAO.get(Artifact.class.getSimpleName(), resourceID);
+            HarvestState artifactHS = harvestStateDAO.get(ArtifactSync.getHarvestStateName(instanceName), resourceID);
             if (artifactHS.curLastModified == null) {
-                // never harvested artifacts: ignore old deleted events
-                hs.curLastModified = new Date();
-                harvestStateDAO.put(hs);
-                hs = harvestStateDAO.get(hs.getID());
+                log.warn("never harvested artifacts: ignore old deleted events");
+                harvestState.curLastModified = new Date();
+                harvestStateDAO.put(harvestState);
+                harvestState = harvestStateDAO.get(harvestState.getID());
             }
         }
-        final HarvestState harvestState = hs;
         harvestStateDAO.setUpdateBufferCount(99); // buffer 99 updates, do every 100
         
         final TransactionManager transactionManager = artifactDAO.getTransactionManager();
@@ -245,7 +279,7 @@ public class DeletedArtifactEventSync extends AbstractSync {
     }
 
     String buildQuery(Date startTime, Date endTime) {
-        DateFormat df = DateUtil.getDateFormat(DateUtil.ISO_DATE_FORMAT, DateUtil.UTC);
+        DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
         StringBuilder query = new StringBuilder();
         query.append(DeletedArtifactEventRowMapper.BASE_QUERY);
         String pre = " WHERE";
@@ -256,6 +290,19 @@ public class DeletedArtifactEventSync extends AbstractSync {
         if (endTime != null) {
             query.append(pre).append(" lastModified < '").append(df.format(endTime)).append("'");
         }
+        
+        if (StringUtil.hasText(includeClause)) {
+            log.debug("\nInjecting clause '" + includeClause + "'\n");
+
+            if (query.indexOf("WHERE") < 0) {
+                query.append(" WHERE ");
+            } else {
+                query.append(" AND ");
+            }
+
+            query.append("(").append(includeClause.trim()).append(")");
+        }
+        
         query.append(" ORDER BY lastModified");
 
         return query.toString();

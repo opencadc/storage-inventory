@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2020.                            (c) 2020.
+*  (c) 2025.                            (c) 2025.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,27 +65,69 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.util;
+package org.opencadc.fenwick;
 
-import ca.nrc.cadc.net.ResourceNotFoundException;
-import java.io.IOException;
-
+import ca.nrc.cadc.date.DateUtil;
+import ca.nrc.cadc.util.Log4jInit;
+import java.text.DateFormat;
+import java.util.Date;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+import org.junit.Assert;
+import org.junit.Test;
+import org.opencadc.inventory.query.StorageLocationEventRowMapper;
 
 /**
- * A Selector to provide the InventoryHarvester with a means to gather include (additive) clauses to select appropriate
- * Artifacts to be included in the metadata sync merge.
  *
  * @author pdowler
  */
-public interface ArtifactSelector {
-    /**
-     * Obtain a condition used to build a query to include the Artifacts being merged that can be added to the WHERE
-     * clause of artifact sync queries.
-     *
-     * @return SQL constraint for use in the WHERE clause; possibly null
-     * @throws ResourceNotFoundException    For any missing required configuration that is missing.
-     * @throws IOException      For unreadable configuration files.
-     * @throws IllegalStateException    For any invalid configuration.
-     */
-    String getConstraint() throws ResourceNotFoundException, IOException, IllegalStateException;
+public class StorageLocationEventSyncTest {
+    private static final Logger log = Logger.getLogger(StorageLocationEventSyncTest.class);
+
+    static {
+        Log4jInit.setLevel("org.opencadc.fenwick", Level.INFO);
+    }
+
+    public StorageLocationEventSyncTest() { 
+    }
+
+    @Test
+    public void testBuildQuery() throws Exception {
+        String expected = StorageLocationEventRowMapper.BASE_QUERY + " ORDER BY lastModified";
+        
+        StorageLocationEventSync sync = new StorageLocationEventSync(null);
+        String adql = sync.buildQuery(null, null);
+
+        Assert.assertEquals(expected, adql);
+    }
+    
+    @Test
+    public void testBuildQueryIncremental() throws Exception {
+        Date now = new Date();
+        DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+        String expected = StorageLocationEventRowMapper.BASE_QUERY 
+                + " WHERE lastModified >= '" + df.format(now) + "'"
+                + " ORDER BY lastModified";
+        
+        StorageLocationEventSync sync = new StorageLocationEventSync(null);
+        String adql = sync.buildQuery(now, null);
+        
+        Assert.assertEquals(expected, adql);
+    }
+    
+    @Test
+    public void testBuildQueryIncrementalPattern() throws Exception {
+        String whereClause = "uri LIKE 'cadc:special/%'";
+        Date now = new Date();
+        DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
+        String expected = StorageLocationEventRowMapper.BASE_QUERY 
+                + " WHERE lastModified >= '" + df.format(now) + "'"
+                + " AND (" + whereClause + ")" // brackets
+                + " ORDER BY lastModified";
+        
+        StorageLocationEventSync sync = new StorageLocationEventSync(whereClause);
+        String adql = sync.buildQuery(now, null);
+        
+        Assert.assertEquals(expected, adql);
+    }
 }

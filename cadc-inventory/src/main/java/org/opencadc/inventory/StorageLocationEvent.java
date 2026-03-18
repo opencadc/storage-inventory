@@ -67,6 +67,7 @@
 
 package org.opencadc.inventory;
 
+import java.net.URI;
 import java.util.UUID;
 import org.apache.log4j.Logger;
 
@@ -76,15 +77,20 @@ import org.apache.log4j.Logger;
  * @author pdowler
  */
 public class StorageLocationEvent extends Entity {
-    private static final Logger log = Logger.getLogger(StorageLocationEvent.class);
 
-    public StorageLocationEvent(UUID id) {
+    public final URI uri;
+
+    public StorageLocationEvent(UUID id, URI uri) {
         super(id);
         InventoryUtil.assertNotNull(StorageLocationEvent.class, "id", id);
+        this.uri = uri; // currently allowed to be null for backwards compat
     }
     
     @Override
     public String toString() {
-        return StorageLocationEvent.class.getSimpleName() + "[" + getID() + "]";
+        StringBuilder sb = new StringBuilder();
+        sb.append(StorageLocationEvent.class.getSimpleName());
+        sb.append("[").append(getID()).append(",").append(uri).append("]");
+        return  sb.toString();
     }
 }

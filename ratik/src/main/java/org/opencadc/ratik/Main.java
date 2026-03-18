@@ -69,10 +69,12 @@ package org.opencadc.ratik;
 
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.util.BucketSelector;
+import ca.nrc.cadc.util.ConfigFileReader;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 
+import java.io.File;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -84,7 +86,9 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.SQLGenerator;
-import org.opencadc.inventory.util.ArtifactSelector;
+import org.opencadc.inventory.util.AllEvents;
+import org.opencadc.inventory.util.EventSelector;
+import org.opencadc.inventory.util.FilterEvents;
 
 /**
  * Main entry point for ratik.
@@ -122,14 +126,6 @@ public class Main {
         URI_BUCKETS_CONFIG_KEY
     };
     
-    private static final Map<String, String> selectorMap;
-
-    static {
-        selectorMap = new HashMap<>();
-        selectorMap.put("all", "org.opencadc.inventory.util.AllArtifacts");
-        selectorMap.put("filter", "org.opencadc.inventory.util.IncludeArtifacts");
-    }
-
     public static void main(final String[] args) {
         Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
         Log4jInit.setLevel("org.opencadc", Level.WARN);
@@ -175,10 +171,14 @@ public class Main {
             final String configuredUriBuckets = props.getFirstPropertyValue(URI_BUCKETS_CONFIG_KEY);
             final BucketSelector bucketSelector = new BucketSelector(configuredUriBuckets);
 
-            final String configuredArtifactSelector = props.getFirstPropertyValue(ARTIFACT_SELECTOR_CONFIG_KEY);
-            final String selectorClass = selectorMap.get(configuredArtifactSelector);
-            log.info("selector: " + configuredArtifactSelector + " -> " + selectorClass);
-            final ArtifactSelector artifactSelector = InventoryUtil.loadPlugin(selectorClass);
+            EventSelector artifactSelector = null;
+            String asel = props.getFirstPropertyValue(ARTIFACT_SELECTOR_CONFIG_KEY);
+            if ("all".equals(asel)) {
+                artifactSelector = new AllEvents();
+            } else if ("filter".equals(asel)) {
+                File f = ConfigFileReader.findConfigFile("artifact-filter.sql");
+                artifactSelector = new FilterEvents(f);
+            } // else: null and fail later
 
             final String configuredTrackSiteLocations = props.getFirstPropertyValue(TRACK_SITE_LOCATIONS_CONFIG_KEY);
             final boolean trackSiteLocations = Boolean.parseBoolean(configuredTrackSiteLocations);

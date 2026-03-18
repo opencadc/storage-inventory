@@ -68,13 +68,14 @@
 package org.opencadc.fenwick;
 
 import ca.nrc.cadc.db.ConnectionConfig;
+import ca.nrc.cadc.util.ConfigFileReader;
 import ca.nrc.cadc.util.Log4jInit;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
 import ca.nrc.cadc.util.StringUtil;
+import java.io.File;
 import java.net.URI;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -82,7 +83,9 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.db.SQLGenerator;
-import org.opencadc.inventory.util.ArtifactSelector;
+import org.opencadc.inventory.util.AllEvents;
+import org.opencadc.inventory.util.EventSelector;
+import org.opencadc.inventory.util.FilterEvents;
 
 /**
  * Main entry point for fenwick.
@@ -104,6 +107,8 @@ public class Main {
     private static final String QUERY_SERVICE_CONFIG_KEY = CONFIG_PREFIX + ".queryService";
     private static final String TRACK_SITE_LOCATIONS_CONFIG_KEY = CONFIG_PREFIX + ".trackSiteLocations";
     private static final String ARTIFACT_SELECTOR_CONFIG_KEY = CONFIG_PREFIX + ".artifactSelector";
+    private static final String EVENT_SELECTOR_CONFIG_KEY = CONFIG_PREFIX + ".eventSelector";
+    private static final String INSTANCE_NAME_CONFIG_KEY = CONFIG_PREFIX + ".instanceName";
     private static final String MAX_RETRY_INTERVAL_CONFIG_KEY = CONFIG_PREFIX + ".maxRetryInterval";
 
 
@@ -120,14 +125,6 @@ public class Main {
         TRACK_SITE_LOCATIONS_CONFIG_KEY,
         MAX_RETRY_INTERVAL_CONFIG_KEY
     };
-
-    private static final Map<String, String> selectorMap;
-
-    static {
-        selectorMap = new HashMap<>();
-        selectorMap.put("all", "org.opencadc.inventory.util.AllArtifacts");
-        selectorMap.put("filter", "org.opencadc.inventory.util.IncludeArtifacts");
-    }
 
     public static void main(final String[] args) {
         Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
@@ -173,10 +170,26 @@ public class Main {
             final String configuredQueryService = props.getFirstPropertyValue(QUERY_SERVICE_CONFIG_KEY);
             final URI resourceID = URI.create(configuredQueryService);
 
-            final String configuredArtifactSelector = props.getFirstPropertyValue(ARTIFACT_SELECTOR_CONFIG_KEY);
-            final String selectorClass = selectorMap.get(configuredArtifactSelector);
-            final ArtifactSelector selector = InventoryUtil.loadPlugin(selectorClass);
-
+            String instanceName = props.getFirstPropertyValue(INSTANCE_NAME_CONFIG_KEY);
+            
+            EventSelector artifactSelector = null;
+            String asel = props.getFirstPropertyValue(ARTIFACT_SELECTOR_CONFIG_KEY);
+            if ("all".equals(asel)) {
+                artifactSelector = new AllEvents();
+            } else if ("filter".equals(asel)) {
+                File f = ConfigFileReader.findConfigFile("artifact-filter.sql");
+                artifactSelector = new FilterEvents(f);
+            }
+            
+            EventSelector eventSelector = null;
+            String esel = props.getFirstPropertyValue(EVENT_SELECTOR_CONFIG_KEY);
+            if ("all".equals(esel)) {
+                eventSelector = new AllEvents();
+            } else if ("filter".equals(esel)) {
+                File f = ConfigFileReader.findConfigFile("event-filter.sql");
+                eventSelector = new FilterEvents(f);
+            } // else: null and fail later
+            
             final String configuredTrackSiteLocations = props.getFirstPropertyValue(TRACK_SITE_LOCATIONS_CONFIG_KEY);
             final boolean trackSiteLocations = Boolean.parseBoolean(configuredTrackSiteLocations);
 
@@ -185,7 +198,7 @@ public class Main {
 
 
             final InventoryHarvester doit = new InventoryHarvester(daoConfig, cc, 
-                    resourceID, selector, trackSiteLocations, maxRetryInterval);
+                    resourceID, instanceName, artifactSelector, eventSelector, trackSiteLocations, maxRetryInterval);
             doit.run();
         } catch (Throwable unexpected) {
             log.fatal("Unexpected failure", unexpected);

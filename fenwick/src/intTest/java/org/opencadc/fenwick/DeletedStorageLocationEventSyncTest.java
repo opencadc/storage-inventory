@@ -87,6 +87,7 @@ import org.opencadc.inventory.DeletedStorageLocationEvent;
 import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.HarvestState;
+import org.opencadc.inventory.util.AllEvents;
 
 public class DeletedStorageLocationEventSyncTest {
 
@@ -122,7 +123,7 @@ public class DeletedStorageLocationEventSyncTest {
 
                     StorageSite site1 = new StorageSite(URI.create("cadc:TEST/siteone"), "Test Site", true, false);
                     final DeletedStorageLocationEventSync sync = new DeletedStorageLocationEventSync(
-                        inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, 6, 6, site1);
+                        inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, "test", new AllEvents(), 6, 6, site1);
                     
                     Calendar now = Calendar.getInstance();
                     now.add(Calendar.DAY_OF_MONTH, -1);
@@ -133,8 +134,8 @@ public class DeletedStorageLocationEventSyncTest {
                     Assert.assertNotNull(emptyIterator);
                     Assert.assertFalse(emptyIterator.hasNext());
 
-                    DeletedStorageLocationEvent expected1 = new DeletedStorageLocationEvent(UUID.randomUUID());
-                    DeletedStorageLocationEvent expected2 = new DeletedStorageLocationEvent(UUID.randomUUID());
+                    DeletedStorageLocationEvent expected1 = new DeletedStorageLocationEvent(UUID.randomUUID(), URI.create("cadc:TEST/alpha"));
+                    DeletedStorageLocationEvent expected2 = new DeletedStorageLocationEvent(UUID.randomUUID(), URI.create("cadc:TEST/beta"));
 
                     luskanEnvironment.deletedStorageLocationEventDAO.put(expected1);
                     luskanEnvironment.deletedStorageLocationEventDAO.put(expected2);
@@ -195,15 +196,15 @@ public class DeletedStorageLocationEventSyncTest {
             Thread.sleep(10L);
             
             // insert 2 dsle in luskan
-            DeletedStorageLocationEvent dsle1 = new DeletedStorageLocationEvent(a1.getID());
+            DeletedStorageLocationEvent dsle1 = new DeletedStorageLocationEvent(a1.getID(), a1.getURI());
             luskanEnvironment.deletedStorageLocationEventDAO.put(dsle1);
-            DeletedStorageLocationEvent dsle2 = new DeletedStorageLocationEvent(a2.getID());
+            DeletedStorageLocationEvent dsle2 = new DeletedStorageLocationEvent(a2.getID(), a2.getURI());
             luskanEnvironment.deletedStorageLocationEventDAO.put(dsle2);
             Thread.sleep(10L);
             
             // doit
             DeletedStorageLocationEventSync sync = new DeletedStorageLocationEventSync(
-                    inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, 6, 6, site1);
+                    inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, "test", new AllEvents(), 6, 6, site1);
             sync.enableSkipOldEvents = false;
             Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
                 sync.doit();
@@ -230,7 +231,7 @@ public class DeletedStorageLocationEventSyncTest {
             DeletedStorageLocationEvent actual = inventoryEnvironment.deletedStorageLocationEventDAO.get(dsle2.getID());
             Assert.assertNull(actual);
             
-            HarvestState hs = inventoryEnvironment.harvestStateDAO.get(DeletedStorageLocationEvent.class.getSimpleName(), TestUtil.LUSKAN_URI);
+            HarvestState hs = inventoryEnvironment.harvestStateDAO.get(sync.getHarvestStateName(), TestUtil.LUSKAN_URI);
             Assert.assertNotNull(hs);
             Assert.assertEquals(dsle2.getLastModified(), hs.curLastModified);
             
@@ -240,7 +241,7 @@ public class DeletedStorageLocationEventSyncTest {
                 return null;
             });
             
-            hs = inventoryEnvironment.harvestStateDAO.get(DeletedStorageLocationEvent.class.getSimpleName(), TestUtil.LUSKAN_URI);
+            hs = inventoryEnvironment.harvestStateDAO.get(sync.getHarvestStateName(), TestUtil.LUSKAN_URI);
             Assert.assertNotNull(hs);
             Assert.assertEquals(dsle2.getLastModified(), hs.curLastModified);
         } catch (Exception ex) {

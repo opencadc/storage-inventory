@@ -138,7 +138,7 @@ public class DeleteAction extends ArtifactAction {
                 throw new ResourceNotFoundException("not found: " + artifactURI);
             }
             
-            DeletedArtifactEvent deletedArtifact = new DeletedArtifactEvent(existing.getID());
+            DeletedArtifactEvent deletedArtifact = new DeletedArtifactEvent(existing.getID(), existing.getURI());
             eventDAO.put(deletedArtifact);
             artifactDAO.delete(existing.getID());
             ObsoleteStorageLocation dsl = null;

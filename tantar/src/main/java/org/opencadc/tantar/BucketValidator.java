@@ -414,7 +414,7 @@ public class BucketValidator implements ValidateActions {
                 Artifact curArtifact = artifactDAO.lock(artifact);
                 if (curArtifact != null) {
                     final DeletedStorageLocationEventDAO deletedEventDAO = new DeletedStorageLocationEventDAO(artifactDAO);
-                    deletedEventDAO.put(new DeletedStorageLocationEvent(artifact.getID()));
+                    deletedEventDAO.put(new DeletedStorageLocationEvent(artifact.getID(), artifact.getURI()));
                     artifactDAO.setStorageLocation(curArtifact, null);
                     
                     transactionManager.commitTransaction();
@@ -475,7 +475,7 @@ public class BucketValidator implements ValidateActions {
                 Artifact cur = artifactDAO.lock(artifact);
                 if (cur != null) {
                     final DeletedArtifactEventDAO deletedEventDAO = new DeletedArtifactEventDAO(artifactDAO);
-                    deletedEventDAO.put(new DeletedArtifactEvent(artifact.getID()));
+                    deletedEventDAO.put(new DeletedArtifactEvent(artifact.getID(), artifact.getURI()));
                     artifactDAO.delete(artifact.getID());
                     
                     transactionManager.commitTransaction();
@@ -567,7 +567,7 @@ public class BucketValidator implements ValidateActions {
                 Artifact cur = artifactDAO.lock(artifact);
                 if (cur != null) {
                     DeletedArtifactEventDAO deletedEventDAO = new DeletedArtifactEventDAO(artifactDAO);
-                    deletedEventDAO.put(new DeletedArtifactEvent(artifact.getID()));
+                    deletedEventDAO.put(new DeletedArtifactEvent(artifact.getID(), artifact.getURI()));
                     artifactDAO.delete(artifact.getID());
                 }
 
@@ -612,7 +612,7 @@ public class BucketValidator implements ValidateActions {
                     artifactDAO.setStorageLocation(cur, smeta.getStorageLocation());
                     
                     StorageLocationEventDAO sleDAO = new StorageLocationEventDAO(artifactDAO);
-                    StorageLocationEvent sle = new StorageLocationEvent(cur.getID());
+                    StorageLocationEvent sle = new StorageLocationEvent(cur.getID(), cur.getURI());
                     sleDAO.put(sle);
                     
                     if (smeta.deleteRecoverable) {

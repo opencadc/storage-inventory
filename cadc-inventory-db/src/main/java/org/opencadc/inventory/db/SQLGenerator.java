@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2024.                            (c) 2024.
+*  (c) 2026.                            (c) 2026.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -197,6 +197,7 @@ public class SQLGenerator {
         this.columnMap.put(StorageSite.class, cols);
         
         cols = new String[] {
+            "uri",
             "lastModified",
             "metaChecksum",
             "id" // last column is always PK
@@ -205,6 +206,11 @@ public class SQLGenerator {
         this.columnMap.put(DeletedStorageLocationEvent.class, cols);
         this.columnMap.put(StorageLocationEvent.class, cols);
         
+        cols = new String[] {
+            "lastModified",
+            "metaChecksum",
+            "id" // last column is always PK
+        };
         this.columnMap.put(Entity.class, cols); // skeleton
         
         cols = new String[] {
@@ -486,36 +492,84 @@ public class SQLGenerator {
         }
     }
     
-    private class DeletedArtifactEventGet extends SkeletonGet {
-        DeletedArtifactEventGet() {
-            super(DeletedArtifactEvent.class);
+    private class DeletedArtifactEventGet implements EntityGet<DeletedArtifactEvent> {
+        private UUID id;
+        
+        @Override
+        public void setID(UUID id) {
+            this.id = id;
         }
 
         @Override
-        public Entity execute(JdbcTemplate jdbc) {
-            return (Entity) jdbc.query(this, new DeletedArtifactEventExtractor());
+        public DeletedArtifactEvent execute(JdbcTemplate jdbc) {
+            return (DeletedArtifactEvent) jdbc.query(this, new DeletedArtifactEventExtractor());
+        }
+        
+        @Override
+        public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
+            StringBuilder sb = getSelectFromSQL(DeletedArtifactEvent.class, false);
+            sb.append(" WHERE ");
+            String col = getKeyColumn(DeletedArtifactEvent.class, true);
+            sb.append(col).append(" = ?");
+            String sql = sb.toString();
+            log.debug("DeletedArtifactEventGet: " + sql);
+            PreparedStatement prep = conn.prepareStatement(sql);
+            prep.setObject(1, id);
+            return prep;
         }
     }
     
-    private class DeletedStorageLocationEventGet extends SkeletonGet {
-        DeletedStorageLocationEventGet() {
-            super(DeletedStorageLocationEvent.class);
+    private class DeletedStorageLocationEventGet implements EntityGet<DeletedStorageLocationEvent> {
+        private UUID id;
+        
+        @Override
+        public void setID(UUID id) {
+            this.id = id;
         }
 
         @Override
-        public Entity execute(JdbcTemplate jdbc) {
-            return (Entity) jdbc.query(this, new DeletedStorageLocationEventExtractor());
+        public DeletedStorageLocationEvent execute(JdbcTemplate jdbc) {
+            return (DeletedStorageLocationEvent) jdbc.query(this, new DeletedStorageLocationEventExtractor());
+        }
+        
+        @Override
+        public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
+            StringBuilder sb = getSelectFromSQL(DeletedStorageLocationEvent.class, false);
+            sb.append(" WHERE ");
+            String col = getKeyColumn(DeletedStorageLocationEvent.class, true);
+            sb.append(col).append(" = ?");
+            String sql = sb.toString();
+            log.debug("DeletedStorageLocationEvent: " + sql);
+            PreparedStatement prep = conn.prepareStatement(sql);
+            prep.setObject(1, id);
+            return prep;
         }
     }
     
-    private class StorageLocationEventGet extends SkeletonGet {
-        StorageLocationEventGet() {
-            super(StorageLocationEvent.class);
+    private class StorageLocationEventGet implements EntityGet<StorageLocationEvent> {
+        private UUID id;
+        
+        @Override
+        public void setID(UUID id) {
+            this.id = id;
         }
 
         @Override
-        public Entity execute(JdbcTemplate jdbc) {
-            return (Entity) jdbc.query(this, new StorageLocationEventExtractor());
+        public StorageLocationEvent execute(JdbcTemplate jdbc) {
+            return (StorageLocationEvent) jdbc.query(this, new StorageLocationEventExtractor());
+        }
+        
+        @Override
+        public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
+            StringBuilder sb = getSelectFromSQL(StorageLocationEvent.class, false);
+            sb.append(" WHERE ");
+            String col = getKeyColumn(StorageLocationEvent.class, true);
+            sb.append(col).append(" = ?");
+            String sql = sb.toString();
+            log.debug("StorageLocationEvent: " + sql);
+            PreparedStatement prep = conn.prepareStatement(sql);
+            prep.setObject(1, id);
+            return prep;
         }
     }
     
@@ -1616,6 +1670,19 @@ public class SQLGenerator {
             log.debug("DeletedEventPut: " + sql);
             PreparedStatement prep = conn.prepareStatement(sql);
             int col = 1;
+            // HACK:
+            if (value instanceof DeletedArtifactEvent) {
+                DeletedArtifactEvent ev = (DeletedArtifactEvent) value;
+                safeSetString(prep, col++, ev.uri);
+            } else if (value instanceof DeletedStorageLocationEvent) {
+                DeletedStorageLocationEvent ev = (DeletedStorageLocationEvent) value;
+                safeSetString(prep, col++, ev.uri);
+            } else if (value instanceof StorageLocationEvent) {
+                StorageLocationEvent ev = (StorageLocationEvent) value;
+                safeSetString(prep, col++, ev.uri);
+            } else {
+                throw new RuntimeException("BUG: EntityEventPut called with " + value.getClass().getName());
+            }
             prep.setTimestamp(col++, new Timestamp(value.getLastModified().getTime()), utc);
             prep.setString(col++, value.getMetaChecksum().toASCIIString());
             prep.setObject(col++, value.getID());
@@ -2170,11 +2237,12 @@ public class SQLGenerator {
                 return null;
             }
             int col = 1;
+            final URI uri = Util.getURI(rs, col++);
             final Date lastModified = Util.getDate(rs, col++, utc);
             final URI metaChecksum = Util.getURI(rs, col++);
             final UUID id = Util.getUUID(rs, col++);
             
-            DeletedArtifactEvent ret = new DeletedArtifactEvent(id);
+            DeletedArtifactEvent ret = new DeletedArtifactEvent(id, uri);
             InventoryUtil.assignLastModified(ret, lastModified);
             InventoryUtil.assignMetaChecksum(ret, metaChecksum);
             return ret;
@@ -2191,12 +2259,12 @@ public class SQLGenerator {
                 return null;
             }
             int col = 1;
-            
+            final URI uri = Util.getURI(rs, col++);
             final Date lastModified = Util.getDate(rs, col++, utc);
             final URI metaChecksum = Util.getURI(rs, col++);
             final UUID id = Util.getUUID(rs, col++);
             
-            DeletedStorageLocationEvent ret = new DeletedStorageLocationEvent(id);
+            DeletedStorageLocationEvent ret = new DeletedStorageLocationEvent(id, uri);
             InventoryUtil.assignLastModified(ret, lastModified);
             InventoryUtil.assignMetaChecksum(ret, metaChecksum);
             return ret;
@@ -2213,12 +2281,12 @@ public class SQLGenerator {
                 return null;
             }
             int col = 1;
-            
+            final URI uri = Util.getURI(rs, col++);
             final Date lastModified = Util.getDate(rs, col++, utc);
             final URI metaChecksum = Util.getURI(rs, col++);
             final UUID id = Util.getUUID(rs, col++);
             
-            StorageLocationEvent ret = new StorageLocationEvent(id);
+            StorageLocationEvent ret = new StorageLocationEvent(id, uri);
             InventoryUtil.assignLastModified(ret, lastModified);
             InventoryUtil.assignMetaChecksum(ret, metaChecksum);
             return ret;

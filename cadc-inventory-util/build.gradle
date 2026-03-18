@@ -15,13 +15,13 @@ sourceCompatibility = 11
 
 group = 'org.opencadc'
 
-version = '0.1.12'
+version = '1.1.0'
 
 description = 'OpenCADC Storage Inventory client utility library'
 def git_url = 'https://github.com/opencadc/storage-inventory'
 
 dependencies {
-    implementation 'org.opencadc:cadc-inventory:[0.9.4,1.0)'
+    api 'org.opencadc:cadc-inventory:[1.1.0,)'
     implementation 'org.opencadc:cadc-util:[1.6,2.0)'
     implementation 'org.opencadc:cadc-tap:[1.0.1,1.2)'
     

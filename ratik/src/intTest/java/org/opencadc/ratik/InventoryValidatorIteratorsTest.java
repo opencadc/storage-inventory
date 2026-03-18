@@ -89,7 +89,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.inventory.util.IncludeArtifacts;
+import org.opencadc.inventory.util.FilterEvents;
 
 public class InventoryValidatorIteratorsTest {
     private static final Logger log = Logger.getLogger(InventoryValidatorIteratorsTest.class);
@@ -106,7 +106,8 @@ public class InventoryValidatorIteratorsTest {
 
     private final InventoryEnvironment localEnvironment = new InventoryEnvironment();
     private final LuskanEnvironment remoteEnvironment = new LuskanEnvironment();
-
+    private File filterFile;
+    
     public InventoryValidatorIteratorsTest() throws Exception {}
 
     @BeforeClass
@@ -121,12 +122,12 @@ public class InventoryValidatorIteratorsTest {
 
     @Before
     public void beforeTest() throws Exception {
-        writeConfig();
+        this.filterFile = writeConfig();
         this.localEnvironment.cleanTestEnvironment();
         this.remoteEnvironment.cleanTestEnvironment();
     }
 
-    private void writeConfig() throws IOException {
+    private File writeConfig() throws IOException {
         // write artifact filter
         final Path includePath = new File(TMP_DIR + "/config").toPath();
         Files.createDirectories(includePath);
@@ -136,6 +137,7 @@ public class InventoryValidatorIteratorsTest {
         fileWriter.write("WHERE uri LIKE 'cadc:INTTEST/%'");
         fileWriter.flush();
         fileWriter.close();
+        return includeFile;
     }
 
     @Test
@@ -447,7 +449,7 @@ public class InventoryValidatorIteratorsTest {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
                                                                     this.localEnvironment.daoConfig,
-                                                                    TestUtil.LUSKAN_URI, new IncludeArtifacts(),
+                                                                    TestUtil.LUSKAN_URI, new FilterEvents(filterFile),
                                                                     bucketSelector, false) {
                 @Override
                 void validate(Artifact local, Artifact remoteArtifact) {

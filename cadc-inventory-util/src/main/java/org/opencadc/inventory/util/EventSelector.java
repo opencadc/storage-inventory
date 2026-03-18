@@ -3,7 +3,7 @@
 *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 *
-*  (c) 2022.                            (c) 2022.
+*  (c) 2025.                            (c) 2025.
 *  Government of Canada                 Gouvernement du Canada
 *  National Research Council            Conseil national de recherches
 *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -65,41 +65,26 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.query;
+package org.opencadc.inventory.util;
 
-import java.net.URI;
-import java.util.Date;
-import java.util.List;
-import java.util.UUID;
-import org.apache.log4j.Logger;
-import org.opencadc.inventory.InventoryUtil;
-import org.opencadc.inventory.StorageLocationEvent;
-import org.opencadc.tap.TapRowMapper;
+import ca.nrc.cadc.net.ResourceNotFoundException;
+import java.io.IOException;
 
 /**
- *
+ * A Selector to provide the metadata-sync and metadata-validate with a means to 
+ * include (additive) clauses to select appropriate events.
+ * 
  * @author pdowler
  */
-public class StorageLocationEventRowMapper implements TapRowMapper<StorageLocationEvent> {
-    private static final Logger log = Logger.getLogger(StorageLocationEventRowMapper.class);
-
-    public static final String BASE_QUERY = "SELECT uri, id, lastModified, metaChecksum "
-        + "FROM inventory.StorageLocationEvent";
-    
-    public StorageLocationEventRowMapper() { 
-    }
-
-    @Override
-    public StorageLocationEvent mapRow(List<Object> row) {
-        int index = 0;
-        URI uri = (URI) row.get(index++);
-        UUID id = (UUID) row.get(index++);
-        Date lastModified = (Date) row.get(index++);
-        URI metaChecksum = (URI) row.get(index++);
-        
-        StorageLocationEvent ret = new StorageLocationEvent(id, uri);
-        InventoryUtil.assignLastModified(ret, (Date) lastModified);
-        InventoryUtil.assignMetaChecksum(ret, (URI) metaChecksum);
-        return ret;
-    }
+public interface EventSelector {
+    /**
+     * Obtain a condition used to build a query to include the Artifacts being merged that can be added to the WHERE
+     * clause of artifact sync queries.
+     *
+     * @return SQL constraint for use in the WHERE clause; possibly null
+     * @throws ResourceNotFoundException    For any missing required configuration that is missing.
+     * @throws IOException      For unreadable configuration files.
+     * @throws IllegalStateException    For any invalid configuration.
+     */
+    String getConstraint() throws ResourceNotFoundException, IOException, IllegalStateException;
 }

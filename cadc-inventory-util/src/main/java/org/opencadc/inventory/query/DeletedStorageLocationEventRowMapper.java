@@ -79,17 +79,20 @@ import org.opencadc.tap.TapRowMapper;
 
 public class DeletedStorageLocationEventRowMapper implements TapRowMapper<DeletedStorageLocationEvent> {
 
-    public static final String BASE_QUERY = "SELECT id, lastModified, metaChecksum "
+    public static final String BASE_QUERY = "SELECT uri, id, lastModified, metaChecksum "
         + "FROM inventory.DeletedStorageLocationEvent";
 
     @Override
     public DeletedStorageLocationEvent mapRow(List<Object> row) {
         int index = 0;
-        final UUID id = (UUID) row.get(index++);
+        URI uri = (URI) row.get(index++);
+        UUID id = (UUID) row.get(index++);
+        Date lastModified = (Date) row.get(index++);
+        URI metaChecksum = (URI) row.get(index++);
 
-        final DeletedStorageLocationEvent deletedStorageLocationEvent = new DeletedStorageLocationEvent(id);
-        InventoryUtil.assignLastModified(deletedStorageLocationEvent, (Date) row.get(index++));
-        InventoryUtil.assignMetaChecksum(deletedStorageLocationEvent, (URI) row.get(index));
+        DeletedStorageLocationEvent deletedStorageLocationEvent = new DeletedStorageLocationEvent(id, uri);
+        InventoryUtil.assignLastModified(deletedStorageLocationEvent, lastModified);
+        InventoryUtil.assignMetaChecksum(deletedStorageLocationEvent, metaChecksum);
         return deletedStorageLocationEvent;
     }
 

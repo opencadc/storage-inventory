@@ -87,7 +87,8 @@ import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.StorageSiteDAO;
 import org.opencadc.inventory.db.version.InitDatabaseSI;
-import org.opencadc.inventory.util.ArtifactSelector;
+import org.opencadc.inventory.util.EventSelector;
+import org.opencadc.inventory.util.EventSelector;
 
 /**
  * @author pdowler
@@ -106,7 +107,9 @@ public class InventoryHarvester implements Runnable {
     private final ArtifactDAO dsleArtifactDAO;
     
     private final URI resourceID;
-    private final ArtifactSelector selector;
+    private final String instanceName;
+    private final EventSelector artifactSelector;
+    private final EventSelector eventSelector;
     private final boolean trackSiteLocations;
     private final int maxRetryInterval;
     
@@ -114,20 +117,27 @@ public class InventoryHarvester implements Runnable {
      * Constructor.
      *
      * @param daoConfig          config map to pass to cadc-inventory-db DAO classes
-     * @param connectionConfig                 database connection info for creating DataSource(s)
+     * @param connectionConfig   database connection info for creating DataSource(s)
      * @param resourceID         identifier for the remote query service
-     * @param selector           selector implementation
+     * @param artifactSelector   artifact selector implementation
+     * @param eventSelector      event selector implementation
      * @param trackSiteLocations Whether to track the remote storage site and add it to the Artifact being processed.
      * @param maxRetryInterval   max interval in seconds to sleep after an error during processing.
      */
     public InventoryHarvester(Map<String, Object> daoConfig, ConnectionConfig connectionConfig,
-            URI resourceID, ArtifactSelector selector, boolean trackSiteLocations, int maxRetryInterval) {
+            URI resourceID, String instanceName, 
+            EventSelector artifactSelector, EventSelector eventSelector,
+            boolean trackSiteLocations, int maxRetryInterval) {
         InventoryUtil.assertNotNull(InventoryHarvester.class, "daoConfig", daoConfig);
         InventoryUtil.assertNotNull(InventoryHarvester.class, "connectionConfig", connectionConfig);
         InventoryUtil.assertNotNull(InventoryHarvester.class, "resourceID", resourceID);
-        InventoryUtil.assertNotNull(InventoryHarvester.class, "selector", selector);
+        InventoryUtil.assertNotNull(InventoryHarvester.class, "instanceName", instanceName);
+        InventoryUtil.assertNotNull(InventoryHarvester.class, "artifactSelector", artifactSelector);
+        InventoryUtil.assertNotNull(InventoryHarvester.class, "eventSelector", eventSelector);
         this.resourceID = resourceID;
-        this.selector = selector;
+        this.instanceName = instanceName;
+        this.artifactSelector = artifactSelector;
+        this.eventSelector = eventSelector;
         this.trackSiteLocations = trackSiteLocations;
         this.maxRetryInterval = maxRetryInterval;
         
@@ -200,7 +210,8 @@ public class InventoryHarvester implements Runnable {
             
             StorageSite storageSite = null;
             if (trackSiteLocations) {
-                StorageSiteSync siteSync = new StorageSiteSync(storageSiteDAO, resourceID, 4 * SYNC_SLEEP, maxRetryInterval);
+                StorageSiteSync siteSync = new StorageSiteSync(storageSiteDAO, resourceID, instanceName, 
+                        4 * SYNC_SLEEP, maxRetryInterval);
                 tasks.add(siteSync);
                 threads.add(createThread("site-thread", siteSync));
                 while (storageSite == null) {
@@ -209,23 +220,27 @@ public class InventoryHarvester implements Runnable {
                     storageSite = siteSync.getCurrentStorageSite();
                 }
             
-                AbstractSync r0 = new DeletedStorageLocationEventSync(dsleArtifactDAO, resourceID, SYNC_SLEEP, maxRetryInterval, storageSite);
+                AbstractSync r0 = new DeletedStorageLocationEventSync(dsleArtifactDAO, resourceID, instanceName, eventSelector,
+                        SYNC_SLEEP, maxRetryInterval, storageSite);
                 tasks.add(r0);
                 threads.add(createThread("dsle-thread", r0));
                 
-                AbstractSync r3 = new StorageLocationEventSync(sleArtifactDAO, resourceID, SYNC_SLEEP, maxRetryInterval, storageSite);
+                AbstractSync r3 = new StorageLocationEventSync(sleArtifactDAO, resourceID, instanceName, eventSelector,
+                        SYNC_SLEEP, maxRetryInterval, storageSite);
                 tasks.add(r3);
                 threads.add(createThread("sle-thread", r3));
             }
             
-            AbstractSync r1 = new DeletedArtifactEventSync(daeArtifactDAO, resourceID, trackSiteLocations, SYNC_SLEEP, maxRetryInterval);
+            AbstractSync r1 = new DeletedArtifactEventSync(daeArtifactDAO, resourceID, instanceName, eventSelector,
+                    trackSiteLocations, SYNC_SLEEP, maxRetryInterval);
             tasks.add(r1);
             threads.add(createThread("dae-thread", r1));
 
             // sleep a bit to allow deleted event threads to init state on first run before harvesting artifacts
             Thread.sleep(6000L);
             
-            AbstractSync r2 = new ArtifactSync(artifactDAO, resourceID, SYNC_SLEEP, maxRetryInterval, selector, storageSite);
+            AbstractSync r2 = new ArtifactSync(artifactDAO, resourceID, instanceName,
+                    SYNC_SLEEP, maxRetryInterval, artifactSelector, storageSite);
             tasks.add(r2);
             threads.add(createThread("artifact-thread", r2));
 

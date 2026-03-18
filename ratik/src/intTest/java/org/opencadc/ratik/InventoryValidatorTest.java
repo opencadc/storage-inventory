@@ -107,7 +107,7 @@ import org.opencadc.inventory.SiteLocation;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.StorageSite;
 import org.opencadc.inventory.query.ArtifactRowMapper;
-import org.opencadc.inventory.util.IncludeArtifacts;
+import org.opencadc.inventory.util.FilterEvents;
 
 public class InventoryValidatorTest {
     private static final Logger log = Logger.getLogger(InventoryValidatorTest.class);
@@ -158,7 +158,8 @@ public class InventoryValidatorTest {
 
     private final InventoryEnvironment localEnvironment = new InventoryEnvironment();
     private final LuskanEnvironment remoteEnvironment = new LuskanEnvironment();
-
+    private File filterFile;
+    
     public InventoryValidatorTest() throws Exception {
 
     }
@@ -175,13 +176,13 @@ public class InventoryValidatorTest {
 
     @Before
     public void beforeTest() throws Exception {
-        writeConfig();
+        this.filterFile = writeConfig();
         this.localEnvironment.cleanTestEnvironment();
         this.remoteEnvironment.cleanTestEnvironment();
         this.remoteEnvironment.initStorageSite(REMOTE_STORAGE_SITE);
     }
 
-    private void writeConfig() throws IOException {
+    private File writeConfig() throws IOException {
         final Path includePath = Paths.get(TMP_DIR + "/config");
         Files.createDirectories(includePath);
         final File includeFile = new File(includePath.toFile(), "artifact-filter.sql");
@@ -190,6 +191,7 @@ public class InventoryValidatorTest {
         fileWriter.write("WHERE uri LIKE 'cadc:INTTEST/%'");
         fileWriter.flush();
         fileWriter.close();
+        return includeFile;
     }
 
     @Test
@@ -213,7 +215,7 @@ public class InventoryValidatorTest {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
                                                                     this.localEnvironment.daoConfig,
-                                                                    TestUtil.LUSKAN_URI, new IncludeArtifacts(),
+                                                                    TestUtil.LUSKAN_URI, new FilterEvents(filterFile),
                                                                     null, true);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
@@ -232,7 +234,7 @@ public class InventoryValidatorTest {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
                                                                     this.localEnvironment.daoConfig,
-                                                                    TestUtil.LUSKAN_URI, new IncludeArtifacts(),
+                                                                    TestUtil.LUSKAN_URI, new FilterEvents(filterFile),
                                                                     null, true);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
@@ -308,7 +310,7 @@ public class InventoryValidatorTest {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
                                                                     this.localEnvironment.daoConfig,
-                                                                    TestUtil.LUSKAN_URI, new IncludeArtifacts(),
+                                                                    TestUtil.LUSKAN_URI, new FilterEvents(filterFile),
                                                                     null, trackSiteLocations);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = enableSubBucketQuery;
@@ -353,7 +355,7 @@ public class InventoryValidatorTest {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig,
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
-                                                                    new IncludeArtifacts(),null,
+                                                                    new FilterEvents(filterFile),null,
                                                                     false) {
                 // Override the remote query to not return the remote Artifact.
                 @Override
@@ -397,7 +399,7 @@ public class InventoryValidatorTest {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig,
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
-                                                                    new IncludeArtifacts(),null,
+                                                                    new FilterEvents(filterFile),null,
                                                                     false) {
                 // Override the remote query to not return the remote Artifact.
                 @Override
@@ -437,7 +439,7 @@ public class InventoryValidatorTest {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig,
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
-                                                                    new IncludeArtifacts(),null,
+                                                                    new FilterEvents(filterFile),null,
                                                                     false) {
                 // Override the remote query to not return the remote Artifact.
                 @Override
@@ -470,7 +472,7 @@ public class InventoryValidatorTest {
             System.setProperty("user.home", TMP_DIR);
             final InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig,
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
-                                                                    new IncludeArtifacts(),null,
+                                                                    new FilterEvents(filterFile),null,
                                                                     false) {
                 // Override the remote query to not return the remote Artifact.
                 @Override
@@ -521,7 +523,7 @@ public class InventoryValidatorTest {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig,
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
-                                                                    new IncludeArtifacts(),null,
+                                                                    new FilterEvents(filterFile),null,
                                                                     true) {
                 // Override the remote query to not return the remote Artifact.
                 @Override
@@ -579,14 +581,14 @@ public class InventoryValidatorTest {
         }
         this.localEnvironment.artifactDAO.put(artifact);
 
-        DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(artifact.getID());
+        DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(artifact.getID(), artifact.getURI());
         this.remoteEnvironment.deletedArtifactEventDAO.put(deletedArtifactEvent);
 
         try {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
-                                                                    new IncludeArtifacts(),null,
+                                                                    new FilterEvents(filterFile),null,
                                                                     trackSiteLocations);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
@@ -636,14 +638,14 @@ public class InventoryValidatorTest {
         artifact.siteLocations.add(new SiteLocation(randomSiteID));
         this.localEnvironment.artifactDAO.put(artifact);
 
-        DeletedStorageLocationEvent deletedStorageLocationEvent = new DeletedStorageLocationEvent(artifact.getID());
+        DeletedStorageLocationEvent deletedStorageLocationEvent = new DeletedStorageLocationEvent(artifact.getID(), artifact.getURI());
         this.remoteEnvironment.deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
 
         try {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
-                                                                    new IncludeArtifacts(),null,
+                                                                    new FilterEvents(filterFile),null,
                                                                     true);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
@@ -682,14 +684,14 @@ public class InventoryValidatorTest {
         artifact.siteLocations.add(new SiteLocation(remoteSiteID));
         this.localEnvironment.artifactDAO.put(artifact);
 
-        deletedStorageLocationEvent = new DeletedStorageLocationEvent(artifact.getID());
+        deletedStorageLocationEvent = new DeletedStorageLocationEvent(artifact.getID(), artifact.getURI());
         this.remoteEnvironment.deletedStorageLocationEventDAO.put(deletedStorageLocationEvent);
 
         try {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
-                                                                    new IncludeArtifacts(),null,
+                                                                    new FilterEvents(filterFile),null,
                                                                     true);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
@@ -741,7 +743,7 @@ public class InventoryValidatorTest {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
-                                                                    new IncludeArtifacts(),null,
+                                                                    new FilterEvents(filterFile),null,
                                                                     true);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
@@ -783,7 +785,7 @@ public class InventoryValidatorTest {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
-                                                                    new IncludeArtifacts(),null,
+                                                                    new FilterEvents(filterFile),null,
                                                                     true);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
@@ -821,7 +823,7 @@ public class InventoryValidatorTest {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
-                                                                    new IncludeArtifacts(),null,
+                                                                    new FilterEvents(filterFile),null,
                                                                     false);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
@@ -891,14 +893,14 @@ public class InventoryValidatorTest {
             localEnvironment.storageSiteDAO.put(ss);
         }
 
-        DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(artifact.getID());
+        DeletedArtifactEvent deletedArtifactEvent = new DeletedArtifactEvent(artifact.getID(), artifact.getURI());
         this.localEnvironment.deletedArtifactEventDAO.put(deletedArtifactEvent);
 
         try {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
-                                                                    new IncludeArtifacts(),null,
+                                                                    new FilterEvents(filterFile),null,
                                                                     trackSiteLocations);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
@@ -934,14 +936,14 @@ public class InventoryValidatorTest {
                                          new Date(), 1024L);
         remoteEnvironment.artifactDAO.put(artifact);
 
-        DeletedStorageLocationEvent localDeletedStorageLocationEvent = new DeletedStorageLocationEvent(artifact.getID());
+        DeletedStorageLocationEvent localDeletedStorageLocationEvent = new DeletedStorageLocationEvent(artifact.getID(), artifact.getURI());
         localEnvironment.deletedStorageLocationEventDAO.put(localDeletedStorageLocationEvent);
 
         try {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(localEnvironment.inventoryConnectionConfig, 
                                                                     localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
-                                                                    new IncludeArtifacts(),null,
+                                                                    new FilterEvents(filterFile),null,
                                                                     false);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
@@ -980,7 +982,7 @@ public class InventoryValidatorTest {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
-                                                                    new IncludeArtifacts(),null,
+                                                                    new FilterEvents(filterFile),null,
                                                                     false);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
@@ -1035,7 +1037,7 @@ public class InventoryValidatorTest {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
-                                                                    new IncludeArtifacts(),null,
+                                                                    new FilterEvents(filterFile),null,
                                                                     true);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
@@ -1102,7 +1104,7 @@ public class InventoryValidatorTest {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
-                                                                    new IncludeArtifacts(),null,
+                                                                    new FilterEvents(filterFile),null,
                                                                     true);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
@@ -1206,7 +1208,7 @@ public class InventoryValidatorTest {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
-                                                                    new IncludeArtifacts(),null,
+                                                                    new FilterEvents(filterFile),null,
                                                                     trackSiteLocations);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
@@ -1256,7 +1258,7 @@ public class InventoryValidatorTest {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
-                                                                    new IncludeArtifacts(),null,
+                                                                    new FilterEvents(filterFile),null,
                                                                     trackSiteLocations);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
@@ -1337,7 +1339,7 @@ public class InventoryValidatorTest {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
-                                                                    new IncludeArtifacts(),null,
+                                                                    new FilterEvents(filterFile),null,
                                                                     trackSiteLocations);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
@@ -1401,7 +1403,7 @@ public class InventoryValidatorTest {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
-                                                                    new IncludeArtifacts(),null,
+                                                                    new FilterEvents(filterFile),null,
                                                                     trackSiteLocations);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;
@@ -1444,7 +1446,7 @@ public class InventoryValidatorTest {
             System.setProperty("user.home", TMP_DIR);
             InventoryValidator testSubject = new InventoryValidator(this.localEnvironment.inventoryConnectionConfig, 
                                                                     this.localEnvironment.daoConfig, TestUtil.LUSKAN_URI,
-                                                                    new IncludeArtifacts(),null,
+                                                                    new FilterEvents(filterFile),null,
                                                                     true);
             testSubject.raceConditionDelta = 0L;
             testSubject.enableSubBucketQuery = false;

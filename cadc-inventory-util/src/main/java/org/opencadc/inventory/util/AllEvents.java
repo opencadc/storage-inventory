@@ -73,9 +73,9 @@ package org.opencadc.inventory.util;
  *
  * @author pdowler
  */
-public class AllArtifacts implements ArtifactSelector {
+public class AllEvents implements EventSelector {
 
-    public AllArtifacts() {
+    public AllEvents() {
     }
 
     /**

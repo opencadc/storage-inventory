@@ -14,7 +14,7 @@ Development starts with the UML diagrams and the current version may be ahead of
 VO-DML documentation. 
 
 <img alt="Storage System UML - development version" style="border-width:0" 
-src="src/main/resources/storage-inventory-0.6.png" />
+src="src/main/resources/storage-inventory-0.7.png" />
 
 # Artifact.uri
 This URI is a globally unique logical identifier that is typically known to and may be defined by some other system 
