@@ -295,6 +295,7 @@ public abstract class ArtifactAction extends RestAction {
     protected String getServerImpl() {
         // no null version checking because fail to build correctly can't get past basic testing
         Version v = getVersionFromResource();
-        return "storage-inventory/raven-" + v.getMajorMinor();
+        //return "storage-inventory/raven-" + v.getMajorMinor();
+        return "storage-inventory/raven-1.0"; // HACK because cadcinfo...
     }
 }
