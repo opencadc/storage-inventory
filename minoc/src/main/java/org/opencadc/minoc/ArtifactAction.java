@@ -159,8 +159,8 @@ public abstract class ArtifactAction extends RestAction {
     protected String getServerImpl() {
         // no null version checking because fail to build correctly can't get past basic testing
         Version v = getVersionFromResource();
-        String ret = "storage-inventory/minoc-" + v.getMajorMinor();
-        return ret;
+        //return "storage-inventory/minoc-" + v.getMajorMinor();
+        return "storage-inventory/minoc-1.0"; // HACK because cadcdata cares about this
     }
 
     /**

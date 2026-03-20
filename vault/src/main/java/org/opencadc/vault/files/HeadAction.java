@@ -125,7 +125,8 @@ public class HeadAction extends RestAction {
     protected String getServerImpl() {
         // no null version checking because fail to build correctly can't get past basic testing
         Version v = getVersionFromResource();
-        return "storage-inventory/vault-" + v.getMajorMinor();
+        //return "storage-inventory/vault-" + v.getMajorMinor();
+        return "storage-inventory/vault-1.0"; // HACK because vostools cares about this
     }
     
     @Override
