@@ -26,11 +26,11 @@ dependencies {
     implementation 'org.opencadc:cadc-vosi:[1.3.6,2.0)'
     implementation 'org.opencadc:cadc-vos:[2.0,)'
 
-    runtimeOnly 'org.opencadc:cadc-storage-adapter-fs:[0.7,)'
-    runtimeOnly 'org.opencadc:cadc-storage-adapter-swift:[0.6,)'
+    runtimeOnly 'org.opencadc:cadc-storage-adapter-fs:[1.0.1,)'
+    runtimeOnly 'org.opencadc:cadc-storage-adapter-swift:[1.0.1,)'
     
     testImplementation 'junit:junit:[4.12,5.0)'
-    intTestImplementation 'org.opencadc:cadc-storage-adapter-fs:[0.7,)'
+    intTestImplementation 'org.opencadc:cadc-storage-adapter-fs:[1.0.1,)'
     
     // work around because 1.8.0-beta4 prints exceptions in log, eg:
     // java.lang.NoSuchFieldException: mdc

@@ -51,10 +51,9 @@ How does delete file get propagated?
 
 ## lastModified updates
 How does global learn about copies at sites other than the original?
-- WAS: when a site file-sync completes (adds a local StorageLocation): update the Artifact.lastModified
-- NOW: when a site file-sync completes (adds a local StorageLocation): create a
-StorageLocationEvent with the Artifact.id
-- when global metadata-sync from site(s) see this and tracks: add a SiteLocation
+- when a site file-sync completes (adds a local StorageLocation): create a StorageLocationEvent 
+with the Artifact.id
+- when global metadata-sync from site(s) see this: add a SiteLocation
 - when global metadata-sync *first* sees an Artifact: update Artifact.lastModified to
 make sure the events in global are inserted at head of sequence
 - metadata-sync never modifies Entity metdata: id, metaChecksum never change during sync
@@ -97,6 +96,10 @@ minor differences if validating global L.
     evidence: DeletedStorageLocationEvent in R 
     action: remove siteID from Artifact.siteLocations (see below)
 
+    explanationX: rename in L, pending/missed Artifact event in R
+    evidence: Artifact in R if query-by-id
+    action: none
+
     explanation3: L==global, new Artifact in L, pending/missed Artifact or sync in R
     evidence: ?
     action: remove siteID from Artifact.siteLocations (see note below)
@@ -136,6 +139,10 @@ minor differences if validating global L.
     evidence: DeletedStorageLocationEvent in L
     action: insert Artifact, remove DeletedStorageLocationEvent 
 
+    explanationX: rename in R, pending/missed Artifact event in L
+    evidence: Artifact in L if query-by-id
+    action: update Artifact
+    
     explanation3: L==storage, new Artifact in R, pending/missed new Artifact event in L
     evidence: ?
     action: insert Artifact
