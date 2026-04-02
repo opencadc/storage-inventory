@@ -110,6 +110,8 @@ public class Main {
     private static final String EVENT_SELECTOR_CONFIG_KEY = CONFIG_PREFIX + ".eventSelector";
     private static final String INSTANCE_NAME_CONFIG_KEY = CONFIG_PREFIX + ".instanceName";
     private static final String MAX_RETRY_INTERVAL_CONFIG_KEY = CONFIG_PREFIX + ".maxRetryInterval";
+    
+    private static final String EXPERIMENTAL_BUCKET_CONFIG_KEY = CONFIG_PREFIX + ".experimentalBucketMode";
 
 
     // Used to verify configuration items.  See the README for descriptions.
@@ -196,9 +198,15 @@ public class Main {
             final String configuredMaxRetryInterval = props.getFirstPropertyValue(MAX_RETRY_INTERVAL_CONFIG_KEY);
             final int maxRetryInterval = Integer.parseInt(configuredMaxRetryInterval);
 
+            boolean experimentalBucketMode = false;
+            String ebm = props.getFirstPropertyValue(EXPERIMENTAL_BUCKET_CONFIG_KEY);
+            if ("true".equals(ebm)) {
+                experimentalBucketMode = true;
+            }
 
             final InventoryHarvester doit = new InventoryHarvester(daoConfig, cc, 
                     resourceID, instanceName, artifactSelector, eventSelector, trackSiteLocations, maxRetryInterval);
+            doit.experimentalBucketMode = experimentalBucketMode;
             doit.run();
         } catch (Throwable unexpected) {
             log.fatal("Unexpected failure", unexpected);
