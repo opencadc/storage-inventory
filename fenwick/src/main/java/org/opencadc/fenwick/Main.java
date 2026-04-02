@@ -165,14 +165,14 @@ public class Main {
             final ConnectionConfig cc = new ConnectionConfig(null, null, username, password,
                                                              "org.postgresql.Driver", dbUrl);
 
-            final String configuredSQLGenerator = props.getFirstPropertyValue(SQLGENERATOR_CONFIG_KEY);
+            String configuredSQLGenerator = props.getFirstPropertyValue(SQLGENERATOR_CONFIG_KEY);
             daoConfig.put(SQLGENERATOR_CONFIG_KEY, Class.forName(configuredSQLGenerator));
             // End DAO Configuration
 
-            final String configuredQueryService = props.getFirstPropertyValue(QUERY_SERVICE_CONFIG_KEY);
+            String configuredQueryService = props.getFirstPropertyValue(QUERY_SERVICE_CONFIG_KEY);
             final URI resourceID = URI.create(configuredQueryService);
 
-            String instanceName = props.getFirstPropertyValue(INSTANCE_NAME_CONFIG_KEY);
+            final String instanceName = props.getFirstPropertyValue(INSTANCE_NAME_CONFIG_KEY);
             
             EventSelector artifactSelector = null;
             String asel = props.getFirstPropertyValue(ARTIFACT_SELECTOR_CONFIG_KEY);
@@ -192,10 +192,10 @@ public class Main {
                 eventSelector = new FilterEvents(f);
             } // else: null and fail later
             
-            final String configuredTrackSiteLocations = props.getFirstPropertyValue(TRACK_SITE_LOCATIONS_CONFIG_KEY);
+            String configuredTrackSiteLocations = props.getFirstPropertyValue(TRACK_SITE_LOCATIONS_CONFIG_KEY);
             final boolean trackSiteLocations = Boolean.parseBoolean(configuredTrackSiteLocations);
 
-            final String configuredMaxRetryInterval = props.getFirstPropertyValue(MAX_RETRY_INTERVAL_CONFIG_KEY);
+            String configuredMaxRetryInterval = props.getFirstPropertyValue(MAX_RETRY_INTERVAL_CONFIG_KEY);
             final int maxRetryInterval = Integer.parseInt(configuredMaxRetryInterval);
 
             boolean experimentalBucketMode = false;
