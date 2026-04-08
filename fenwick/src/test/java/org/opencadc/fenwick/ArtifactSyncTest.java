@@ -78,9 +78,12 @@ import org.junit.Test;
 
 
 public class ArtifactSyncTest {
+    static {
+        Log4jInit.setLevel("org.opencadc.fenwick", Level.INFO);
+    }
 
     @Test
-    public void testBuildQueryNoLastModifiedDate() throws Exception {
+    public void testBuildQueryNoConditions() throws Exception {
         final ArtifactSync artifactSync = new ArtifactSync(null);
         final String resultOne = artifactSync.buildQuery(null, null);
 
@@ -90,10 +93,6 @@ public class ArtifactSyncTest {
                             + "ORDER BY lastModified", resultOne);
     }
     
-    static {
-        Log4jInit.setLevel("org.opencadc.fenwick", Level.INFO);
-    }
-
     @Test
     public void testBuildQueryWithLastModifiedDate() throws Exception {
         final Calendar calendar = Calendar.getInstance(DateUtil.UTC);
@@ -111,31 +110,54 @@ public class ArtifactSyncTest {
     }
 
     @Test
-    public void testBuildQueryWithLastModifiedDateAndInclude() throws Exception {
+    public void testBuildQueryWithBucketPrefix() throws Exception {
         final Calendar calendar = Calendar.getInstance(DateUtil.UTC);
         calendar.set(1977, Calendar.NOVEMBER, 25, 3, 12, 0);
         calendar.set(Calendar.MILLISECOND, 0);
 
-        final ArtifactSync artifactSync = new ArtifactSync("uri LIKE 'ad:CFHT%'");
-        final String resultOne = artifactSync.buildQuery(calendar.getTime(), null);
+        final ArtifactSync artifactSync = new ArtifactSync(null);
+        final String resultOne = artifactSync.buildQuery(null, null, "abc");
 
         Assert.assertEquals("Wrong query.",
-                            "SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, "
-                            + "contentEncoding, lastModified, metaChecksum FROM inventory.Artifact "
-                            + "WHERE lastModified >= '1977-11-25 03:12:00.000' "
-                            + "AND (uri LIKE 'ad:CFHT%') "
-                            + "ORDER BY lastModified", resultOne);
+                            "SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType,"
+                            + " contentEncoding, lastModified, metaChecksum FROM inventory.Artifact"
+                            + " WHERE uriBucket LIKE 'abc%'"
+                            + " ORDER BY lastModified", resultOne);
     }
 
     @Test
-    public void testBuildQueryWithNoLastModifiedAndInclude() throws Exception {
-        final ArtifactSync artifactSync = new ArtifactSync("uri LIKE 'ad:CFHT%' OR uri LIKE 'ad:MEGA%'");
+    public void testBuildQueryWithInclude() throws Exception {
+        final ArtifactSync artifactSync = new ArtifactSync("uri LIKE 'cadc:CFHT%' OR uri LIKE 'cadc:MEGA%'");
         final String resultOne = artifactSync.buildQuery(null, null);
 
         Assert.assertEquals("Wrong query.",
                             "SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType, "
                             + "contentEncoding, lastModified, metaChecksum FROM inventory.Artifact "
-                            + "WHERE (uri LIKE 'ad:CFHT%' OR uri LIKE 'ad:MEGA%') "
+                            + "WHERE (uri LIKE 'cadc:CFHT%' OR uri LIKE 'cadc:MEGA%') "
                             + "ORDER BY lastModified", resultOne);
     }
+
+    @Test
+    public void testBuildQueryWithAll() throws Exception {
+        final Calendar calendar = Calendar.getInstance(DateUtil.UTC);
+        calendar.set(1977, Calendar.NOVEMBER, 25, 3, 12, 0);
+        calendar.set(Calendar.MILLISECOND, 0);
+        Date start = calendar.getTime();
+        calendar.add(Calendar.HOUR, 1);
+        Date end = calendar.getTime();
+
+        final ArtifactSync artifactSync = new ArtifactSync("uri LIKE 'cadc:CFHT/%'");
+        final String resultOne = artifactSync.buildQuery(start, end, "abc");
+
+        Assert.assertEquals("Wrong query.",
+                            "SELECT id, uri, contentChecksum, contentLastModified, contentLength, contentType,"
+                            + " contentEncoding, lastModified, metaChecksum FROM inventory.Artifact"
+                            + " WHERE lastModified >= '1977-11-25 03:12:00.000'"
+                            + " AND lastModified < '1977-11-25 04:12:00.000'"
+                            + " AND uriBucket LIKE 'abc%'"
+                            + " AND (uri LIKE 'cadc:CFHT/%')"
+                            + " ORDER BY lastModified", resultOne);
+    }
+
+    
 }

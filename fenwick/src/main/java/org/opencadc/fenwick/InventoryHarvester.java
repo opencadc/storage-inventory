@@ -113,6 +113,8 @@ public class InventoryHarvester implements Runnable {
     private final boolean trackSiteLocations;
     private final int maxRetryInterval;
     
+    public boolean experimentalBucketMode = false;
+    
     /**
      * Constructor.
      *
@@ -239,8 +241,9 @@ public class InventoryHarvester implements Runnable {
             // sleep a bit to allow deleted event threads to init state on first run before harvesting artifacts
             Thread.sleep(6000L);
             
-            AbstractSync r2 = new ArtifactSync(artifactDAO, resourceID, instanceName,
+            ArtifactSync r2 = new ArtifactSync(artifactDAO, resourceID, instanceName,
                     SYNC_SLEEP, maxRetryInterval, artifactSelector, storageSite);
+            r2.experimentalBucketMode = experimentalBucketMode;
             tasks.add(r2);
             threads.add(createThread("artifact-thread", r2));
 

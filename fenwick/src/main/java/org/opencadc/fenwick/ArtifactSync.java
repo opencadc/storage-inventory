@@ -73,6 +73,7 @@ import ca.nrc.cadc.db.TransactionManager;
 import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
+import ca.nrc.cadc.util.BucketSelector;
 import ca.nrc.cadc.util.StringUtil;
 import java.io.IOException;
 import java.net.URI;
@@ -104,6 +105,7 @@ public class ArtifactSync extends AbstractSync {
     private final StorageSite storageSite;
     private final TapClient<Artifact> tapClient;
     private final String includeClause;
+    public boolean experimentalBucketMode = false;
 
     public ArtifactSync(ArtifactDAO artifactDAO, URI resourceID, String instanceName,
             int querySleepInterval, int maxRetryInterval, 
@@ -142,8 +144,30 @@ public class ArtifactSync extends AbstractSync {
         return instanceName + "/" + Artifact.class.getSimpleName();
     }
 
+    
     @Override
     void doit() throws ResourceNotFoundException, IOException, IllegalStateException, TransientException, InterruptedException {
+        if (experimentalBucketMode) {
+            for (char c1 : InventoryUtil.BUCKET_CHARS.toCharArray()) {
+                for (char c2 : InventoryUtil.BUCKET_CHARS.toCharArray()) {
+                    StringBuilder sb = new StringBuilder();
+                    sb.append(c1).append(c2);
+                    String bpre = sb.toString();
+                    log.info("START bucket " + bpre);
+                    doBucket(bpre);
+                    log.info("DONE bucket " + bpre);
+                }
+            }
+            throw new RuntimeException("experimentalBucketMode completed"
+                    + " -- you should stop fenwick and manually fix the HarvestState before restarting in incremenetal mode");
+        } else {
+            doBucket(null);
+        }
+    }
+    
+    private void doBucket(String bucketPrefix) 
+            throws ResourceNotFoundException, IOException, IllegalStateException, TransientException, InterruptedException {
+        
         final MessageDigest messageDigest;
         try {
             messageDigest = MessageDigest.getInstance("MD5");
@@ -153,8 +177,12 @@ public class ArtifactSync extends AbstractSync {
 
         final SiteLocation remoteSiteLocation = (storageSite == null ? null : new SiteLocation(storageSite.getID()));
         
-        HarvestState harvestState = harvestStateDAO.get(getHarvestStateName(), resourceID);
-        // migrate backwards compat
+        String name = getHarvestStateName();
+        if (bucketPrefix != null) {
+            name = name + ":" + bucketPrefix;
+        }
+        HarvestState harvestState = harvestStateDAO.get(name, resourceID);
+        // migrate backwards compat (1.0.x)
         if (harvestState.curLastModified == null) {
             HarvestState bc = harvestStateDAO.get(Artifact.class.getSimpleName(), resourceID);
             if (bc.curLastModified != null) {
@@ -191,7 +219,7 @@ public class ArtifactSync extends AbstractSync {
         
         boolean first = true;
         long t1 = System.currentTimeMillis();
-        try (final ResourceIterator<Artifact> artifactResourceIterator = getEventStream(startTime, now)) {
+        try (final ResourceIterator<Artifact> artifactResourceIterator = getEventStream(startTime, now, bucketPrefix)) {
             while (artifactResourceIterator.hasNext()) {
                 final Artifact artifact = artifactResourceIterator.next();
                 if (first) {
@@ -342,44 +370,43 @@ public class ArtifactSync extends AbstractSync {
         return true;
     }
 
-    ResourceIterator<Artifact> getEventStream(Date start, Date end)
+    
+    ResourceIterator<Artifact> getEventStream(Date start, Date end, String bucketPrefix)
             throws ResourceNotFoundException, IOException, IllegalStateException, TransientException,
                    InterruptedException {
-        final String query = buildQuery(start, end);
+        final String query = buildQuery(start, end, bucketPrefix);
         log.debug("adql:" + query);
         return tapClient.query(query, new ArtifactRowMapper());
     }
 
-    /**
-     * Assemble the WHERE clause and return the full query.  Very useful for testing separately.
-     * @return  String query.  Never null.
-     */
+    // simpler unit tests
     String buildQuery(Date startTime, Date endTime) {
+        return buildQuery(startTime, endTime, null);
+    }
+
+    String buildQuery(Date startTime, Date endTime, String bucketPrefix) {
         final StringBuilder query = new StringBuilder();
         query.append(ArtifactRowMapper.BASE_QUERY);
 
         DateFormat df = DateUtil.getDateFormat(DateUtil.ISO_DATE_FORMAT, DateUtil.UTC);
+        String aug = " WHERE ";
+        String and = " AND ";
         if (startTime != null) {
-            log.debug("\nInjecting lastModified date compare '" + startTime + "'\n");
-            query.append(" WHERE lastModified >= '").append(df.format(startTime)).append("'");
-
-            if (endTime != null) {
-                query.append(" AND ").append("lastModified < '").append(df.format(endTime)).append("'");
-            }
-        } else if (endTime != null) {
-            query.append(" WHERE ").append("lastModified < '").append(df.format(endTime)).append("'");
+            query.append(aug).append("lastModified >= '").append(df.format(startTime)).append("'");
+            aug = and;
         }
-        
+        if (endTime != null) {
+            query.append(aug).append("lastModified < '").append(df.format(endTime)).append("'");
+            aug = and;
+        }
+        if (bucketPrefix != null) {
+            query.append(aug).append("uriBucket LIKE '").append(bucketPrefix).append("%'");
+            aug = and;
+        }
         if (StringUtil.hasText(includeClause)) {
-            log.debug("\nInjecting clause '" + includeClause + "'\n");
-
-            if (query.indexOf("WHERE") < 0) {
-                query.append(" WHERE ");
-            } else {
-                query.append(" AND ");
-            }
-
+            query.append(aug);
             query.append("(").append(includeClause.trim()).append(")");
+            aug = and;
         }
 
         query.append(" ORDER BY lastModified");

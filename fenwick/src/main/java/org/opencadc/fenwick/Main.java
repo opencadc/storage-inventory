@@ -110,6 +110,8 @@ public class Main {
     private static final String EVENT_SELECTOR_CONFIG_KEY = CONFIG_PREFIX + ".eventSelector";
     private static final String INSTANCE_NAME_CONFIG_KEY = CONFIG_PREFIX + ".instanceName";
     private static final String MAX_RETRY_INTERVAL_CONFIG_KEY = CONFIG_PREFIX + ".maxRetryInterval";
+    
+    private static final String EXPERIMENTAL_BUCKET_CONFIG_KEY = CONFIG_PREFIX + ".experimentalBucketMode";
 
 
     // Used to verify configuration items.  See the README for descriptions.
@@ -167,10 +169,10 @@ public class Main {
             daoConfig.put(SQLGENERATOR_CONFIG_KEY, Class.forName(configuredSQLGenerator));
             // End DAO Configuration
 
-            final String configuredQueryService = props.getFirstPropertyValue(QUERY_SERVICE_CONFIG_KEY);
+            String configuredQueryService = props.getFirstPropertyValue(QUERY_SERVICE_CONFIG_KEY);
             final URI resourceID = URI.create(configuredQueryService);
 
-            String instanceName = props.getFirstPropertyValue(INSTANCE_NAME_CONFIG_KEY);
+            final String instanceName = props.getFirstPropertyValue(INSTANCE_NAME_CONFIG_KEY);
             
             EventSelector artifactSelector = null;
             String asel = props.getFirstPropertyValue(ARTIFACT_SELECTOR_CONFIG_KEY);
@@ -190,15 +192,21 @@ public class Main {
                 eventSelector = new FilterEvents(f);
             } // else: null and fail later
             
-            final String configuredTrackSiteLocations = props.getFirstPropertyValue(TRACK_SITE_LOCATIONS_CONFIG_KEY);
+            String configuredTrackSiteLocations = props.getFirstPropertyValue(TRACK_SITE_LOCATIONS_CONFIG_KEY);
             final boolean trackSiteLocations = Boolean.parseBoolean(configuredTrackSiteLocations);
 
-            final String configuredMaxRetryInterval = props.getFirstPropertyValue(MAX_RETRY_INTERVAL_CONFIG_KEY);
+            String configuredMaxRetryInterval = props.getFirstPropertyValue(MAX_RETRY_INTERVAL_CONFIG_KEY);
             final int maxRetryInterval = Integer.parseInt(configuredMaxRetryInterval);
 
+            boolean experimentalBucketMode = false;
+            String ebm = props.getFirstPropertyValue(EXPERIMENTAL_BUCKET_CONFIG_KEY);
+            if ("true".equals(ebm)) {
+                experimentalBucketMode = true;
+            }
 
             final InventoryHarvester doit = new InventoryHarvester(daoConfig, cc, 
                     resourceID, instanceName, artifactSelector, eventSelector, trackSiteLocations, maxRetryInterval);
+            doit.experimentalBucketMode = experimentalBucketMode;
             doit.run();
         } catch (Throwable unexpected) {
             log.fatal("Unexpected failure", unexpected);
