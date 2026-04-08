@@ -165,7 +165,7 @@ public class Main {
             final ConnectionConfig cc = new ConnectionConfig(null, null, username, password,
                                                              "org.postgresql.Driver", dbUrl);
 
-            String configuredSQLGenerator = props.getFirstPropertyValue(SQLGENERATOR_CONFIG_KEY);
+            final String configuredSQLGenerator = props.getFirstPropertyValue(SQLGENERATOR_CONFIG_KEY);
             daoConfig.put(SQLGENERATOR_CONFIG_KEY, Class.forName(configuredSQLGenerator));
             // End DAO Configuration
 

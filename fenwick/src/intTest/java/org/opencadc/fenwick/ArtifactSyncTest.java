@@ -78,6 +78,8 @@ import java.security.PrivilegedExceptionAction;
 import java.text.DateFormat;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import javax.security.auth.Subject;
 import org.apache.log4j.Level;
@@ -122,19 +124,24 @@ public class ArtifactSyncTest {
     
     @Test
     public void runAllArtifactsNoTrackSiteLocations() throws Exception {
-        doAllArtifacts(false); // global -> site
+        doAllArtifacts(false, false); // global -> site
     }
 
     @Test
     public void runAllArtifactsTrackSiteLocations() throws Exception {
-        doAllArtifacts(true); // site -> global
+        doAllArtifacts(true, false); // site -> global
+    }
+    
+    @Test
+    public void testExperimentalBucketMode() throws Exception {
+        doAllArtifacts(true, true); // site -> global
     }
     
     // track==true:  harvest site to global -- site setup, global asserts
     // track==false: harvest global to site -- global setup, site asserts
     //
     // 
-    private void doAllArtifacts(boolean track) throws Exception {
+    private void doAllArtifacts(boolean track, boolean experimentalBucketMode) throws Exception {
         final StorageSite site1 = new StorageSite(URI.create("cadc:TEST/site1"), "Test Site", true, false);
         final SiteLocation sloc1 = new SiteLocation(site1.getID());
         final SiteLocation sloc2 = new SiteLocation(UUID.randomUUID());
@@ -145,16 +152,29 @@ public class ArtifactSyncTest {
             trackSite = site1;
         }
         final ArtifactSync sync = new ArtifactSync(inventoryEnvironment.artifactDAO, TestUtil.LUSKAN_URI, "test", 6, 6, new AllEvents(), trackSite);
-        Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
-            sync.doit();
-            return null;
-        });
+        sync.experimentalBucketMode = experimentalBucketMode;
+        try {
+            Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
+                sync.doit();
+                return null;
+            });
+        } catch (RuntimeException ex) {
+            if (experimentalBucketMode) {
+                log.info("caught expected: " + ex);
+            } else {
+                throw ex;
+            }
+        }
         
         // source artifacts
         long t = System.currentTimeMillis();
         final Artifact a1 = new Artifact(URI.create("cadc:TEST/a1"), TestUtil.getRandomMD5(), new Date(t - 300), 8989L);
         final Artifact a2 = new Artifact(URI.create("cadc:TEST/a2"), TestUtil.getRandomMD5(), new Date(t - 200), 8989L);
         final Artifact a3 = new Artifact(URI.create("cadc:TEST/a3"), TestUtil.getRandomMD5(), new Date(t - 100), 8989L);
+        final Set<String> buckets = new TreeSet<>();
+        buckets.add(a1.getBucket().substring(0,2));
+        buckets.add(a2.getBucket().substring(0,2));
+        buckets.add(a3.getBucket().substring(0,2));
         
         StorageLocation storLoc2 = new StorageLocation(URI.create("cadc:TEST/location/2"));
         if (track) {
@@ -189,10 +209,18 @@ public class ArtifactSyncTest {
         }
         
         // execute again
-        Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
-            sync.doit();
-            return null;
-        });
+        try {
+            Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
+                sync.doit();
+                return null;
+            });
+        } catch (RuntimeException ex) {
+            if (experimentalBucketMode) {
+                log.info("caught expected: " + ex);
+            } else {
+                throw ex;
+            }
+        }
         
         final DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
         
@@ -249,22 +277,53 @@ public class ArtifactSyncTest {
             Assert.assertEquals(a3.getLastModified(), actual3.getLastModified());
         }
         
-        HarvestState hs = inventoryEnvironment.harvestStateDAO.get(sync.getHarvestStateName(), TestUtil.LUSKAN_URI);
-        Assert.assertNotNull(hs);
-        Assert.assertEquals(a3.getID(), hs.curID);
-        Assert.assertEquals(a3.getLastModified(), hs.curLastModified);
+        if (experimentalBucketMode) {
+            for (String b : buckets) {
+                String name = sync.getHarvestStateName() + ":" + b;
+                HarvestState hs = inventoryEnvironment.harvestStateDAO.get(name, TestUtil.LUSKAN_URI);
+                log.info("found: " + hs);
+                Assert.assertNotNull(hs);
+                Assert.assertNotNull(hs.curID);
+                Assert.assertNotNull(hs.curLastModified);
+            }
+        } else {
+            HarvestState hs = inventoryEnvironment.harvestStateDAO.get(sync.getHarvestStateName(), TestUtil.LUSKAN_URI);
+            Assert.assertNotNull(hs);
+            Assert.assertEquals(a3.getID(), hs.curID);
+            Assert.assertEquals(a3.getLastModified(), hs.curLastModified);
+        }
         
         log.info("Run it again.  It should be idempotent...");
 
-        Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
-            sync.doit();
-            return null;
-        });
+        try {
+            Subject.doAs(this.testUser, (PrivilegedExceptionAction<Object>) () -> {
+                sync.doit();
+                return null;
+            });
+        } catch (RuntimeException ex) {
+            if (experimentalBucketMode) {
+                log.info("caught expected: " + ex);
+            } else {
+                throw ex;
+            }
+        }
 
-        hs = inventoryEnvironment.harvestStateDAO.get(sync.getHarvestStateName(), TestUtil.LUSKAN_URI);
-        Assert.assertNotNull(hs);
-        Assert.assertEquals(a3.getID(), hs.curID);
-        Assert.assertEquals(a3.getLastModified(), hs.curLastModified);
+        if (experimentalBucketMode) {
+            for (String b : buckets) {
+                String name = sync.getHarvestStateName() + ":" + b;
+                HarvestState hs = inventoryEnvironment.harvestStateDAO.get(name, TestUtil.LUSKAN_URI);
+                log.info("found: " + hs);
+                Assert.assertNotNull(hs);
+                Assert.assertNotNull(hs.curID);
+                Assert.assertNotNull(hs.curLastModified);
+                // how to determine idempotent?
+            }
+        } else {
+            HarvestState hs = inventoryEnvironment.harvestStateDAO.get(sync.getHarvestStateName(), TestUtil.LUSKAN_URI);
+            Assert.assertNotNull(hs);
+            Assert.assertEquals(a3.getID(), hs.curID);
+            Assert.assertEquals(a3.getLastModified(), hs.curLastModified);
+        }
     }
 
     /**
