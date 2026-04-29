@@ -75,9 +75,7 @@ import ca.nrc.cadc.dali.util.IntervalFormat;
 import ca.nrc.cadc.dali.util.PolarizationStateListFormat;
 import ca.nrc.cadc.dali.util.ShapeFormat;
 import ca.nrc.cadc.util.StringUtil;
-
 import java.util.List;
-
 import org.opencadc.soda.ExtensionSlice;
 import org.opencadc.soda.PixelRange;
 import org.opencadc.soda.server.Cutout;

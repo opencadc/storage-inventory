@@ -77,7 +77,6 @@ import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.rest.RestAction;
 import ca.nrc.cadc.rest.Version;
 import ca.nrc.cadc.util.InvalidConfigException;
-
 import java.io.IOException;
 import java.net.URI;
 import java.net.URL;
@@ -87,9 +86,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.TreeMap;
-
 import javax.security.auth.Subject;
-
 import org.apache.log4j.Logger;
 
 /**

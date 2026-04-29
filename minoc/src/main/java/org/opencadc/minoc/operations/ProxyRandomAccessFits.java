@@ -71,7 +71,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
-
 import nom.tam.util.RandomAccessFileIO;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.ByteRange;

@@ -87,7 +87,8 @@ import org.opencadc.inventory.Artifact;
 public class ArtifactWriter {
     private static final Logger log = Logger.getLogger(ArtifactWriter.class);
 
-    public ArtifactWriter() { }
+    public ArtifactWriter() {
+    }
     
     public void write(Artifact artifact, OutputStream ostream) throws IOException {
         write(artifact, new OutputStreamWriter(ostream));

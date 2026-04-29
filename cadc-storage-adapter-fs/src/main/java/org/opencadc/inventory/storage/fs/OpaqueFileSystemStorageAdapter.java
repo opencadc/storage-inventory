@@ -78,7 +78,6 @@ import ca.nrc.cadc.util.HexUtil;
 import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
-
 import ca.nrc.cadc.util.StringUtil;
 import java.io.File;
 import java.io.IOException;
@@ -109,7 +108,6 @@ import java.util.List;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.UUID;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.Namespace;

@@ -76,14 +76,12 @@ import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.util.Date;
 import java.util.Iterator;
-
 import java.util.List;
 import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.StorageLocation;

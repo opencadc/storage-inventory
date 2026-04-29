@@ -73,7 +73,6 @@ import ca.nrc.cadc.auth.AuthenticationUtil;
 import ca.nrc.cadc.util.InvalidConfigException;
 import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.util.PropertiesReader;
-
 import java.net.URI;
 import java.security.Principal;
 import java.util.ArrayList;
@@ -86,9 +85,7 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 import javax.security.auth.x500.X500Principal;
-
 import org.apache.log4j.Logger;
 import org.opencadc.gms.GroupURI;
 

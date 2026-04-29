@@ -81,7 +81,6 @@ import ca.nrc.cadc.vos.Transfer;
 import ca.nrc.cadc.vos.TransferReader;
 import ca.nrc.cadc.vos.TransferWriter;
 import ca.nrc.cadc.vos.VOS;
-
 import java.io.ByteArrayOutputStream;
 import java.net.URI;
 import java.security.AccessControlException;
@@ -89,7 +88,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-
 import org.apache.log4j.Logger;
 
 /**

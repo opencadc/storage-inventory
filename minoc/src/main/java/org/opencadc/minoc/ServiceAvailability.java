@@ -72,20 +72,16 @@ import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.reg.client.RegistryClient;
 import ca.nrc.cadc.rest.RestAction;
-import ca.nrc.cadc.util.MultiValuedProperties;
 import ca.nrc.cadc.vosi.Availability;
 import ca.nrc.cadc.vosi.AvailabilityPlugin;
 import ca.nrc.cadc.vosi.avail.CheckCertificate;
 import ca.nrc.cadc.vosi.avail.CheckException;
 import ca.nrc.cadc.vosi.avail.CheckResource;
 import ca.nrc.cadc.vosi.avail.CheckWebService;
-
 import java.io.File;
 import java.net.URI;
 import java.net.URL;
-import java.util.Map;
 import java.util.NoSuchElementException;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.db.ArtifactDAO;
 

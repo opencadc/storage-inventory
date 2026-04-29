@@ -71,13 +71,11 @@ package org.opencadc.ringhold;
 
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.util.StringUtil;
-
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.LineNumberReader;
 import java.nio.file.Path;
-
 import org.apache.log4j.Logger;
 
 /**
