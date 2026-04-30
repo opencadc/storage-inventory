@@ -103,7 +103,6 @@ public class ArtifactSync extends AbstractSync {
     private static final Logger log = Logger.getLogger(ArtifactSync.class);
 
     private final StorageSite storageSite;
-    private final TapClient<Artifact> tapClient;
     private final String includeClause;
     public boolean experimentalBucketMode = false;
 
@@ -112,13 +111,6 @@ public class ArtifactSync extends AbstractSync {
             EventSelector selector, StorageSite storageSite) {
         super(artifactDAO, resourceID, instanceName, querySleepInterval, maxRetryInterval);
         this.storageSite = storageSite;
-        try {
-            this.tapClient = new TapClient<>(resourceID);
-            tapClient.setConnectionTimeout(12000); // 12 sec
-            tapClient.setReadTimeout(300000);      // 300 sec
-        } catch (ResourceNotFoundException ex) {
-            throw new IllegalArgumentException("invalid config: query service not found: " + resourceID);
-        }
         try {
             this.includeClause = selector.getConstraint();
         } catch (IOException | ResourceNotFoundException ex) {
@@ -130,7 +122,6 @@ public class ArtifactSync extends AbstractSync {
     ArtifactSync(String includeClause) {
         super(true);
         this.storageSite = null;
-        this.tapClient = null;
         this.includeClause = includeClause;
     }
 
@@ -376,7 +367,14 @@ public class ArtifactSync extends AbstractSync {
                    InterruptedException {
         final String query = buildQuery(start, end, bucketPrefix);
         log.debug("adql:" + query);
-        return tapClient.query(query, new ArtifactRowMapper());
+        try {
+            TapClient<Artifact> tapClient = new TapClient<>(resourceID);
+            tapClient.setConnectionTimeout(12000); // 12 sec
+            tapClient.setReadTimeout(300000);      // 300 sec
+            return tapClient.query(query, new ArtifactRowMapper());
+        } catch (ResourceNotFoundException ex) {
+            throw new IllegalArgumentException("invalid config: query service not found: " + resourceID);
+        }
     }
 
     // simpler unit tests

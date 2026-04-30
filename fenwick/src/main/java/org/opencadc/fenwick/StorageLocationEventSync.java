@@ -99,7 +99,6 @@ public class StorageLocationEventSync extends AbstractSync {
     private static final Logger log = Logger.getLogger(StorageLocationEventSync.class);
 
     private final StorageSite storageSite;
-    private final TapClient<StorageLocationEvent> tapClient;
     private final String includeClause;
     
     // package access for intTest code
@@ -111,13 +110,6 @@ public class StorageLocationEventSync extends AbstractSync {
         InventoryUtil.assertNotNull(StorageLocationEventSync.class, "storageSite", storageSite);
         this.storageSite = storageSite;
         try {
-            this.tapClient = new TapClient<>(resourceID);
-            tapClient.setConnectionTimeout(12000); // 12 sec
-            tapClient.setReadTimeout(120000);      // 120 sec
-        } catch (ResourceNotFoundException ex) {
-            throw new IllegalArgumentException("invalid config: query service not found: " + resourceID);
-        }
-        try {
             this.includeClause = selector.getConstraint();
         } catch (IOException | ResourceNotFoundException ex) {
             throw new IllegalArgumentException("invalid config: failed to read event selector config: " + ex);
@@ -127,7 +119,6 @@ public class StorageLocationEventSync extends AbstractSync {
     public StorageLocationEventSync(String includeClause) {
         super(true);
         this.storageSite = null;
-        this.tapClient = null;
         this.includeClause = includeClause;
     }
      
@@ -267,7 +258,14 @@ public class StorageLocationEventSync extends AbstractSync {
                    InterruptedException {
         final String query = buildQuery(start, end);
         log.debug("adql: " + query);
-        return tapClient.query(query, new StorageLocationEventRowMapper());
+        try {
+            TapClient<StorageLocationEvent> tapClient = new TapClient<>(resourceID);
+            tapClient.setConnectionTimeout(12000); // 12 sec
+            tapClient.setReadTimeout(120000);      // 120 sec
+            return tapClient.query(query, new StorageLocationEventRowMapper());
+        } catch (ResourceNotFoundException ex) {
+            throw new IllegalArgumentException("invalid config: query service not found: " + resourceID);
+        }
     }
    
     // unit test

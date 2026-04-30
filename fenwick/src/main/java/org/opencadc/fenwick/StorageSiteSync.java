@@ -101,7 +101,6 @@ public class StorageSiteSync extends AbstractSync {
     private static final String STORAGE_SITE_QUERY =
             "SELECT resourceID, name, allowRead, allowWrite, id, lastModified, metaChecksum FROM inventory.StorageSite";
 
-    private final TapClient<StorageSite> tapClient;
     private final StorageSiteDAO storageSiteDAO;
     private final MessageDigest messageDigest;
     
@@ -111,11 +110,6 @@ public class StorageSiteSync extends AbstractSync {
             int querySleepInterval, int maxRetryInterval) {
         super(resourceID, instanceName, querySleepInterval, maxRetryInterval);
         this.storageSiteDAO = storageSiteDAO;
-        try {
-            this.tapClient = new TapClient<>(resourceID);
-        } catch (ResourceNotFoundException ex) {
-            throw new IllegalArgumentException("invalid config: query service not found: " + resourceID);
-        }
         try {
             this.messageDigest = MessageDigest.getInstance("MD5");
         } catch (NoSuchAlgorithmException e) {
@@ -127,7 +121,6 @@ public class StorageSiteSync extends AbstractSync {
     
     StorageSiteSync() {
         super(true);
-        this.tapClient = null;
         this.storageSiteDAO = null;
         try {
             this.messageDigest = MessageDigest.getInstance("MD5");
@@ -212,21 +205,28 @@ public class StorageSiteSync extends AbstractSync {
                                                              IllegalArgumentException, TransientException, IOException,
                                                              InterruptedException {
         log.debug("adql:" + STORAGE_SITE_QUERY);
-        return tapClient.query(STORAGE_SITE_QUERY, row -> {
-            int index = 0;
-            // column order folllowing model declarations
-            final URI rid = (URI) row.get(index++);
-            final String name = row.get(index++).toString();
-            final boolean allowRead = (Boolean) row.get(index++);
-            final boolean allowWrite = (Boolean) row.get(index++);
-            final UUID id = (UUID) row.get(index++);
+        try {
+            TapClient<StorageSite> tapClient = new TapClient<>(resourceID);
+            tapClient.setConnectionTimeout(12000); // 12 sec
+            tapClient.setReadTimeout(300000);      // 300 sec
+            return tapClient.query(STORAGE_SITE_QUERY, row -> {
+                int index = 0;
+                // column order folllowing model declarations
+                final URI rid = (URI) row.get(index++);
+                final String name = row.get(index++).toString();
+                final boolean allowRead = (Boolean) row.get(index++);
+                final boolean allowWrite = (Boolean) row.get(index++);
+                final UUID id = (UUID) row.get(index++);
 
-            final StorageSite storageSite = new StorageSite(id, rid, name, allowRead, allowWrite);
+                final StorageSite storageSite = new StorageSite(id, rid, name, allowRead, allowWrite);
 
-            InventoryUtil.assignLastModified(storageSite, (Date) row.get(index++));
-            InventoryUtil.assignMetaChecksum(storageSite, (URI) row.get(index));
+                InventoryUtil.assignLastModified(storageSite, (Date) row.get(index++));
+                InventoryUtil.assignMetaChecksum(storageSite, (URI) row.get(index));
 
-            return storageSite;
-        });
+                return storageSite;
+            });
+        } catch (ResourceNotFoundException ex) {
+            throw new IllegalArgumentException("invalid config: query service not found: " + resourceID);
+        }
     }
 }
