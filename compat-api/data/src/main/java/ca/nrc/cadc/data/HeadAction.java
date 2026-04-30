@@ -73,12 +73,10 @@ import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpTransfer;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.rest.InlineContentHandler;
-
 import java.net.URI;
 import java.net.URL;
 import java.security.AccessControlException;
 import java.util.List;
-
 import org.apache.log4j.Logger;
 
 /**

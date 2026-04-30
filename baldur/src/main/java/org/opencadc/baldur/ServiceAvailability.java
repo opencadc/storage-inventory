@@ -71,7 +71,6 @@ package org.opencadc.baldur;
 
 import ca.nrc.cadc.vosi.Availability;
 import ca.nrc.cadc.vosi.AvailabilityPlugin;
-
 import org.apache.log4j.Logger;
 
 /**

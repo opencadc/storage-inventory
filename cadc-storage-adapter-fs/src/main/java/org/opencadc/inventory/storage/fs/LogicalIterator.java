@@ -82,7 +82,6 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Stack;
 import java.util.stream.Stream;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;

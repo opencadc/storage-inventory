@@ -81,7 +81,6 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.NoSuchElementException;
 import java.util.stream.Stream;
-
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageEngageException;

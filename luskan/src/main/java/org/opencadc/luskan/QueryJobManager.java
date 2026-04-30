@@ -73,7 +73,6 @@ import ca.nrc.cadc.uws.server.JobExecutor;
 import ca.nrc.cadc.uws.server.JobPersistence;
 import ca.nrc.cadc.uws.server.SimpleJobManager;
 import ca.nrc.cadc.uws.server.ThreadPoolExecutor;
-
 import org.apache.log4j.Logger;
 import org.opencadc.luskan.tap.QueryRunnerImpl;
 

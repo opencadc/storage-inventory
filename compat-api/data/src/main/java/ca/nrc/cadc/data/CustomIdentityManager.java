@@ -81,7 +81,6 @@ import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.reg.Standards;
 import ca.nrc.cadc.reg.client.LocalAuthority;
 import ca.nrc.cadc.reg.client.RegistryClient;
-
 import java.io.IOException;
 import java.net.URI;
 import java.net.URL;
@@ -92,9 +91,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-
 import javax.security.auth.Subject;
-
 import org.apache.log4j.Logger;
 
 /**

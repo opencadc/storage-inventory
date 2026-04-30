@@ -79,12 +79,10 @@ import ca.nrc.cadc.vosi.avail.CheckDataSource;
 import ca.nrc.cadc.vosi.avail.CheckException;
 import ca.nrc.cadc.vosi.avail.CheckResource;
 import ca.nrc.cadc.vosi.avail.CheckWebService;
-
 import java.io.File;
 import java.net.URI;
 import java.net.URL;
 import java.util.NoSuchElementException;
-
 import org.apache.log4j.Logger;
 
 /**
