@@ -100,7 +100,6 @@ public class DeletedArtifactEventSync extends AbstractSync {
     private static final Logger log = Logger.getLogger(DeletedArtifactEventSync.class);
 
     private final DeletedArtifactEventDAO deletedDAO;
-    private final TapClient<DeletedArtifactEvent> tapClient;
     private final boolean isGlobal;
     private final String includeClause;
     
@@ -113,13 +112,6 @@ public class DeletedArtifactEventSync extends AbstractSync {
         this.isGlobal = isGlobal;
         this.deletedDAO = new DeletedArtifactEventDAO(artifactDAO);
         try {
-            this.tapClient = new TapClient<>(resourceID);
-            tapClient.setConnectionTimeout(12000); // 12 sec
-            tapClient.setReadTimeout(120000);      // 120 sec
-        } catch (ResourceNotFoundException ex) {
-            throw new IllegalArgumentException("invalid config: query service not found: " + resourceID);
-        }
-        try {
             this.includeClause = selector.getConstraint();
         } catch (IOException | ResourceNotFoundException ex) {
             throw new IllegalArgumentException("invalid config: failed to read event selector config: " + ex);
@@ -131,7 +123,6 @@ public class DeletedArtifactEventSync extends AbstractSync {
         super(true);
         this.deletedDAO = null;
         this.isGlobal = false;
-        this.tapClient = null;
         this.includeClause = includeClause;
     }
 
@@ -275,7 +266,15 @@ public class DeletedArtifactEventSync extends AbstractSync {
         throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
         String adql = buildQuery(startTime, endTime);
         log.debug("adql: " + adql);
-        return tapClient.query(adql, new DeletedArtifactEventRowMapper());
+        try {
+            TapClient<DeletedArtifactEvent> tapClient = new TapClient<>(resourceID);
+            tapClient.setConnectionTimeout(12000); // 12 sec
+            tapClient.setReadTimeout(120000);      // 120 sec
+            return tapClient.query(adql, new DeletedArtifactEventRowMapper());
+        } catch (ResourceNotFoundException ex) {
+            // InventoryHarvester does a registry lookup/check on startup, so here failure is transient
+            throw new TransientException("failed to contact query service: " + resourceID, ex);
+        }
     }
 
     String buildQuery(Date startTime, Date endTime) {

@@ -102,7 +102,6 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
     private static final Logger log = Logger.getLogger(DeletedStorageLocationEventSync.class);
 
     private final StorageSite storageSite;
-    private final TapClient<DeletedStorageLocationEvent> tapClient;
     private final String includeClause;
     
     // package access for intTest code
@@ -114,13 +113,6 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
         InventoryUtil.assertNotNull(DeletedStorageLocationEventSync.class, "storageSite", storageSite);
         this.storageSite = storageSite;
         try {
-            this.tapClient = new TapClient<>(resourceID);
-            tapClient.setConnectionTimeout(12000); // 12 sec
-            tapClient.setReadTimeout(120000);      // 120 sec
-        } catch (ResourceNotFoundException ex) {
-            throw new IllegalArgumentException("invalid config: query service not found: " + resourceID);
-        }
-        try {
             this.includeClause = selector.getConstraint();
         } catch (IOException | ResourceNotFoundException ex) {
             throw new IllegalArgumentException("invalid config: failed to read event selector config: " + ex);
@@ -130,7 +122,6 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
     public DeletedStorageLocationEventSync(String includeClause) {
         super(true);
         this.storageSite = null;
-        this.tapClient = null;
         this.includeClause = includeClause;
     }
     
@@ -273,7 +264,15 @@ public class DeletedStorageLocationEventSync extends AbstractSync {
             throws InterruptedException, IOException, ResourceNotFoundException, TransientException {
         String adql = buildQuery(startTime, endTime);
         log.debug("adql: " + adql);
-        return tapClient.query(adql, new DeletedStorageLocationEventRowMapper());
+        try {
+            TapClient<DeletedStorageLocationEvent> tapClient = new TapClient<>(resourceID);
+            tapClient.setConnectionTimeout(12000); // 12 sec
+            tapClient.setReadTimeout(120000);      // 120 sec
+            return tapClient.query(adql, new DeletedStorageLocationEventRowMapper());
+        } catch (ResourceNotFoundException ex) {
+            // InventoryHarvester does a registry lookup/check on startup, so here failure is transient
+            throw new TransientException("failed to contact query service: " + resourceID, ex);
+        }
     }
 
     // unit test
