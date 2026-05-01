@@ -226,7 +226,8 @@ public class StorageSiteSync extends AbstractSync {
                 return storageSite;
             });
         } catch (ResourceNotFoundException ex) {
-            throw new IllegalArgumentException("invalid config: query service not found: " + resourceID);
+            // InventoryHarvester does a registry lookup/check on startup, so here failure is transient
+            throw new TransientException("failed to contact query service: " + resourceID, ex);
         }
     }
 }

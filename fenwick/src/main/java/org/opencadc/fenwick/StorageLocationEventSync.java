@@ -264,7 +264,8 @@ public class StorageLocationEventSync extends AbstractSync {
             tapClient.setReadTimeout(120000);      // 120 sec
             return tapClient.query(query, new StorageLocationEventRowMapper());
         } catch (ResourceNotFoundException ex) {
-            throw new IllegalArgumentException("invalid config: query service not found: " + resourceID);
+            // InventoryHarvester does a registry lookup/check on startup, so here failure is transient
+            throw new TransientException("failed to contact query service: " + resourceID, ex);
         }
     }
    
