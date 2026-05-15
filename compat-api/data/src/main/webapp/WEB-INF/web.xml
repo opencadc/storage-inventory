@@ -46,7 +46,7 @@
       <param-name>get</param-name>
       <param-value>ca.nrc.cadc.data.GetAction</param-value>
     </init-param>
-    <load-on-startup>4</load-on-startup>
+    <load-on-startup>2</load-on-startup>
   </servlet>
   
   <servlet>
@@ -68,7 +68,7 @@
       <param-name>authRequired</param-name>
       <param-value>true</param-value>
     </init-param>
-    <load-on-startup>4</load-on-startup>
+    <load-on-startup>2</load-on-startup>
   </servlet>
 
   <servlet>
@@ -78,7 +78,7 @@
       <param-name>ca.nrc.cadc.vosi.AvailabilityPlugin</param-name>
       <param-value>ca.nrc.cadc.data.AvailabilityImpl</param-value>
     </init-param>
-    <load-on-startup>5</load-on-startup>
+    <load-on-startup>3</load-on-startup>
   </servlet>
 
   <servlet>
@@ -100,6 +100,7 @@
       <param-name>input</param-name>
       <param-value>/capabilities.xml</param-value>
     </init-param>
+    <load-on-startup>3</load-on-startup>
   </servlet>
   
   <servlet-mapping>
@@ -127,31 +128,4 @@
     <servlet-name>logControl</servlet-name>
     <url-pattern>/logControl</url-pattern>
   </servlet-mapping>
-
-  <!-- use tomcat supplied username/password challenge -->
-  <!--
-  <security-constraint>
-    <web-resource-collection>
-      <web-resource-name>auth</web-resource-name>
-      <description/>
-      <url-pattern>/auth/*</url-pattern>
-      <http-method>GET</http-method>
-      <http-method>POST</http-method>
-      <http-method>HEAD</http-method>
-      <http-method>PUT</http-method>
-      <http-method>OPTIONS</http-method>
-      <http-method>TRACE</http-method>
-      <http-method>DELETE</http-method>
-    </web-resource-collection>
-    <auth-constraint>
-      <description>force authentication for all requests</description>
-      <role-name>public</role-name>
-    </auth-constraint>
-  </security-constraint>
-
-  <login-config>
-    <auth-method>DIGEST</auth-method>
-    <realm-name>Canadian Astronomy Data Centre</realm-name>
-  </login-config>
-    -->
 </web-app>
