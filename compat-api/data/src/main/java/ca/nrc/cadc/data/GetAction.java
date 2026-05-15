@@ -128,7 +128,7 @@ public class GetAction extends BaseAction {
         CredUtil.checkCredentials();
         
         for (URI uri : uris) {
-            log.warn("try: " + uri);
+            log.debug("try: " + uri);
             // request all protocols that can be used
             List<Protocol> protocolList = new ArrayList<>();
             protocolList.add(new Protocol(VOS.PROTOCOL_HTTPS_GET));
