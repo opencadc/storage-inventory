@@ -84,7 +84,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.opencadc.inventory.Artifact;
-import org.opencadc.vospace.db.DataNodeSizeWorker;
+import org.opencadc.vospace.VOS;
 import org.opencadc.inventory.Namespace;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.db.ArtifactDAO;
@@ -95,8 +95,6 @@ import org.opencadc.inventory.db.TestUtil;
 import org.opencadc.inventory.db.version.InitDatabaseSI;
 import org.opencadc.vospace.ContainerNode;
 import org.opencadc.vospace.DataNode;
-import org.opencadc.vospace.db.InitDatabaseVOS;
-import org.opencadc.vospace.db.NodeDAO;
 
 /**
  *
@@ -240,6 +238,14 @@ public class DataNodeSizeWorkerTest {
         Assert.assertNotNull(actual);
         log.info("found: "  + actual.getID() + " aka " + actual);
         Assert.assertEquals(expected.getContentLength(), actual.bytesUsed);
+        // verify the worker wrote new cached artifact props
+        String md5 = actual.getPropertyValue(VOS.PROPERTY_URI_CONTENTMD5);
+        Assert.assertNotNull("contentMD5 is not cached after first sync", md5);
+        Assert.assertEquals("false contentMD5 value", expected.getContentChecksum().getSchemeSpecificPart(), md5);
+        String contentDate = actual.getPropertyValue(VOS.PROPERTY_URI_CONTENTDATE);
+        // content-date is only stored when different from node.lastModified; just verify it is present or absent consistently
+        // (the artifact contentLastModified predates the node write, so it should differ)
+        Assert.assertNotNull("content-date cached after first sync", contentDate);
 
         Thread.sleep(100L);
         
@@ -263,13 +269,17 @@ public class DataNodeSizeWorkerTest {
 
         actual = (DataNode)nodeDAO.get(orig.getID());
         Assert.assertEquals(m1.getContentLength(), actual.bytesUsed);
+        // md5 unchanged (same checksum)
+        Assert.assertEquals("contentMD5 still correct after size update",
+                m1.getContentChecksum().getSchemeSpecificPart(),
+                actual.getPropertyValue(VOS.PROPERTY_URI_CONTENTMD5));
         final Date nodeLastMod = actual.getLastModified();
         
         Thread.sleep(100L);
         
         // replace the artifact but with the same contentLength to ensure timestamp change
         artifactDAO.delete(m1.getID());
-        Artifact m2 = new Artifact(expected.getURI(), expected.getContentChecksum(), new Date(), 333L); // same size
+        Artifact m2 = new Artifact(expected.getURI(), URI.create("md5:a7f3c91e5b8d4f20c6e1a9d73b2f4e8c"), new Date(), 333L); // same size
         if (isStorageSite) {
             m2.storageLocation = new StorageLocation(URI.create("id:" + UUID.randomUUID().toString()));
             m2.storageLocation.storageBucket = "X";
@@ -290,5 +300,9 @@ public class DataNodeSizeWorkerTest {
         actual = (DataNode)nodeDAO.get(orig.getID());
         Assert.assertEquals(m2.getContentLength(), actual.bytesUsed);
         Assert.assertTrue("timestamp change", actual.getLastModified().after(nodeLastMod));
+        // verify checksum was updated to m2's new value
+        Assert.assertEquals("contentMD5 did not update to new artifact checksum",
+                "a7f3c91e5b8d4f20c6e1a9d73b2f4e8c",
+                actual.getPropertyValue(VOS.PROPERTY_URI_CONTENTMD5));
     }
 }

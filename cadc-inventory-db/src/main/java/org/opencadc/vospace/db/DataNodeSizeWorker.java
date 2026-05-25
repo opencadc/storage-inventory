@@ -80,6 +80,8 @@ import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.HarvestState;
 import org.opencadc.inventory.db.HarvestStateDAO;
 import org.opencadc.vospace.DataNode;
+import org.opencadc.vospace.NodeProperty;
+import org.opencadc.vospace.VOS;
 
 /**
  * This class performs the work of synchronizing the size of Data Nodes from 
@@ -165,6 +167,19 @@ public class DataNodeSizeWorker implements Runnable {
                             continue; // node gone - race condition
                         }
                         node.bytesUsed = artifact.getContentLength();
+
+                        // Persist #content-date only when it differs from the node #date value
+                        if (!node.getLastModified().equals(artifact.getContentLastModified())) {
+                            node.getProperties().removeIf(p -> VOS.PROPERTY_URI_CONTENTDATE.equals(p.getKey()));
+                            node.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTDATE, df.format(artifact.getContentLastModified())));
+                        }
+
+                        // Persist VOSpace content-md5 property only for MD5 checksums
+                        if (artifact.getContentChecksum().getScheme().equalsIgnoreCase("md5")) {
+                            node.getProperties().removeIf(p -> VOS.PROPERTY_URI_CONTENTMD5.equals(p.getKey()));
+                            node.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTMD5, artifact.getContentChecksum().getSchemeSpecificPart()));
+                        }
+
                         nodeDAO.put(node, delta); // delta forces lastModified update
                         tm.commitTransaction();
                         log.debug("ArtifactSyncWorker.updateDataNode id=" + node.getID() 

@@ -416,6 +416,19 @@ public class NodePersistenceImpl implements NodePersistence {
                         if (locked != null) {
                             dn = locked; // safer than accidentally using the wrong variable
                             dn.bytesUsed = a.getContentLength();
+
+                            // Persist #content-date only when it differs from the node #date value
+                            if (!ret.getLastModified().equals(a.getContentLastModified())) {
+                                dn.getProperties().removeIf(p -> VOS.PROPERTY_URI_CONTENTDATE.equals(p.getKey()));
+                                dn.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTDATE, df.format(a.getContentLastModified())));
+                            }
+
+                            // Persist VOSpace content-md5 property only for MD5 checksums
+                            if (a.getContentChecksum().getScheme().equalsIgnoreCase("md5")) {
+                                dn.getProperties().removeIf(p -> VOS.PROPERTY_URI_CONTENTMD5.equals(p.getKey()));
+                                dn.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTMD5, a.getContentChecksum().getSchemeSpecificPart()));
+                            }
+
                             dao.put(dn, delta);
                             ret = dn;
                         }
@@ -446,16 +459,6 @@ public class NodePersistenceImpl implements NodePersistence {
                 //       cause a visible #date change; probably OK
                 ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_DATE, df.format(ret.getLastModified())));
 
-                // #content-date is only output if different from #date
-                if (!ret.getLastModified().equals(a.getContentLastModified())) {
-                    ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTDATE, df.format(a.getContentLastModified())));
-                }
-
-                // only #md5 in VOSpace spec
-                if (a.getContentChecksum().getScheme().equalsIgnoreCase("md5")) {
-                    ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTMD5, a.getContentChecksum().getSchemeSpecificPart()));
-                }
-                
                 if (a.contentEncoding != null) {
                     ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTENCODING, a.contentEncoding));
                 }
