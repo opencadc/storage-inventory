@@ -223,7 +223,10 @@ public class GetAction extends ArtifactAction {
                 try {
                     DateFormat df = DateUtil.getDateFormat(DateUtil.HTTP_DATE_FORMAT, DateUtil.GMT);
                     Date clientDate = df.parse(ifModifiedSince);
-                    if (!artifact.getContentLastModified().after(clientDate)) {
+                    long clientTime = (clientDate.getTime() / 1000) * 1000;
+                    long lastModifiedTime = (artifact.getContentLastModified().getTime() / 1000) * 1000;
+
+                    if (lastModifiedTime <= clientTime) {
                         syncOutput.setCode(304);
                         return;
                     }
