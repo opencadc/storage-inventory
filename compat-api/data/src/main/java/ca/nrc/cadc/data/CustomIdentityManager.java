@@ -152,7 +152,7 @@ public class CustomIdentityManager extends ACIdentityManager {
                             //String domainHdr = login.getResponseHeader("x-vo-bearer-domains");
                             //List<String> domains = Arrays.asList(domainHdr.split(" ,"));
                             List<String> domains = Arrays.asList(new String[] {
-                                "cadc-ccda.hia-iha.nrc-cnrc.gc.ca", "cadc.dao.nrc.ca"
+                                "canfar.net", "cadc-ccda.hia-iha.nrc-cnrc.gc.ca", "cadc.dao.nrc.ca"
                             });
 
                             AuthorizationToken at = new AuthorizationToken("bearer", token, domains);
