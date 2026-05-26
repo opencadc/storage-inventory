@@ -417,11 +417,9 @@ public class NodePersistenceImpl implements NodePersistence {
                             dn = locked; // safer than accidentally using the wrong variable
                             dn.bytesUsed = a.getContentLength();
 
-                            // Persist #content-date only when it differs from the node #date value
-                            if (!ret.getLastModified().equals(a.getContentLastModified())) {
-                                dn.getProperties().removeIf(p -> VOS.PROPERTY_URI_CONTENTDATE.equals(p.getKey()));
-                                dn.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTDATE, df.format(a.getContentLastModified())));
-                            }
+                            // update the #content-date in the props list
+                            dn.getProperties().removeIf(p -> VOS.PROPERTY_URI_CONTENTDATE.equals(p.getKey()));
+                            dn.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTDATE, df.format(a.getContentLastModified())));
 
                             // Persist VOSpace content-md5 property only for MD5 checksums
                             if (a.getContentChecksum().getScheme().equalsIgnoreCase("md5")) {

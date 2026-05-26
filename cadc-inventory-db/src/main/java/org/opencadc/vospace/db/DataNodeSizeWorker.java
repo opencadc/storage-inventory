@@ -168,11 +168,9 @@ public class DataNodeSizeWorker implements Runnable {
                         }
                         node.bytesUsed = artifact.getContentLength();
 
-                        // Persist #content-date only when it differs from the node #date value
-                        if (!node.getLastModified().equals(artifact.getContentLastModified())) {
-                            node.getProperties().removeIf(p -> VOS.PROPERTY_URI_CONTENTDATE.equals(p.getKey()));
-                            node.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTDATE, df.format(artifact.getContentLastModified())));
-                        }
+                        // update the #content-date in the props list
+                        node.getProperties().removeIf(p -> VOS.PROPERTY_URI_CONTENTDATE.equals(p.getKey()));
+                        node.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTDATE, df.format(artifact.getContentLastModified())));
 
                         // Persist VOSpace content-md5 property only for MD5 checksums
                         if (artifact.getContentChecksum().getScheme().equalsIgnoreCase("md5")) {
