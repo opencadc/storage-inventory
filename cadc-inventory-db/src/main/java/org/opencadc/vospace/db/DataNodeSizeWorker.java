@@ -157,8 +157,17 @@ public class DataNodeSizeWorker implements Runnable {
                 Artifact artifact = iter.next();
                 DataNode node = nodeDAO.getDataNode(artifact.getURI());
                 if (node != null) {
-                    boolean delta = !artifact.getContentLength().equals(node.bytesUsed); // size change
-                    delta = delta || artifact.getLastModified().after(node.getLastModified());
+                    NodeProperty contentChecksumProp = node.getProperty(VOS.PROPERTY_URI_CONTENTMD5);
+                    boolean updateContentChecksum = contentChecksumProp == null ||
+                            (artifact.getContentChecksum().getScheme().equalsIgnoreCase("md5") // Persist VOSpace content-md5 property only for MD5 checksums
+                                    && !artifact.getContentChecksum().getSchemeSpecificPart().equals(contentChecksumProp.getValue()));
+
+                    NodeProperty contentDateProp = node.getProperty(VOS.PROPERTY_URI_CONTENTDATE);
+                    boolean updateContentDate = contentDateProp == null || !df.format(artifact.getContentLastModified()).equals(contentDateProp.getValue());
+
+                    boolean updateBytesUsed = !artifact.getContentLength().equals(node.bytesUsed);
+
+                    boolean delta = updateBytesUsed || updateContentChecksum || updateContentDate;
                     log.debug(artifact.getURI() + " len=" + artifact.getContentLength() + " -> " + node.getName());
                     tm.startTransaction();
                     try {
@@ -168,13 +177,16 @@ public class DataNodeSizeWorker implements Runnable {
                         }
                         node.bytesUsed = artifact.getContentLength();
 
-                        // update the #content-date in the props list
-                        node.getProperties().removeIf(p -> VOS.PROPERTY_URI_CONTENTDATE.equals(p.getKey()));
-                        node.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTDATE, df.format(artifact.getContentLastModified())));
-
-                        // Persist VOSpace content-md5 property only for MD5 checksums
-                        if (artifact.getContentChecksum().getScheme().equalsIgnoreCase("md5")) {
-                            node.getProperties().removeIf(p -> VOS.PROPERTY_URI_CONTENTMD5.equals(p.getKey()));
+                        if (updateContentDate) {
+                            if (contentDateProp != null) {
+                                node.getProperties().remove(contentDateProp);
+                            }
+                            node.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTDATE, df.format(artifact.getContentLastModified())));
+                        }
+                        if (updateContentChecksum) {
+                            if (contentChecksumProp != null) {
+                                node.getProperties().remove(contentChecksumProp);
+                            }
                             node.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTMD5, artifact.getContentChecksum().getSchemeSpecificPart()));
                         }
 

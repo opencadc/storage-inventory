@@ -403,8 +403,17 @@ public class NodePersistenceImpl implements NodePersistence {
                 // and may help hide some inconsistencies in child listing sizes
                 
                 // be consistent with DataNodeSizeWorker
-                boolean delta = !a.getContentLength().equals(dn.bytesUsed); // size change
-                delta = delta || a.getLastModified().after(dn.getLastModified());
+                NodeProperty contentChecksumProp = dn.getProperty(VOS.PROPERTY_URI_CONTENTMD5);
+                boolean updateContentChecksum = contentChecksumProp == null ||
+                        (a.getContentChecksum().getScheme().equalsIgnoreCase("md5") // Persist VOSpace content-md5 property only for MD5 checksums
+                                && !a.getContentChecksum().getSchemeSpecificPart().equals(contentChecksumProp.getValue()));
+
+                NodeProperty contentDateProp = dn.getProperty(VOS.PROPERTY_URI_CONTENTDATE);
+                boolean updateContentDate = contentDateProp == null || !df.format(a.getContentLastModified()).equals(contentDateProp.getValue());
+
+                boolean updateBytesUsed = !a.getContentLength().equals(dn.bytesUsed);
+
+                boolean delta = updateBytesUsed || updateContentChecksum || updateContentDate;
                 if (delta) {
                     TransactionManager txn = dao.getTransactionManager();
                     try {
@@ -417,13 +426,16 @@ public class NodePersistenceImpl implements NodePersistence {
                             dn = locked; // safer than accidentally using the wrong variable
                             dn.bytesUsed = a.getContentLength();
 
-                            // update the #content-date in the props list
-                            dn.getProperties().removeIf(p -> VOS.PROPERTY_URI_CONTENTDATE.equals(p.getKey()));
-                            dn.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTDATE, df.format(a.getContentLastModified())));
-
-                            // Persist VOSpace content-md5 property only for MD5 checksums
-                            if (a.getContentChecksum().getScheme().equalsIgnoreCase("md5")) {
-                                dn.getProperties().removeIf(p -> VOS.PROPERTY_URI_CONTENTMD5.equals(p.getKey()));
+                            if (updateContentDate) {
+                                if (contentDateProp != null) {
+                                    dn.getProperties().remove(contentDateProp);
+                                }
+                                dn.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTDATE, df.format(a.getContentLastModified())));
+                            }
+                            if (updateContentChecksum) {
+                                if (contentChecksumProp != null) {
+                                    dn.getProperties().remove(contentChecksumProp);
+                                }
                                 dn.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTMD5, a.getContentChecksum().getSchemeSpecificPart()));
                             }
 
