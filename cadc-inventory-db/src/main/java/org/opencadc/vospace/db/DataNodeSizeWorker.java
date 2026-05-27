@@ -158,8 +158,8 @@ public class DataNodeSizeWorker implements Runnable {
                 DataNode node = nodeDAO.getDataNode(artifact.getURI());
                 if (node != null) {
                     NodeProperty contentChecksumProp = node.getProperty(VOS.PROPERTY_URI_CONTENTMD5);
-                    boolean updateContentChecksum = contentChecksumProp == null ||
-                            (artifact.getContentChecksum().getScheme().equalsIgnoreCase("md5") // Persist VOSpace content-md5 property only for MD5 checksums
+                    boolean updateContentChecksum = contentChecksumProp == null
+                            || (artifact.getContentChecksum().getScheme().equalsIgnoreCase("md5") // Persist VOSpace content-md5 property only for MD5 checksums
                                     && !artifact.getContentChecksum().getSchemeSpecificPart().equals(contentChecksumProp.getValue()));
 
                     NodeProperty contentDateProp = node.getProperty(VOS.PROPERTY_URI_CONTENTDATE);

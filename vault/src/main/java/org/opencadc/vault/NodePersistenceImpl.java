@@ -404,8 +404,8 @@ public class NodePersistenceImpl implements NodePersistence {
                 
                 // be consistent with DataNodeSizeWorker
                 NodeProperty contentChecksumProp = dn.getProperty(VOS.PROPERTY_URI_CONTENTMD5);
-                boolean updateContentChecksum = contentChecksumProp == null ||
-                        (a.getContentChecksum().getScheme().equalsIgnoreCase("md5") // Persist VOSpace content-md5 property only for MD5 checksums
+                boolean updateContentChecksum = contentChecksumProp == null
+                        || (a.getContentChecksum().getScheme().equalsIgnoreCase("md5") // Persist VOSpace content-md5 property only for MD5 checksums
                                 && !a.getContentChecksum().getSchemeSpecificPart().equals(contentChecksumProp.getValue()));
 
                 NodeProperty contentDateProp = dn.getProperty(VOS.PROPERTY_URI_CONTENTDATE);
