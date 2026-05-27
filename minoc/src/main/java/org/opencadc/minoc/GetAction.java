@@ -71,19 +71,21 @@ import ca.nrc.cadc.dali.Circle;
 import ca.nrc.cadc.dali.Interval;
 import ca.nrc.cadc.dali.Polygon;
 import ca.nrc.cadc.dali.Shape;
+import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.io.ByteCountOutputStream;
 import ca.nrc.cadc.io.ReadException;
 import ca.nrc.cadc.io.WriteException;
-import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.HttpTransfer;
 import ca.nrc.cadc.net.RangeNotSatisfiableException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
 import ca.nrc.cadc.util.CaseInsensitiveStringComparator;
-import ca.nrc.cadc.util.StringUtil;
 import java.io.IOException;
+import java.text.DateFormat;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
@@ -215,6 +217,24 @@ public class GetAction extends ArtifactAction {
             
             // default: complete download
             HeadAction.setHeaders(artifact, filenameOverride, syncOutput);
+
+            String ifModifiedSince = syncInput.getHeader("If-Modified-Since");
+            if (ifModifiedSince != null && artifact.getContentLastModified() != null) {
+                try {
+                    DateFormat df = DateUtil.getDateFormat(DateUtil.HTTP_DATE_FORMAT, DateUtil.GMT);
+                    Date clientDate = df.parse(ifModifiedSince);
+                    long clientTime = (clientDate.getTime() / 1000) * 1000;
+                    long lastModifiedTime = (artifact.getContentLastModified().getTime() / 1000) * 1000;
+
+                    if (lastModifiedTime <= clientTime) {
+                        syncOutput.setCode(304);
+                        return;
+                    }
+                } catch (ParseException ex) {
+                    log.debug("Ignoring unparseable If-Modified-Since header: " + ifModifiedSince);
+                }
+            }
+
             bcos = new ByteCountOutputStream(syncOutput.getOutputStream());
             
             // create tmp StorageLocation with expected checksum so adapter can potentially

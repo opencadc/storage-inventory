@@ -46,6 +46,8 @@ paths:
             Last-Modified:
               description: Timestamp when data was modified
               type: string
+        '304':
+          description: Not Modified - returned when the artifact has not been modified since the date specified in the If-Modified-Since request header
         '401':
           description: If the client does not provide credentials and anonymous access is disallowed
         '403':
@@ -57,6 +59,11 @@ paths:
         '503':
           description: Service busy
       parameters:
+        - name: If-Modified-Since
+          in: header
+          type: string
+          description: 'Standard HTTP conditional request header. If the artifact has not been modified since the specified date (in HTTP date format), a 304 Not Modified response is returned instead of the file content.'
+          required: false
         - name: SUB
           in: query
           description: 'SUB-region of a FITS file image.  Multiple SUB parameters are allowed and will generate MEF output in file order. Examples: entire extensions (SUB=[1]&SUB=[SCI,2]), or more general purpose (SUB=[SCI,3][400:500]).'

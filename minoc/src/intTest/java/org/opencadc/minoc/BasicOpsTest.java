@@ -538,4 +538,79 @@ public class BasicOpsTest extends MinocTest {
             Assert.fail("unexpected throwable: " + t);
         }
     }
+
+    // covers the full upload → GET → again GET(304 check) → replace → GET → delete lifecycle for the new header testing
+    @Test
+    public void testIfModifiedSinceHeader() {
+        try {
+
+            Subject.doAs(userSubject, new PrivilegedExceptionAction<Object>() {
+                public Object run() throws Exception {
+
+                    final String data1 = "first artifact";
+                    final String data2 = "second artifact";
+                    URI artifactURI = URI.create("cadc:TEST/testReplaceFile");
+                    URL artifactURL = new URL(filesURL + "/" + artifactURI);
+
+                    // put initial file
+                    InputStream in = new ByteArrayInputStream(data1.getBytes());
+                    HttpUpload put = new HttpUpload(in, artifactURL);
+                    put.setDigest(computeChecksumURI(data1.getBytes()));
+                    put.run();
+                    Assert.assertNull(put.getThrowable());
+
+                    // assert file and metadata
+                    OutputStream out = new ByteArrayOutputStream();
+                    HttpGet get = new HttpGet(artifactURL, out);
+                    get.run();
+                    Assert.assertEquals(200, get.getResponseCode());
+                    Assert.assertNull(get.getThrowable());
+                    URI digest = get.getDigest();
+                    long contentLength = get.getContentLength();
+                    Assert.assertEquals(computeChecksumURI(data1.getBytes()), digest);
+                    Assert.assertEquals(data1.getBytes().length, contentLength);
+
+                    String lastModified = get.getResponseHeader("Last-Modified");
+                    Assert.assertNotNull(lastModified);
+
+                    // 304 Not Modified
+                    get = new HttpGet(artifactURL, out);
+                    get.setRequestProperty("If-Modified-Since", lastModified);
+                    get.run();
+                    Assert.assertNull(get.getThrowable());
+                    Assert.assertEquals(304, get.getResponseCode());
+                    Assert.assertEquals(-1, get.getContentLength());
+
+                    // replace with new data
+                    in = new ByteArrayInputStream(data2.getBytes());
+                    put = new HttpUpload(in, artifactURL);
+                    put.setDigest(computeChecksumURI(data2.getBytes()));
+                    put.run();
+                    Assert.assertNull(put.getThrowable());
+
+                    // assert new file and metadata
+                    out = new ByteArrayOutputStream();
+                    get = new HttpGet(artifactURL, out);
+                    get.run();
+                    Assert.assertNull(get.getThrowable());
+                    Assert.assertEquals(200, get.getResponseCode());
+                    digest = get.getDigest();
+                    contentLength = get.getContentLength();
+                    Assert.assertEquals(computeChecksumURI(data2.getBytes()), digest);
+                    Assert.assertEquals(data2.getBytes().length, contentLength);
+
+                    // delete
+                    HttpDelete delete = new HttpDelete(artifactURL, false);
+                    delete.run();
+                    Assert.assertNull(delete.getThrowable());
+
+                    return null;
+                }
+            });
+
+        } catch (Exception t) {
+            log.error("unexpected throwable", t);
+            Assert.fail("unexpected throwable: " + t);
+        }
+    }
 }

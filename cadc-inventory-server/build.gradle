@@ -21,6 +21,7 @@ description = 'OpenCADC Storage Inventory server utility library'
 def git_url = 'https://github.com/opencadc/storage-inventory'
 
 dependencies {
+    implementation 'org.opencadc:cadc-registry:[1.7,)'
     implementation 'org.opencadc:cadc-inventory:[1.0.0,2.0)'
     implementation 'org.opencadc:cadc-inventory-db:[1.0.0,2.0)'
     implementation 'org.opencadc:cadc-util:[1.11,2.0)'
