@@ -146,19 +146,16 @@ public class FitsOperationsTest extends MinocTest {
         uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
         
         LOGGER.info("unset content-type and try again: rely on filename extension only...");
-        final URI noclArtifactURI = URI.create("cadc:TEST/" + testFilePrefix + "-nocl." + testFileExtension);
-        final URL noclArtifactURL = new URL(filesURL + "/" + noclArtifactURI.toString());
-        LOGGER.info("no content-length: " + noclArtifactURL);
-        
+        final URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
         try {
             putContentType = null;
-            uploadAndCompareCutout(noclArtifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
+            uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
         } finally {
             putContentType = "application/fits";
         }
         
         Subject.doAs(userSubject, (PrivilegedExceptionAction<Object>) () -> {
-            HttpGet head = new HttpGet(noclArtifactURL, false);
+            HttpGet head = new HttpGet(artifactURL, false);
             head.setHeadOnly(true);
             head.prepare();
             Assert.assertNull("no content type", head.getResponseHeader("content-type"));
@@ -207,49 +204,48 @@ public class FitsOperationsTest extends MinocTest {
         final String testFilePrefix = "test-simple";
         final String testFileExtension = "fits";
         final URI artifactURI = URI.create("cadc:TEST/" + testFilePrefix + "." + testFileExtension);
-        final String[] cutoutSpecs = new String[] {
+        final String[] cutoutSpecs = new String[]{
                 "[0][200:350,100:300]"
         };
 
         uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
-        
-        LOGGER.info("unset content-type and try again: rely on filename extension only...");
-        final URI noclArtifactURI = URI.create("cadc:TEST/" + testFilePrefix + "-nocl." + testFileExtension);
-        final URL noclArtifactURL = new URL(filesURL + "/" + noclArtifactURI.toString());
-        LOGGER.info("no content-length: " + noclArtifactURL);
-        
+
+        LOGGER.info("filenameOverride does not interfere: rely on content-type...");
         try {
             filenameOverridePrefix = "something-else";
             uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
         } finally {
             filenameOverridePrefix = null;
         }
-        
+
+        LOGGER.info("unset content-type and try again: rely on filename extension only...");
+        final URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
         try {
             putContentType = null;
-            uploadAndCompareCutout(noclArtifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
+            uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
         } finally {
             putContentType = "application/fits";
         }
-        
+
         Subject.doAs(userSubject, (PrivilegedExceptionAction<Object>) () -> {
-            HttpGet head = new HttpGet(noclArtifactURL, false);
+            HttpGet head = new HttpGet(artifactURL, false);
             head.setHeadOnly(true);
             head.prepare();
             LOGGER.info("null content-type test: " + head.getContentType());
             Assert.assertNull("no content type", head.getResponseHeader("content-type"));
             return null;
         });
-        
+
+        LOGGER.info("useless content-type: cutout should still work via filename extension...");
         try {
             putContentType = "application/octet-stream";
-            uploadAndCompareCutout(noclArtifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
+            uploadAndCompareCutout(artifactURI, SodaParamValidator.SUB, cutoutSpecs, testFilePrefix);
         } finally {
             putContentType = "application/fits";
         }
-        
+
         Subject.doAs(userSubject, (PrivilegedExceptionAction<Object>) () -> {
-            HttpGet head = new HttpGet(noclArtifactURL, false);
+            HttpGet head = new HttpGet(artifactURL, false);
             head.setHeadOnly(true);
             head.prepare();
             LOGGER.info("useless content-type test: " + head.getContentType());

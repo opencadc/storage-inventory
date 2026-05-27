@@ -12,5 +12,5 @@ which must connect to the same database as the minoc service.
 
 These tests also require the ability to resolve to the Vault VOSpace service to be able to download test data:
 
-`ivo://cadc.nrc.ca/vault = https://ws-cadc.canfar.net/vault/capabilities`
+`ivo://cadc.nrc.ca/vault = https://cadc-west-01.canfar.net/vault/capabilities`
 
