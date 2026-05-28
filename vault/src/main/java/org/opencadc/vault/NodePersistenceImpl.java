@@ -404,10 +404,10 @@ public class NodePersistenceImpl implements NodePersistence {
                 
                 // be consistent with DataNodeSizeWorker
                 NodeProperty contentChecksumProp = dn.getProperty(VOS.PROPERTY_URI_CONTENTMD5);
+                boolean isMd5 = "md5".equalsIgnoreCase(a.getContentChecksum().getScheme());
                 boolean updateContentChecksum = contentChecksumProp == null
-                        || !a.getContentChecksum().getScheme().equalsIgnoreCase("md5") // remove existing property if checksum is no longer MD5
-                        || (a.getContentChecksum().getScheme().equalsIgnoreCase("md5") // Persist VOSpace content-md5 property only for MD5 checksums
-                                && !a.getContentChecksum().getSchemeSpecificPart().equals(contentChecksumProp.getValue()));
+                        || !isMd5 // need to remove existing property if checksum is no longer MD5
+                        || !a.getContentChecksum().getSchemeSpecificPart().equals(contentChecksumProp.getValue());
 
                 NodeProperty contentDateProp = dn.getProperty(VOS.PROPERTY_URI_CONTENTDATE);
                 String contentLastModifiedStr = df.format(a.getContentLastModified());
@@ -438,7 +438,8 @@ public class NodePersistenceImpl implements NodePersistence {
                                 if (contentChecksumProp != null) {
                                     dn.getProperties().remove(contentChecksumProp);
                                 }
-                                if (a.getContentChecksum().getScheme().equalsIgnoreCase("md5")) {
+                                // Persist VOSpace content-md5 property only for MD5 checksums
+                                if (isMd5) {
                                     dn.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTMD5, a.getContentChecksum().getSchemeSpecificPart()));
                                 }
                             }

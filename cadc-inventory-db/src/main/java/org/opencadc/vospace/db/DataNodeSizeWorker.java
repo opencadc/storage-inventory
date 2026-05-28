@@ -158,10 +158,10 @@ public class DataNodeSizeWorker implements Runnable {
                 DataNode node = nodeDAO.getDataNode(artifact.getURI());
                 if (node != null) {
                     NodeProperty contentChecksumProp = node.getProperty(VOS.PROPERTY_URI_CONTENTMD5);
+                    boolean isMd5 = "md5".equalsIgnoreCase(artifact.getContentChecksum().getScheme());
                     boolean updateContentChecksum = contentChecksumProp == null
-                            || !artifact.getContentChecksum().getScheme().equalsIgnoreCase("md5") // remove existing property if checksum is no longer MD5
-                            || (artifact.getContentChecksum().getScheme().equalsIgnoreCase("md5") // Persist VOSpace content-md5 property only for MD5 checksums
-                                    && !artifact.getContentChecksum().getSchemeSpecificPart().equals(contentChecksumProp.getValue()));
+                            || !isMd5 // need to remove existing property if checksum is no longer MD5
+                            || !artifact.getContentChecksum().getSchemeSpecificPart().equals(contentChecksumProp.getValue());
 
                     NodeProperty contentDateProp = node.getProperty(VOS.PROPERTY_URI_CONTENTDATE);
                     String contentLastModifiedStr = df.format(artifact.getContentLastModified());
@@ -189,7 +189,8 @@ public class DataNodeSizeWorker implements Runnable {
                             if (contentChecksumProp != null) {
                                 node.getProperties().remove(contentChecksumProp);
                             }
-                            if (artifact.getContentChecksum().getScheme().equalsIgnoreCase("md5")) {
+                            // Persist VOSpace content-md5 property only for MD5 checksums
+                            if (isMd5) {
                                 node.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTMD5, artifact.getContentChecksum().getSchemeSpecificPart()));
                             }
                         }
