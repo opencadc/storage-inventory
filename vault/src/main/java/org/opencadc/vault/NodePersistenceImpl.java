@@ -405,9 +405,9 @@ public class NodePersistenceImpl implements NodePersistence {
                 // be consistent with DataNodeSizeWorker
                 NodeProperty contentChecksumProp = dn.getProperty(VOS.PROPERTY_URI_CONTENTMD5);
                 boolean isMd5 = "md5".equalsIgnoreCase(a.getContentChecksum().getScheme());
-                boolean updateContentChecksum = contentChecksumProp == null
-                        || !isMd5 // need to remove existing property if checksum is no longer MD5
-                        || !a.getContentChecksum().getSchemeSpecificPart().equals(contentChecksumProp.getValue());
+                boolean updateContentChecksum = (contentChecksumProp == null && isMd5) // need to create new property for checksums
+                        || (contentChecksumProp != null // need to remove existing property if checksum is no longer MD5
+                            && (!isMd5 || !a.getContentChecksum().getSchemeSpecificPart().equals(contentChecksumProp.getValue())));
 
                 NodeProperty contentDateProp = dn.getProperty(VOS.PROPERTY_URI_CONTENTDATE);
                 String contentLastModifiedStr = df.format(a.getContentLastModified());

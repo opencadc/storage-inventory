@@ -159,9 +159,9 @@ public class DataNodeSizeWorker implements Runnable {
                 if (node != null) {
                     NodeProperty contentChecksumProp = node.getProperty(VOS.PROPERTY_URI_CONTENTMD5);
                     boolean isMd5 = "md5".equalsIgnoreCase(artifact.getContentChecksum().getScheme());
-                    boolean updateContentChecksum = contentChecksumProp == null
-                            || !isMd5 // need to remove existing property if checksum is no longer MD5
-                            || !artifact.getContentChecksum().getSchemeSpecificPart().equals(contentChecksumProp.getValue());
+                    boolean updateContentChecksum = (contentChecksumProp == null && isMd5) // need to create new property for checksums
+                            || (contentChecksumProp != null // need to remove existing property if checksum is no longer MD5
+                                && (!isMd5 || !artifact.getContentChecksum().getSchemeSpecificPart().equals(contentChecksumProp.getValue())));
 
                     NodeProperty contentDateProp = node.getProperty(VOS.PROPERTY_URI_CONTENTDATE);
                     String contentLastModifiedStr = df.format(artifact.getContentLastModified());
