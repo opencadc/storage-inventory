@@ -159,11 +159,13 @@ public class DataNodeSizeWorker implements Runnable {
                 if (node != null) {
                     NodeProperty contentChecksumProp = node.getProperty(VOS.PROPERTY_URI_CONTENTMD5);
                     boolean updateContentChecksum = contentChecksumProp == null
+                            || !artifact.getContentChecksum().getScheme().equalsIgnoreCase("md5") // remove existing property if checksum is no longer MD5
                             || (artifact.getContentChecksum().getScheme().equalsIgnoreCase("md5") // Persist VOSpace content-md5 property only for MD5 checksums
                                     && !artifact.getContentChecksum().getSchemeSpecificPart().equals(contentChecksumProp.getValue()));
 
                     NodeProperty contentDateProp = node.getProperty(VOS.PROPERTY_URI_CONTENTDATE);
-                    boolean updateContentDate = contentDateProp == null || !df.format(artifact.getContentLastModified()).equals(contentDateProp.getValue());
+                    String contentLastModifiedStr = df.format(artifact.getContentLastModified());
+                    boolean updateContentDate = contentDateProp == null || !contentLastModifiedStr.equals(contentDateProp.getValue());
 
                     boolean updateBytesUsed = !artifact.getContentLength().equals(node.bytesUsed);
 
@@ -181,13 +183,15 @@ public class DataNodeSizeWorker implements Runnable {
                             if (contentDateProp != null) {
                                 node.getProperties().remove(contentDateProp);
                             }
-                            node.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTDATE, df.format(artifact.getContentLastModified())));
+                            node.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTDATE, contentLastModifiedStr));
                         }
                         if (updateContentChecksum) {
                             if (contentChecksumProp != null) {
                                 node.getProperties().remove(contentChecksumProp);
                             }
-                            node.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTMD5, artifact.getContentChecksum().getSchemeSpecificPart()));
+                            if (artifact.getContentChecksum().getScheme().equalsIgnoreCase("md5")) {
+                                node.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTMD5, artifact.getContentChecksum().getSchemeSpecificPart()));
+                            }
                         }
 
                         nodeDAO.put(node, delta); // delta forces lastModified update
