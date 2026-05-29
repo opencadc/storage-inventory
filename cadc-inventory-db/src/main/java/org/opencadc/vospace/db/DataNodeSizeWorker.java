@@ -84,8 +84,8 @@ import org.opencadc.vospace.NodeProperty;
 import org.opencadc.vospace.VOS;
 
 /**
- * This class performs the work of synchronizing the size of Data Nodes from 
- * inventory (Artifact) to vopsace (Node).
+ * This class performs the work of synchronizing some file properties
+ * from Artifact to DataNode.
  * 
  * @author adriand
  */
