@@ -84,8 +84,8 @@ import org.opencadc.vospace.NodeProperty;
 import org.opencadc.vospace.VOS;
 
 /**
- * This class performs the work of synchronizing the size of Data Nodes from 
- * inventory (Artifact) to vopsace (Node).
+ * This class performs the work of synchronizing some file properties
+ * from Artifact to DataNode.
  * 
  * @author adriand
  */
@@ -152,65 +152,11 @@ public class DataNodeSizeWorker implements Runnable {
 
         String uriBucket = null; // process all artifacts in a single thread
         try (final ResourceIterator<Artifact> iter = artifactDAO.iterator(storageNamespace, uriBucket, startTime, true, isStorageSite)) {
-            TransactionManager tm = nodeDAO.getTransactionManager();
             while (iter.hasNext()) {
                 Artifact artifact = iter.next();
                 DataNode node = nodeDAO.getDataNode(artifact.getURI());
                 if (node != null) {
-                    NodeProperty contentChecksumProp = node.getProperty(VOS.PROPERTY_URI_CONTENTMD5);
-                    boolean isMd5 = "md5".equalsIgnoreCase(artifact.getContentChecksum().getScheme());
-                    boolean updateContentChecksum = (contentChecksumProp == null && isMd5) // need to create new property for checksums
-                            || (contentChecksumProp != null // need to remove existing property if checksum is no longer MD5
-                                && (!isMd5 || !artifact.getContentChecksum().getSchemeSpecificPart().equals(contentChecksumProp.getValue())));
-
-                    NodeProperty contentDateProp = node.getProperty(VOS.PROPERTY_URI_CONTENTDATE);
-                    String contentLastModifiedStr = df.format(artifact.getContentLastModified());
-                    boolean updateContentDate = contentDateProp == null || !contentLastModifiedStr.equals(contentDateProp.getValue());
-
-                    boolean updateBytesUsed = !artifact.getContentLength().equals(node.bytesUsed);
-
-                    boolean delta = updateBytesUsed || updateContentChecksum || updateContentDate;
-                    log.debug(artifact.getURI() + " len=" + artifact.getContentLength() + " -> " + node.getName());
-                    tm.startTransaction();
-                    try {
-                        node = (DataNode)nodeDAO.lock(node);
-                        if (node == null) {
-                            continue; // node gone - race condition
-                        }
-                        node.bytesUsed = artifact.getContentLength();
-
-                        if (updateContentDate) {
-                            if (contentDateProp != null) {
-                                node.getProperties().remove(contentDateProp);
-                            }
-                            node.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTDATE, contentLastModifiedStr));
-                        }
-                        if (updateContentChecksum) {
-                            if (contentChecksumProp != null) {
-                                node.getProperties().remove(contentChecksumProp);
-                            }
-                            // Persist VOSpace content-md5 property only for MD5 checksums
-                            if (isMd5) {
-                                node.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTMD5, artifact.getContentChecksum().getSchemeSpecificPart()));
-                            }
-                        }
-
-                        nodeDAO.put(node, delta); // delta forces lastModified update
-                        tm.commitTransaction();
-                        log.debug("ArtifactSyncWorker.updateDataNode id=" + node.getID() 
-                                + " bytesUsed=" + node.bytesUsed + " artifact.lastModified=" + df.format(artifact.getLastModified()));
-                    } catch (Exception ex) {
-                        log.debug("Failed to update data node size for " + node.getName(), ex);
-                        tm.rollbackTransaction();
-                        throw ex;
-                    } finally {
-                        if (tm.isOpen()) {
-                            log.error("BUG: transaction open in finally. Rolling back...");
-                            tm.rollbackTransaction();
-                            log.error("Rollback: OK");
-                            throw new RuntimeException("BUG: transaction open in finally");
-                        }
-                    }
+                    updateDataNode(artifact, node, nodeDAO, df);
                 }
                 harvestState.curLastModified = artifact.getLastModified();
                 harvestState.curID = artifact.getID();
@@ -229,6 +175,73 @@ public class DataNodeSizeWorker implements Runnable {
             log.debug(opName + " source=" + harvestState.getResourceID() 
                     + " instance=" + harvestState.instanceID 
                     + " end=null");
+        }
+    }
+    
+    /**
+     * Copy some properties from Artifact to DataNode
+     * @param artifact source of file properties
+     * @param node the data node to update
+     * @param dao NodeDAO
+     * @param df standard VOSpace date formatter
+     * @return the updated node (may be different object due to db lock)
+     */
+    public static DataNode updateDataNode(Artifact artifact, DataNode node, NodeDAO dao, DateFormat df) {
+        TransactionManager tm = dao.getTransactionManager();
+        NodeProperty contentChecksumProp = node.getProperty(VOS.PROPERTY_URI_CONTENTMD5);
+        boolean isMd5 = "md5".equalsIgnoreCase(artifact.getContentChecksum().getScheme());
+        boolean updateContentChecksum = (contentChecksumProp == null && isMd5) // need to create new property for checksums
+                || (contentChecksumProp != null // need to remove existing property if checksum is no longer MD5
+                    && (!isMd5 || !artifact.getContentChecksum().getSchemeSpecificPart().equals(contentChecksumProp.getValue())));
+
+        NodeProperty contentDateProp = node.getProperty(VOS.PROPERTY_URI_CONTENTDATE);
+        String contentLastModifiedStr = df.format(artifact.getContentLastModified());
+        boolean updateContentDate = contentDateProp == null || !contentLastModifiedStr.equals(contentDateProp.getValue());
+
+        boolean updateBytesUsed = !artifact.getContentLength().equals(node.bytesUsed);
+
+        boolean delta = updateBytesUsed || updateContentChecksum || updateContentDate;
+        log.debug(artifact.getURI() + " len=" + artifact.getContentLength() + " -> " + node.getName());
+        tm.startTransaction();
+        try {
+            node = (DataNode) dao.lock(node);
+            if (node == null) {
+                return null; // node gone - race condition
+            }
+            node.bytesUsed = artifact.getContentLength();
+
+            if (updateContentDate) {
+                if (contentDateProp != null) {
+                    node.getProperties().remove(contentDateProp);
+                }
+                node.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTDATE, contentLastModifiedStr));
+            }
+            if (updateContentChecksum) {
+                if (contentChecksumProp != null) {
+                    node.getProperties().remove(contentChecksumProp);
+                }
+                // Persist VOSpace content-md5 property only for MD5 checksums
+                if (isMd5) {
+                    node.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTMD5, artifact.getContentChecksum().getSchemeSpecificPart()));
+                }
+            }
+
+            dao.put(node, delta); // delta forces lastModified update
+            tm.commitTransaction();
+            log.debug("ArtifactSyncWorker.updateDataNode id=" + node.getID() 
+                    + " bytesUsed=" + node.bytesUsed + " artifact.lastModified=" + df.format(artifact.getLastModified()));
+            return node;
+        } catch (Exception ex) {
+            log.debug("Failed to update data node size for " + node.getName(), ex);
+            tm.rollbackTransaction();
+            throw ex;
+        } finally {
+            if (tm.isOpen()) {
+                log.error("BUG: transaction open in finally. Rolling back...");
+                tm.rollbackTransaction();
+                log.error("Rollback: OK");
+                throw new RuntimeException("BUG: transaction open in finally");
+            }
         }
     }
 
