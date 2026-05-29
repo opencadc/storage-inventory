@@ -109,6 +109,7 @@ import org.opencadc.vospace.Node;
 import org.opencadc.vospace.NodeNotSupportedException;
 import org.opencadc.vospace.NodeProperty;
 import org.opencadc.vospace.VOS;
+import org.opencadc.vospace.db.DataNodeSizeWorker;
 import org.opencadc.vospace.db.NodeDAO;
 import org.opencadc.vospace.io.NodeWriter;
 import org.opencadc.vospace.server.NodePersistence;
@@ -397,81 +398,11 @@ public class NodePersistenceImpl implements NodePersistence {
             Artifact a = artifactDAO.get(dn.storageID);
             DateFormat df = NodeWriter.getDateFormat();
             if (a != null) {
-                // DataNode.bytesUsed is an optimization (cache): 
-                // if DataNode.bytesUsed != Artifact.contentLength we update the cache
-                // this retains put+get consistency in a single-site deployed (with minoc)
-                // and may help hide some inconsistencies in child listing sizes
+                // sync props from Artifact to DataNode to support container listing
+                // this normally happens in background but here we can also do it as a side effect 
+                // for maximum consistency
+                DataNodeSizeWorker.updateDataNode(a, dn, dao, df);
                 
-                // be consistent with DataNodeSizeWorker
-                NodeProperty contentChecksumProp = dn.getProperty(VOS.PROPERTY_URI_CONTENTMD5);
-                boolean isMd5 = "md5".equalsIgnoreCase(a.getContentChecksum().getScheme());
-                boolean updateContentChecksum = (contentChecksumProp == null && isMd5) // need to create new property for checksums
-                        || (contentChecksumProp != null // need to remove existing property if checksum is no longer MD5
-                            && (!isMd5 || !a.getContentChecksum().getSchemeSpecificPart().equals(contentChecksumProp.getValue())));
-
-                NodeProperty contentDateProp = dn.getProperty(VOS.PROPERTY_URI_CONTENTDATE);
-                String contentLastModifiedStr = df.format(a.getContentLastModified());
-                boolean updateContentDate = contentDateProp == null || !contentLastModifiedStr.equals(contentDateProp.getValue());
-
-                boolean updateBytesUsed = !a.getContentLength().equals(dn.bytesUsed);
-
-                boolean delta = updateBytesUsed || updateContentChecksum || updateContentDate;
-                if (delta) {
-                    TransactionManager txn = dao.getTransactionManager();
-                    try {
-                        log.debug("starting node transaction");
-                        txn.startTransaction();
-                        log.debug("start txn: OK");
-            
-                        DataNode locked = (DataNode) dao.lock(dn);
-                        if (locked != null) {
-                            dn = locked; // safer than accidentally using the wrong variable
-                            dn.bytesUsed = a.getContentLength();
-
-                            if (updateContentDate) {
-                                if (contentDateProp != null) {
-                                    dn.getProperties().remove(contentDateProp);
-                                }
-                                dn.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTDATE, contentLastModifiedStr));
-                            }
-                            if (updateContentChecksum) {
-                                if (contentChecksumProp != null) {
-                                    dn.getProperties().remove(contentChecksumProp);
-                                }
-                                // Persist VOSpace content-md5 property only for MD5 checksums
-                                if (isMd5) {
-                                    dn.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTMD5, a.getContentChecksum().getSchemeSpecificPart()));
-                                }
-                            }
-
-                            dao.put(dn, delta);
-                            ret = dn;
-                        }
-
-                        log.debug("commit txn...");
-                        txn.commitTransaction();
-                        log.debug("commit txn: OK");
-                        if (locked == null) {
-                            return null; // gone
-                        }
-                    } catch (Exception ex) {
-                        if (txn.isOpen()) {
-                            log.error("failed to update bytesUsed on " + dn.getID() + " aka " + dn.getName(), ex);
-                            txn.rollbackTransaction();
-                            log.debug("rollback txn: OK");
-                        }
-                    } finally {
-                        if (txn.isOpen()) {
-                            log.error("BUG - open transaction in finally");
-                            txn.rollbackTransaction();
-                            log.error("rollback txn: OK");
-                        }
-                    }
-                }
-                
-                // #date is always Node.lastModified for consistency with container listing
-                // TODO: some props like contentType are set on the artifact so those changes do not
-                //       cause a visible #date change; probably OK
                 ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_DATE, df.format(ret.getLastModified())));
 
                 if (a.contentEncoding != null) {
