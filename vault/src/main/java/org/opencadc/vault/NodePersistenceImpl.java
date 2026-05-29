@@ -403,8 +403,19 @@ public class NodePersistenceImpl implements NodePersistence {
                 // and may help hide some inconsistencies in child listing sizes
                 
                 // be consistent with DataNodeSizeWorker
-                boolean delta = !a.getContentLength().equals(dn.bytesUsed); // size change
-                delta = delta || a.getLastModified().after(dn.getLastModified());
+                NodeProperty contentChecksumProp = dn.getProperty(VOS.PROPERTY_URI_CONTENTMD5);
+                boolean isMd5 = "md5".equalsIgnoreCase(a.getContentChecksum().getScheme());
+                boolean updateContentChecksum = (contentChecksumProp == null && isMd5) // need to create new property for checksums
+                        || (contentChecksumProp != null // need to remove existing property if checksum is no longer MD5
+                            && (!isMd5 || !a.getContentChecksum().getSchemeSpecificPart().equals(contentChecksumProp.getValue())));
+
+                NodeProperty contentDateProp = dn.getProperty(VOS.PROPERTY_URI_CONTENTDATE);
+                String contentLastModifiedStr = df.format(a.getContentLastModified());
+                boolean updateContentDate = contentDateProp == null || !contentLastModifiedStr.equals(contentDateProp.getValue());
+
+                boolean updateBytesUsed = !a.getContentLength().equals(dn.bytesUsed);
+
+                boolean delta = updateBytesUsed || updateContentChecksum || updateContentDate;
                 if (delta) {
                     TransactionManager txn = dao.getTransactionManager();
                     try {
@@ -416,6 +427,23 @@ public class NodePersistenceImpl implements NodePersistence {
                         if (locked != null) {
                             dn = locked; // safer than accidentally using the wrong variable
                             dn.bytesUsed = a.getContentLength();
+
+                            if (updateContentDate) {
+                                if (contentDateProp != null) {
+                                    dn.getProperties().remove(contentDateProp);
+                                }
+                                dn.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTDATE, contentLastModifiedStr));
+                            }
+                            if (updateContentChecksum) {
+                                if (contentChecksumProp != null) {
+                                    dn.getProperties().remove(contentChecksumProp);
+                                }
+                                // Persist VOSpace content-md5 property only for MD5 checksums
+                                if (isMd5) {
+                                    dn.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTMD5, a.getContentChecksum().getSchemeSpecificPart()));
+                                }
+                            }
+
                             dao.put(dn, delta);
                             ret = dn;
                         }
@@ -446,16 +474,6 @@ public class NodePersistenceImpl implements NodePersistence {
                 //       cause a visible #date change; probably OK
                 ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_DATE, df.format(ret.getLastModified())));
 
-                // #content-date is only output if different from #date
-                if (!ret.getLastModified().equals(a.getContentLastModified())) {
-                    ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTDATE, df.format(a.getContentLastModified())));
-                }
-
-                // only #md5 in VOSpace spec
-                if (a.getContentChecksum().getScheme().equalsIgnoreCase("md5")) {
-                    ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTMD5, a.getContentChecksum().getSchemeSpecificPart()));
-                }
-                
                 if (a.contentEncoding != null) {
                     ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTENCODING, a.contentEncoding));
                 }

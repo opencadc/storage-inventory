@@ -80,6 +80,8 @@ import org.opencadc.inventory.db.ArtifactDAO;
 import org.opencadc.inventory.db.HarvestState;
 import org.opencadc.inventory.db.HarvestStateDAO;
 import org.opencadc.vospace.DataNode;
+import org.opencadc.vospace.NodeProperty;
+import org.opencadc.vospace.VOS;
 
 /**
  * This class performs the work of synchronizing the size of Data Nodes from 
@@ -155,8 +157,19 @@ public class DataNodeSizeWorker implements Runnable {
                 Artifact artifact = iter.next();
                 DataNode node = nodeDAO.getDataNode(artifact.getURI());
                 if (node != null) {
-                    boolean delta = !artifact.getContentLength().equals(node.bytesUsed); // size change
-                    delta = delta || artifact.getLastModified().after(node.getLastModified());
+                    NodeProperty contentChecksumProp = node.getProperty(VOS.PROPERTY_URI_CONTENTMD5);
+                    boolean isMd5 = "md5".equalsIgnoreCase(artifact.getContentChecksum().getScheme());
+                    boolean updateContentChecksum = (contentChecksumProp == null && isMd5) // need to create new property for checksums
+                            || (contentChecksumProp != null // need to remove existing property if checksum is no longer MD5
+                                && (!isMd5 || !artifact.getContentChecksum().getSchemeSpecificPart().equals(contentChecksumProp.getValue())));
+
+                    NodeProperty contentDateProp = node.getProperty(VOS.PROPERTY_URI_CONTENTDATE);
+                    String contentLastModifiedStr = df.format(artifact.getContentLastModified());
+                    boolean updateContentDate = contentDateProp == null || !contentLastModifiedStr.equals(contentDateProp.getValue());
+
+                    boolean updateBytesUsed = !artifact.getContentLength().equals(node.bytesUsed);
+
+                    boolean delta = updateBytesUsed || updateContentChecksum || updateContentDate;
                     log.debug(artifact.getURI() + " len=" + artifact.getContentLength() + " -> " + node.getName());
                     tm.startTransaction();
                     try {
@@ -165,6 +178,23 @@ public class DataNodeSizeWorker implements Runnable {
                             continue; // node gone - race condition
                         }
                         node.bytesUsed = artifact.getContentLength();
+
+                        if (updateContentDate) {
+                            if (contentDateProp != null) {
+                                node.getProperties().remove(contentDateProp);
+                            }
+                            node.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTDATE, contentLastModifiedStr));
+                        }
+                        if (updateContentChecksum) {
+                            if (contentChecksumProp != null) {
+                                node.getProperties().remove(contentChecksumProp);
+                            }
+                            // Persist VOSpace content-md5 property only for MD5 checksums
+                            if (isMd5) {
+                                node.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTMD5, artifact.getContentChecksum().getSchemeSpecificPart()));
+                            }
+                        }
+
                         nodeDAO.put(node, delta); // delta forces lastModified update
                         tm.commitTransaction();
                         log.debug("ArtifactSyncWorker.updateDataNode id=" + node.getID() 
