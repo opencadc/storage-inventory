@@ -111,8 +111,9 @@ public class NodesTest extends org.opencadc.conformance.vos.NodesTest {
     private static final Logger log = Logger.getLogger(NodesTest.class);
 
     static {
-        Log4jInit.setLevel("org.opencadc.conformance.vos", Level.DEBUG);
-        Log4jInit.setLevel("org.opencadc.vospace", Level.DEBUG);
+        Log4jInit.setLevel("org.opencadc.conformance.vos", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.vospace", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.vault", Level.INFO);
     }
     
     public NodesTest() {
@@ -154,18 +155,18 @@ public class NodesTest extends org.opencadc.conformance.vos.NodesTest {
             Assert.assertNull(persistedNode.getProperty(VOS.PROPERTY_URI_CONTENTDATE));
 
             // Push some data to the node
-            PushData(nodeURI.getURI());
+            pushData(nodeURI.getURI());
 
             result = get(nodeURL, 200, XML_CONTENT_TYPE);
             log.info("found: " + result.vosURI + " owner: " + result.node.ownerDisplay);
             Assert.assertTrue(result.node instanceof DataNode);
             persistedNode = (DataNode) result.node;
-            Assert.assertNotNull(persistedNode.getProperties());
             for (NodeProperty np : persistedNode.getProperties()) {
                 log.info("persisted prop: " + np.getKey() + " = " + np.getValue());
             }
             Assert.assertEquals(testNode, persistedNode);
             Assert.assertEquals(nodeURI, result.vosURI);
+            // expect these to be returned by the GET after the upload
             Assert.assertNotNull(persistedNode.getProperty(VOS.PROPERTY_URI_CONTENTMD5));
             Assert.assertNotNull(persistedNode.getProperty(VOS.PROPERTY_URI_CONTENTDATE));
 
@@ -178,7 +179,7 @@ public class NodesTest extends org.opencadc.conformance.vos.NodesTest {
         }
     }
 
-    private void PushData(URI testURI) throws Exception {
+    private void pushData(URI testURI) throws Exception {
         // Create a push-to-vospace Transfer for the node
         Transfer pushTransfer = new Transfer(testURI, Direction.pushToVoSpace);
         pushTransfer.version = VOS.VOSPACE_21;

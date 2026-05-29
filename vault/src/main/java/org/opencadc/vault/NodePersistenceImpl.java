@@ -401,10 +401,11 @@ public class NodePersistenceImpl implements NodePersistence {
                 // sync props from Artifact to DataNode to support container listing
                 // this normally happens in background but here we can also do it as a side effect 
                 // for maximum consistency
-                DataNodeSizeWorker.updateDataNode(a, dn, dao, df);
+                log.debug("calling DataNodeSizeWorker.updateDataNode: " + a + " -> " + dn);
+                dn = DataNodeSizeWorker.updateDataNode(a, dn, dao, df);
+                ret = dn;
                 
-                ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_DATE, df.format(ret.getLastModified())));
-
+                // artifact props not stored in DataNode
                 if (a.contentEncoding != null) {
                     ret.getProperties().add(new NodeProperty(VOS.PROPERTY_URI_CONTENTENCODING, a.contentEncoding));
                 }

@@ -178,8 +178,15 @@ public class DataNodeSizeWorker implements Runnable {
         }
     }
     
-    // also used by vault NodePersistenceImpl
-    public static void updateDataNode(Artifact artifact, DataNode node, NodeDAO dao, DateFormat df) {
+    /**
+     * Copy some properties from Artifact to DataNode
+     * @param artifact source of file properties
+     * @param node the data node to update
+     * @param dao NodeDAO
+     * @param df standard VOSpace date formatter
+     * @return the updated node (may be different object due to db lock)
+     */
+    public static DataNode updateDataNode(Artifact artifact, DataNode node, NodeDAO dao, DateFormat df) {
         TransactionManager tm = dao.getTransactionManager();
         NodeProperty contentChecksumProp = node.getProperty(VOS.PROPERTY_URI_CONTENTMD5);
         boolean isMd5 = "md5".equalsIgnoreCase(artifact.getContentChecksum().getScheme());
@@ -199,7 +206,7 @@ public class DataNodeSizeWorker implements Runnable {
         try {
             node = (DataNode) dao.lock(node);
             if (node == null) {
-                return; // node gone - race condition
+                return null; // node gone - race condition
             }
             node.bytesUsed = artifact.getContentLength();
 
@@ -223,6 +230,7 @@ public class DataNodeSizeWorker implements Runnable {
             tm.commitTransaction();
             log.debug("ArtifactSyncWorker.updateDataNode id=" + node.getID() 
                     + " bytesUsed=" + node.bytesUsed + " artifact.lastModified=" + df.format(artifact.getLastModified()));
+            return node;
         } catch (Exception ex) {
             log.debug("Failed to update data node size for " + node.getName(), ex);
             tm.rollbackTransaction();
