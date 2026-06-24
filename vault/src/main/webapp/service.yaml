@@ -400,6 +400,57 @@ paths:
           required: true
           type: string
           format: uri
+  /async-nodesize:
+    post:
+      description: |
+        Post an asynchronous job to compute recursive storage usage for a VOSpace allocation.
+        This is an IVOA UWS endpoint.
+      tags:
+        - Recursive operations (async)
+      consumes:
+        - None
+      responses:
+        '200':
+          description: Successful response
+        '201':
+          description: Successful response
+        '303':
+          description: Job created with a standard redirect URL to execute the created job
+        '400':
+          description: Invalid request
+        '403':
+          description: If the user does not have permission on the allocation root
+        '404':
+          description: If the target node could not be found
+        '500':
+          description: Internal error
+        '503':
+          description: Service busy
+        default:
+          description: Unexpected error
+          schema:
+            $ref: '#/definitions/Error'
+      parameters:
+        - name: target
+          in: query
+          description: VOSURI of the allocation (ContainerNode) to measure
+          required: true
+          type: string
+          format: uri
+        - name: maxdepth
+          in: query
+          description: Maximum container depth to include in the report (default 0)
+          required: false
+          type: integer
+          minimum: 0
+        - name: sort
+          in: query
+          description: Sort report lines by size (`asc` or `desc`)
+          required: false
+          type: string
+          enum:
+            - asc
+            - desc
   /availability:
     get:
       tags:
