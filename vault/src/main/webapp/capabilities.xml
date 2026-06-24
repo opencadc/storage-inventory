@@ -71,9 +71,9 @@
     </interface>
   </capability>
 
-    <capability standardID="ivo://ivoa.net/std/VOSpace#node-size-report">
+    <capability standardID="ivo://ivoa.net/std/VOSpace#recursive-nodesize-proto">
         <interface xsi:type="vs:ParamHTTP" role="std">
-            <accessURL use="base">https://replace.me.com/vault/node-size-report</accessURL>
+            <accessURL use="base">https://replace.me.com/vault/async-nodesize</accessURL>
             <securityMethod/>
             <securityMethod standardID="ivo://ivoa.net/sso#cookie"/>
             <securityMethod standardID="ivo://ivoa.net/sso#tls-with-certificate"/>
