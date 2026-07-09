@@ -76,6 +76,7 @@ import ca.nrc.cadc.dali.util.PolarizationStateListFormat;
 import ca.nrc.cadc.dali.util.ShapeFormat;
 import ca.nrc.cadc.util.StringUtil;
 import java.util.List;
+import org.opencadc.minoc.GetAction;
 import org.opencadc.soda.ExtensionSlice;
 import org.opencadc.soda.PixelRange;
 import org.opencadc.soda.server.Cutout;
@@ -85,8 +86,10 @@ import org.opencadc.soda.server.Cutout;
  * Calculate an appropriate output filename based on some requested cutout specification.
  */
 public class CutoutFileNameFormat {
+    private static final String REGEX_SPACE_DECIMAL = "[ .]";
     private static final String OUTPUT_DELIMITER = "_";
     private final String originalFileName;
+    
 
 
     public CutoutFileNameFormat(final String originalFileName) {
@@ -127,24 +130,44 @@ public class CutoutFileNameFormat {
             appendage.deleteCharAt(appendage.lastIndexOf(OUTPUT_DELIMITER));
         }
 
-        final StringBuilder fileBuilder = new StringBuilder(originalFileName);
-        fileBuilder.insert(fileBuilder.lastIndexOf(".") + 1,
-                           appendage.toString().replaceAll("\\.", OUTPUT_DELIMITER) + ".");
+        // remove fits extension
+        String base = originalFileName;
+        String ext = null;
+        for (String s : GetAction.FITS_EXTENSIONS) {
+            if (originalFileName.endsWith(s)) {
+                base = originalFileName.substring(0, originalFileName.length() - s.length());
+                ext = s;
+            }
+        }
+        if (ext != null) {
+            ext = cleanExtension(ext);
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append(base).append(".");
+        sb.append(appendage);
+        sb.append(ext);
 
-        return fileBuilder.toString();
+        return sb.toString();
+    }
+    
+    private String cleanExtension(String ext) {
+        if (ext.endsWith(".fz")) {
+            return ".fits";
+        }
+        return ext;
     }
 
     private void appendIntervalCutout(final Interval<?> interval, final StringBuilder appendage) {
         final IntervalFormat intervalFormat = new IntervalFormat();
         final String formattedInterval = intervalFormat.format(interval);
-        appendage.append(formattedInterval.replaceAll(" ", OUTPUT_DELIMITER)).append(OUTPUT_DELIMITER)
+        appendage.append(formattedInterval.replaceAll(REGEX_SPACE_DECIMAL, OUTPUT_DELIMITER)).append(OUTPUT_DELIMITER)
                  .append(OUTPUT_DELIMITER);
     }
 
     private void appendShapeCutout(final Shape shape, final StringBuilder appendage) {
         final ShapeFormat shapeFormat = new ShapeFormat();
         final String formattedShape = shapeFormat.format(shape);
-        appendage.append(formattedShape.replaceAll(" ", OUTPUT_DELIMITER))
+        appendage.append(formattedShape.replaceAll(REGEX_SPACE_DECIMAL, OUTPUT_DELIMITER))
                  .append(OUTPUT_DELIMITER).append(OUTPUT_DELIMITER);
     }
 
@@ -152,8 +175,8 @@ public class CutoutFileNameFormat {
                                           final StringBuilder appendage) {
         final PolarizationStateListFormat polarizationStateListFormat = new PolarizationStateListFormat();
         final String formattedPolarizationStates = polarizationStateListFormat.format(polarizationStates);
-        appendage.append(formattedPolarizationStates.replaceAll(" ", OUTPUT_DELIMITER)
-                                                    .replaceAll("\\|", OUTPUT_DELIMITER))
+        appendage.append(formattedPolarizationStates.replaceAll(REGEX_SPACE_DECIMAL, OUTPUT_DELIMITER)
+                                                    .replaceAll("[|]", OUTPUT_DELIMITER))
                  .append(OUTPUT_DELIMITER).append(OUTPUT_DELIMITER);
     }
 

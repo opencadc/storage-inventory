@@ -129,7 +129,8 @@ public class GetAction extends ArtifactAction {
         "NULL", // existing bad content
         "None"  // existing bad content
     };
-    private static final String[] FITS_EXTENSIONS = new String[] {
+    // used by operations
+    public static final String[] FITS_EXTENSIONS = new String[] {
         ".fits",
         ".fits.fz",
         ".fz" //??
