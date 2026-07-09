@@ -61,4 +61,7 @@ configurations {
 
   // pulled by stil,unused, critical CVEs:
   runtimeOnly.exclude group: 'org.yaml', module: 'snakeyaml'
+
+  // CVEs
+  runtimeOnly.exclude group: 'org.codehaus.jackson'
 }
