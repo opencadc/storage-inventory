@@ -255,6 +255,28 @@
     <load-on-startup>3</load-on-startup>
   </servlet>
 
+    <!-- async allocation size servlet -->
+    <servlet>
+        <servlet-name>RecursiveNodeSizeServlet</servlet-name>
+        <servlet-class>ca.nrc.cadc.uws.server.JobServlet</servlet-class>
+        <init-param>
+            <param-name>get</param-name>
+            <param-value>ca.nrc.cadc.uws.web.GetAction</param-value>
+        </init-param>
+        <init-param>
+            <param-name>post</param-name>
+            <param-value>ca.nrc.cadc.uws.web.PostAction</param-value>
+        </init-param>
+        <init-param>
+            <param-name>delete</param-name>
+            <param-value>ca.nrc.cadc.uws.web.DeleteAction</param-value>
+        </init-param>
+        <init-param>
+            <param-name>ca.nrc.cadc.uws.server.JobManager</param-name>
+            <param-value>org.opencadc.vault.uws.RecursiveNodeSizeJobManager</param-value>
+        </init-param>
+        <load-on-startup>3</load-on-startup>
+    </servlet>
 
     <!-- hopefully temporary -->
     <!-- internal servlet to assist async transfer servlet -->
@@ -299,7 +321,16 @@
     <servlet-name>RecursiveNodePropsServlet</servlet-name>
     <url-pattern>/async-setprops/*</url-pattern>
   </servlet-mapping>
-  
+
+  <servlet-mapping>
+      <servlet-name>RecursiveNodeSizeServlet</servlet-name>
+      <url-pattern>/async-nodesize/*</url-pattern>
+  </servlet-mapping>
+
+  <servlet-mapping>
+      <servlet-name>RecursiveNodeSizeServlet</servlet-name>
+      <url-pattern>/nodesize-report/*</url-pattern>
+  </servlet-mapping>
   <servlet-mapping>
     <servlet-name>AsyncTransferServlet</servlet-name>
     <url-pattern>/transfers/*</url-pattern>
