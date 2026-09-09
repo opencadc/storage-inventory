@@ -23,6 +23,7 @@ def git_url = 'https://github.com/opencadc/storage-inventory'
 dependencies {
     implementation 'org.opencadc:cadc-util:[1.12,2.0)'
     implementation 'org.opencadc:cadc-inventory:[1.0,2.0)'
+    implementation 'org.opencadc:cadc-inventory-db:[1.1,2.0)'
     implementation 'org.opencadc:cadc-storage-adapter:[1.0,2.0)'
 
     testImplementation 'junit:junit:[4.0,)'
