@@ -1,0 +1,32 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'checkstyle'
+}
+
+repositories {
+    mavenCentral()
+    mavenLocal()
+}
+
+apply from: '../opencadc.gradle'
+
+sourceCompatibility = 11
+
+group = 'org.opencadc'
+
+mainClassName = 'org.opencadc.xrootd.Main
+
+dependencies {
+    implementation 'org.opencadc:cadc-util:[1.10.2,2.0)'
+    implementation 'org.opencadc:cadc-log:[1.1.2,2.0)'
+    implementation 'org.opencadc:cadc-inventory:[1.1.0,2.0)'
+    implementation 'org.opencadc:cadc-inventory-db:[1.1,2.0)'
+    implementation 'org.opencadc:cadc-inventory-util:[1.0,2.0)'
+    implementation 'org.opencadc:cadc-storage-adapter:[1.0,)'
+    implementation 'org.opencadc:cadc-storage-adapter-eos:[0.1,)'
+
+    testImplementation 'junit:junit:[4.12,5.0)'
+}
+
+
