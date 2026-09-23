@@ -93,13 +93,13 @@ public class EosFindTest {
     }
 
     EosFind eos = new EosFind(URI.create("root://eos-mgm.keel-dev.arbutus.cloud"), 
-            "/eos/keel-dev.arbutus.cloud/data/lsst", "zteos64:invalid-token", "lsst");
+            "/eos/keel-dev.arbutus.cloud/data/lsst", "zteos64:invalid-token", "lsst", null);
 
     public EosFindTest() { 
     }
 
     @Test
-    public void testPathStorageLocation() throws Exception {
+    public void testPathToStorageLocation() throws Exception {
         String path = "users/fabio/hello.txt";
         StorageLocation sloc = eos.pathToStorageLocation(path);
         log.info("sloc: " + sloc);

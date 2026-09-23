@@ -106,9 +106,7 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
     private final String mgmPath;
     private final String authToken;
     private final String artifactScheme;
-    
-    // optional storageBucketPrefix
-    public String pathPrefix;
+    private final String subpath;
     
     private Process proc;
     private InputStream istream;
@@ -118,11 +116,14 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
     private LineNumberReader inputReader;
     private StorageMetadata cur = null;
 
-    public EosFind(URI mgmServer, String mgmPath, String authToken, String artifactScheme) {
+    // mgmPath is not included in the output StorageLocation
+    // subpath is included in the output StorageLocation
+    public EosFind(URI mgmServer, String mgmPath, String authToken, String artifactScheme, String subpath) {
         this.mgmServer = mgmServer;
         this.mgmPath = mgmPath;
         this.authToken = authToken;
         this.artifactScheme = artifactScheme;
+        this.subpath = subpath;
     }
 
     // explicit start
@@ -134,8 +135,8 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
         // currently used: openStream()
         try {
             String path = mgmPath;
-            if (pathPrefix != null) {
-                path += "/" + pathPrefix;
+            if (subpath != null) {
+                path += "/" + subpath;
             }
             openStream(mgmServer, path, authToken);
             this.inputReader = new LineNumberReader(new InputStreamReader(istream));
@@ -310,7 +311,7 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
         environment.put("EOS_MGM_URL", mgmServer.toASCIIString());
         environment.put("EOSAUTHZ", authToken);
 
-        log.warn("openStream: " + str);
+        log.info("openStream: " + str);
         this.proc = processBuilder.start();
         this.istream = proc.getInputStream();
         this.ostream = proc.getOutputStream();

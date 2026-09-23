@@ -131,10 +131,10 @@ public class EosStorageAdapter implements StorageAdapter {
     private static final int CIRC_BUFFERS = 3;
     private static final int CIRC_BUFFERSIZE = 64 * 1024;
     
-    private final URI mgmServer;
-    private final String mgmPath;
-    private final URL mgmBaseURL;
-    private final String authToken;
+    final URI mgmServer;
+    final String mgmPath;
+    final URL mgmBaseURL;
+    final String authToken;
     private final String artifactScheme;
 
     /**
@@ -345,10 +345,8 @@ public class EosStorageAdapter implements StorageAdapter {
         if (includeRecoverable) {
             throw new UnsupportedOperationException();
         }
-        EosFind find = new EosFind(mgmServer, mgmPath, authToken, artifactScheme);
-        find.pathPrefix = storageBucketPrefix;
-        find.start();
-        return find;
+        EosPathIterator iter = new EosPathIterator(mgmServer, mgmPath, authToken, artifactScheme, storageBucketPrefix);
+        return iter;
     }
 
     // read-only implementation -- everything else unsupported
