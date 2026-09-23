@@ -17,9 +17,11 @@ org.opencadc.inventory.storage.eos.EosStorageAdapter.mgmHttpsPort = {https port}
 
 org.opencadc.inventory.storage.eos.EosStorageAdapter.authToken = zteos64:{token}
 
-org.opencadc.inventory.storage.eos.EosStorageAdapter.artifactScheme = {scheme}
+# new
+org.opencadc.inventory.storage.eos.EosStorageAdapter.subpath = {dir name under mgmServerPath}
 
-org.opencadc.inventory.storage.eos.schema={schema for scanned storage objects}
+# no longer used:
+org.opencadc.inventory.storage.eos.EosStorageAdapter.artifactScheme = {scheme}
 ```
 
 The _mgmServer_ is a normal value of the EOS_MGM_URL environment variable used by eos-client tools; it is
@@ -35,10 +37,4 @@ access.
 The _authToken_ is used to authenticate to the EOS server.
 
 The _artifactScheme_ is used to create Artifact.uri values from backend storage relative paths. This is used
-by the `xrootd-scanner`.
-
-The _schema_ is the database schema where raw (scanned) backend storage metadata is stored. This is used
-by the `xrootd-scanner` (to persist the raw scan) and by the StorageAdapter.iterator() methods called by tantar to validate inventory vs storage.
-
-
-
+by the `eos-scanner`.

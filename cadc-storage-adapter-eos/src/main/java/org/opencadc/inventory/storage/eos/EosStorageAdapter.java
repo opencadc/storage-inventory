@@ -68,7 +68,6 @@
 package org.opencadc.inventory.storage.eos;
 
 import ca.nrc.cadc.auth.AuthenticationUtil;
-import ca.nrc.cadc.auth.NotAuthenticatedException;
 import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.MultiBufferIO;
 import ca.nrc.cadc.io.ReadException;
@@ -76,7 +75,6 @@ import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
-import ca.nrc.cadc.net.RangeNotSatisfiableException;
 import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
@@ -91,7 +89,6 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.security.AccessControlContext;
 import java.security.AccessControlException;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
@@ -99,6 +96,8 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
@@ -111,6 +110,7 @@ import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.inventory.storage.StorageMetadataDAO;
 
 /**
  * StorageAdapter implementation for the EOS file storage system.
@@ -345,8 +345,10 @@ public class EosStorageAdapter implements StorageAdapter {
         if (includeRecoverable) {
             throw new UnsupportedOperationException();
         }
-        EosPathIterator iter = new EosPathIterator(mgmServer, mgmPath, authToken, artifactScheme, storageBucketPrefix);
-        return iter;
+        Map<String,Object> config = new TreeMap<>();
+        StorageMetadataDAO dao = new StorageMetadataDAO();
+        dao.setConfig(config);
+        return dao.iterator(storageBucketPrefix);
     }
 
     // read-only implementation -- everything else unsupported
