@@ -92,16 +92,16 @@ public class EosPathDividerTest {
     public void testSubdivide() throws Exception {
         EosStorageAdapter sa = new EosStorageAdapter();
         
-        String bucket = "dp2";
+        final String bucket = "dp2";
         EosPathDivider pdiv = new EosPathDivider(sa.mgmServer, sa.mgmPath, sa.authToken, bucket);
         
+        // start in a small subpath for testing
         String subpath = sa.mgmPath + "/" + bucket + "/LSSTCam/calib";
         List<EosPathDivider.SubpathInfo> result = pdiv.subdivide(subpath);
         
         for (EosPathDivider.SubpathInfo spi : result) {
-            log.info("found: " + spi.path + " " + spi.numFiles);
-            Assert.assertFalse(spi.path.contains(sa.mgmPath));
-            Assert.assertFalse(spi.path.startsWith(bucket));
+            log.info("found: " + spi.path + " numFiles: " + spi.numFiles);
+            Assert.assertTrue(spi.path.startsWith(bucket));
         }
         
     }

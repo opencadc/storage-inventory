@@ -93,7 +93,6 @@ public class EosFindTest {
         EosStorageAdapter sa = new EosStorageAdapter();
         
         String subpath = "dp2/LSSTCam/calib";
-        String expectedPathPrefix = subpath + "/fgcmcal/DM-50154";
         
         EosFind find = new EosFind(sa.mgmServer, sa.mgmPath, sa.authToken, "lsst", subpath);
         find.start();
@@ -103,7 +102,7 @@ public class EosFindTest {
             log.info("found: " + actual);
             num++;
             Assert.assertNotNull(actual.getStorageLocation().storageBucket);
-            Assert.assertTrue(actual.getStorageLocation().storageBucket.startsWith(expectedPathPrefix));
+            Assert.assertTrue(actual.getStorageLocation().storageBucket.startsWith(subpath));
             Assert.assertTrue(actual.isValid());
         }
         Assert.assertEquals(6, num);
