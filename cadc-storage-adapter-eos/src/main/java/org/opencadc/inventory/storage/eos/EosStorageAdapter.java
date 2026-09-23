@@ -136,6 +136,8 @@ public class EosStorageAdapter implements StorageAdapter {
     final URL mgmBaseURL;
     final String authToken;
     private final String artifactScheme;
+    
+    private Map<String,Object> daoConfig;
 
     /**
      * Standard constructor for dynamic loading and operational use.
@@ -230,6 +232,11 @@ public class EosStorageAdapter implements StorageAdapter {
         log.debug("authToken: REDACTED");
     }
 
+    // called by tantar only
+    public void setConfig(Map<String,Object> daoConfig) {
+        this.daoConfig = daoConfig;
+    }
+
     @Override
     public BucketType getBucketType() {
         return BucketType.PATH;
@@ -321,6 +328,7 @@ public class EosStorageAdapter implements StorageAdapter {
                 }
                 get.prepare();
             }
+            log.debug("content-length: " + get.getContentLength());
             return get.getInputStream();
         } catch (ByteLimitExceededException | ResourceAlreadyExistsException ex) {
             throw new RuntimeException("BUG: unexpected fail during get: " + ex);
@@ -345,9 +353,8 @@ public class EosStorageAdapter implements StorageAdapter {
         if (includeRecoverable) {
             throw new UnsupportedOperationException();
         }
-        Map<String,Object> config = new TreeMap<>();
         StorageMetadataDAO dao = new StorageMetadataDAO();
-        dao.setConfig(config);
+        dao.setConfig(daoConfig);
         return dao.iterator(storageBucketPrefix);
     }
 

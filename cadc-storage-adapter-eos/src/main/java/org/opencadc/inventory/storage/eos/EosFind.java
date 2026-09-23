@@ -278,30 +278,9 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
         return ret;
     }
 
-    // read-into-memory implementation
-    private LineNumberReader readFully(URI mgmServer, String remotePath, String authToken) throws IOException {
-        
-        String str = "eos find -f --format path,size,checksumtype,checksum,ctime " + remotePath;
-        final String[] cmd = str.split(" ");
-        final Map<String, String> environment = new HashMap<>();
-        environment.put("EOS_MGM_URL", mgmServer.toASCIIString());
-        environment.put("EOSAUTHZ", authToken);
-        
-        log.warn("readFully: " + str);
-        BuilderOutputGrabber exec = new BuilderOutputGrabber();
-        exec.captureOutput(cmd, environment);
-        log.warn("exit status: " + exec.getExitValue());
-        
-        if (exec.getExitValue() != 0) {
-            throw new StorageEngageException("eos find failed (" + exec.getExitValue() + "): " + exec.getOutput());
-        }
-
-        return new LineNumberReader(new StringReader(exec.getOutput()));
-    }
-
     // streaming implementation
     private void openStream(URI mgmServer, String remotePath, String authToken) throws IOException {
-        final String str = "eos find -f --format path,size,checksumtype,checksum,ctime " + remotePath;
+        final String str = "eos newfind -f --format path,size,checksumtype,checksum,ctime " + remotePath;
         List<String> parameters = Arrays.asList(str.split(" "));
         
         ProcessBuilder processBuilder = new ProcessBuilder(parameters);
