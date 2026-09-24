@@ -86,63 +86,39 @@ import org.apache.log4j.Logger;
 public class EosPathDivider {
     private static final Logger log = Logger.getLogger(EosPathDivider.class);
 
-    private final URI mgmServer;
     private final String mgmPath;
-    private final String authToken;
+    private final Map<String, String> environment = new HashMap<>();
+       
     
     // optional storageBucketPrefix
     private final String pathPrefix;
     
     private final Path basePath;
     
-    public static class SubpathInfo {
-        String path;
-        Integer numFiles;
-
-        public SubpathInfo(String path, Integer numFiles) {
-            this.path = path;
-            this.numFiles = numFiles;
-        }
-    }
-    
     public EosPathDivider(URI mgmServer, String mgmPath, String authToken, String pathPrefix) {
-        this.mgmServer = mgmServer;
         this.mgmPath = mgmPath;
-        this.authToken = authToken;
         this.pathPrefix = pathPrefix;
         this.basePath = Path.of(mgmPath);
+        environment.put("EOS_MGM_URL", mgmServer.toASCIIString());
+        environment.put("EOSAUTHZ", authToken);
     }
     
-    public List<SubpathInfo> subdivide() throws IOException {
+    public List<SubPath> subdivide() throws IOException {
         // dir scan
         String path = mgmPath + "/" + pathPrefix;
         // TODO: useful to be able to start with a depth > 1 on the first call
-        return subdivide(path); 
+        return subdivide(path, 3); 
     }
 
-    List<SubpathInfo> subdivide(String path) throws IOException {
-        final Map<String, String> environment = new HashMap<>();
-        environment.put("EOS_MGM_URL", mgmServer.toASCIIString());
-        environment.put("EOSAUTHZ", authToken);
+    List<SubPath> subdivide(String path, int depth) throws IOException {
         
-        // TODO: might be faster to try maxdepth > 1 here and adjust 
-        // if too many subpaths or truncated
-        int depth = 3; // try 3, 2, 1
         List<String> dirs = dirScan(environment, path, depth);
         while (dirs.isEmpty() && depth > 1) {
             // truncated
             depth--;
             dirs = dirScan(environment, path, depth);
         }
-        // too many subpaths -> too many calls to eos newfind
-        // if someone thought about scalability and used hex chars for dir names,
-        // then we'd have 16 or 16*16 = 256 or 16*16*16 = 4096 subdirs
-        // TODO: make limit configurable?
-        while (dirs.size() > 4096 && depth > 1) {
-            // too many
-            depth--;
-            dirs = dirScan(environment, path, depth);
-        }
+        
         log.debug("dir scan produced " + dirs.size() + " subpaths to count...");
         // the above scanning will fail if it encounters a flat dir a/b with more than 50k children
         // because both dir scan and file count will be truncated
@@ -151,7 +127,7 @@ public class EosPathDivider {
         }
         
         
-        List<SubpathInfo> ret = new ArrayList<>();
+        List<SubPath> ret = new ArrayList<>();
         for (String subpath : dirs) {
             String count = "eos newfind -f --count " + subpath;
             log.info("file count: " + count);
@@ -163,31 +139,62 @@ public class EosPathDivider {
                 case 7:
                     log.warn("count: " + count + " TRUNCATED " + dt + "ms");
                     // recursion
-                    List<SubpathInfo> recurse = subdivide(subpath);
-                    for (SubpathInfo spi : recurse) {
+                    List<SubPath> recurse = subdivide(subpath, 1);
+                    for (SubPath spi : recurse) {
                         ret.add(spi);
-                    }   
+                    }
+                    // re-check subpath for immediate child files
+                    String shallowCount = "eos newfind -f --count --maxdepth 1 " + subpath;
+                    log.info("file count, shallow: " + shallowCount);
+                    BuilderOutputGrabber sproc = new BuilderOutputGrabber();
+                    sproc.captureOutput(shallowCount.split(" "), environment);
+                    switch (sproc.getExitValue()) {
+                        case 7:
+                            throw new RuntimeException("FAIL: shallow file count truncated - directory " + subpath + " has too many files");
+                        case 0:
+                            log.info("file count: " + count + " OK " + dt + "ms");
+                            // output: nfiles=X ndirectories=Y
+                            String cr = proc.getOutput();
+                            SubPath spi = parse(subpath, cr, true);
+                            if (spi.numFiles > 0) {
+                                ret.add(spi);
+                            }
+                            break;
+                        default:
+                            throw new RuntimeException("unexpected exit code: " + sproc.getExitValue() 
+                                + " exec: " + shallowCount
+                                + " cause:\n" + sproc.getErrorOutput());
+                    }
                     break;
                 case 0:
                     log.info("file count: " + count + " OK " + dt + "ms");
                     // output: nfiles=X ndirectories=Y
                     String cr = proc.getOutput();
-                    log.debug("file count raw: " + cr);
-                    String[] split = cr.split("[= ]");
-                    Integer nf = Integer.parseInt(split[1]);
-                    Path full = Path.of(subpath);
-                    Path rel = basePath.relativize(full);
-                    SubpathInfo spi = new SubpathInfo(rel.toString(), nf);
-                    ret.add(spi);
+                    SubPath spi = parse(subpath, cr, false);
+                    if (spi.numFiles > 0) {
+                        ret.add(spi);
+                    }
                     break;
                 default:
-                    throw new RuntimeException("unexpected exit code: " + proc.getExitValue() + " exec: " + count
+                    throw new RuntimeException("unexpected exit code: " + proc.getExitValue() 
+                        + " exec: " + count
                         + " cause:\n" + proc.getErrorOutput());
             }
         }
         
         return ret;
         
+    }
+    
+    private SubPath parse(String subpath, String str, boolean shallow) {
+        // output: nfiles=X ndirectories=Y
+        log.debug("file count raw: " + str);
+        String[] split = str.split("[= ]");
+        Integer nf = Integer.parseInt(split[1]);
+        Path full = Path.of(subpath);
+        Path rel = basePath.relativize(full);
+        SubPath spi = new SubPath(rel.toString(), nf, shallow);
+        return spi;
     }
     
     private List<String> dirScan(Map<String, String> environment, String path, int depth) throws IOException {

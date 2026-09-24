@@ -93,7 +93,7 @@ public class EosFindTest {
     }
 
     EosFind eos = new EosFind(URI.create("root://eos-mgm.keel-dev.arbutus.cloud"), 
-            "/eos/keel-dev.arbutus.cloud/data/lsst", "zteos64:invalid-token", "lsst", null);
+            "/eos/keel-dev.arbutus.cloud/data/lsst", "zteos64:invalid-token", "lsst", null, false);
 
     public EosFindTest() { 
     }

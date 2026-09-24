@@ -67,20 +67,15 @@
 
 package org.opencadc.inventory.storage.eos;
 
-import ca.nrc.cadc.exec.BuilderOutputGrabber;
 import ca.nrc.cadc.io.ResourceIterator;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.LineNumberReader;
 import java.io.OutputStream;
-import java.io.StringReader;
 import java.net.URI;
-import java.net.URL;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.log4j.Logger;
@@ -107,6 +102,7 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
     private final String authToken;
     private final String artifactScheme;
     private final String subpath;
+    private final boolean shallow;
     
     private Process proc;
     private InputStream istream;
@@ -118,12 +114,13 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
 
     // mgmPath is not included in the output StorageLocation
     // subpath is included in the output StorageLocation
-    public EosFind(URI mgmServer, String mgmPath, String authToken, String artifactScheme, String subpath) {
+    public EosFind(URI mgmServer, String mgmPath, String authToken, String artifactScheme, String subpath, boolean shallow) {
         this.mgmServer = mgmServer;
         this.mgmPath = mgmPath;
         this.authToken = authToken;
         this.artifactScheme = artifactScheme;
         this.subpath = subpath;
+        this.shallow = shallow;
     }
 
     // explicit start
@@ -280,8 +277,17 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
 
     // streaming implementation
     private void openStream(URI mgmServer, String remotePath, String authToken) throws IOException {
-        final String str = "eos newfind -f --format path,size,checksumtype,checksum,ctime " + remotePath;
-        List<String> parameters = Arrays.asList(str.split(" "));
+        StringBuilder sb = new StringBuilder();
+        sb.append("eos newfind -f ");
+        if (shallow) {
+            sb.append("--maxdepth 1 ");
+        }
+        sb.append("--format path,size,checksumtype,checksum,ctime ");
+        sb.append(remotePath);
+        String cmd = sb.toString();
+        log.info("find files: " + cmd);
+        
+        List<String> parameters = Arrays.asList(cmd.split(" "));
         
         ProcessBuilder processBuilder = new ProcessBuilder(parameters);
         processBuilder.redirectErrorStream(true);
@@ -290,7 +296,6 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
         environment.put("EOS_MGM_URL", mgmServer.toASCIIString());
         environment.put("EOSAUTHZ", authToken);
 
-        log.info("openStream: " + str);
         this.proc = processBuilder.start();
         this.istream = proc.getInputStream();
         this.ostream = proc.getOutputStream();

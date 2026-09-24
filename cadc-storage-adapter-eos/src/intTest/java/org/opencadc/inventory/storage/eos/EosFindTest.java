@@ -72,6 +72,7 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
+import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
 
 /**
@@ -94,7 +95,7 @@ public class EosFindTest {
         
         String subpath = "dp2/LSSTCam/calib";
         
-        EosFind find = new EosFind(sa.mgmServer, sa.mgmPath, sa.authToken, "lsst", subpath);
+        EosFind find = new EosFind(sa.mgmServer, sa.mgmPath, sa.authToken, "lsst", subpath, false);
         find.start();
         int num = 0;
         while (find.hasNext()) {
@@ -106,5 +107,23 @@ public class EosFindTest {
             Assert.assertTrue(actual.isValid());
         }
         Assert.assertEquals(6, num);
+        
+        
+    }
+    
+    @Test
+    public void testNoFiles() throws Exception {
+        EosStorageAdapter sa = new EosStorageAdapter();
+        
+        String subpath = "dp2/LSSTCam/calib";
+        try {
+            EosFind find2 = new EosFind(sa.mgmServer, sa.mgmPath, sa.authToken, "lsst", subpath, true);
+            find2.start();
+            // current impl fails if there are no files because of past experience
+            Assert.fail("expected StorageEngageException, got iterator with hasNext=" + find2.hasNext());
+            //Assert.assertFalse(find2.hasNext()); // no files directly in the subpath dir
+        } catch (StorageEngageException ex) {
+            log.info("caught expected: " + ex);
+        }
     }
 }

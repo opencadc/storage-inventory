@@ -97,12 +97,40 @@ public class EosPathDividerTest {
         
         // start in a small subpath for testing
         String subpath = sa.mgmPath + "/" + bucket + "/LSSTCam/calib";
-        List<EosPathDivider.SubpathInfo> result = pdiv.subdivide(subpath);
+        List<SubPath> result = pdiv.subdivide(subpath, 1);
+        log.info("found " + result.size() + " subpaths in bucket " + bucket);
         
-        for (EosPathDivider.SubpathInfo spi : result) {
-            log.info("found: " + spi.path + " numFiles: " + spi.numFiles);
+        long numFiles = 0;
+        for (SubPath spi : result) {
+            log.info("found: " + spi.path + " numFiles: " + spi.numFiles + " shallow: " + spi.shallow);
             Assert.assertTrue(spi.path.startsWith(bucket));
+            Assert.assertNotNull(spi.numFiles);
+            numFiles += spi.numFiles;
         }
+        log.info("found " + result.size() + " subpaths in bucket " + bucket);
+        log.info("found " + numFiles + " files in bucket " + bucket);
+    }
+    
+    @Test
+    public void testSubdivideDP2() throws Exception {
+        EosStorageAdapter sa = new EosStorageAdapter();
         
+        final String bucket = "dp2";
+        EosPathDivider pdiv = new EosPathDivider(sa.mgmServer, sa.mgmPath, sa.authToken, bucket);
+        
+        // start in a small subpath for testing
+        String subpath = sa.mgmPath + "/" + bucket;
+        List<SubPath> result = pdiv.subdivide(subpath, 5);
+        log.info("found " + result.size() + " subpaths in bucket " + bucket);
+        
+        long numFiles = 0;
+        for (SubPath spi : result) {
+            log.info("found: " + spi.path + " numFiles: " + spi.numFiles + " shallow: " + spi.shallow);
+            Assert.assertTrue(spi.path.startsWith(bucket));
+            Assert.assertNotNull(spi.numFiles);
+            numFiles += spi.numFiles;
+        }
+        log.info("found " + result.size() + " subpaths in bucket " + bucket);
+        log.info("found " + numFiles + " files in bucket " + bucket);
     }
 }

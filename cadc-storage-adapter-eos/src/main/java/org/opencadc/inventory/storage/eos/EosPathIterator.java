@@ -94,7 +94,7 @@ public class EosPathIterator implements Iterator<StorageMetadata> {
     private final String pathPrefix;
     
     private StorageMetadata cur;
-    private Iterator<EosPathDivider.SubpathInfo> subpathIter;
+    private Iterator<SubPath> subpathIter;
     private ResourceIterator<StorageMetadata> eosIter;
     
     public EosPathIterator(URI mgmServer, String mgmPath, String authToken, String artifactScheme, String pathPrefix) {
@@ -125,7 +125,7 @@ public class EosPathIterator implements Iterator<StorageMetadata> {
     private void init() {
         try {
             EosPathDivider pdiv = new EosPathDivider(mgmServer, mgmPath, authToken, pathPrefix);
-            List<EosPathDivider.SubpathInfo> subpaths = pdiv.subdivide();
+            List<SubPath> subpaths = pdiv.subdivide();
             this.subpathIter = subpaths.iterator();
         } catch (IOException ex) {
             throw new StorageEngageException("init: failed to subdivide target (" + pathPrefix + ") into viable subpaths", ex);
@@ -147,9 +147,9 @@ public class EosPathIterator implements Iterator<StorageMetadata> {
         if (eosIter == null && subpathIter != null) {
             while (eosIter == null && subpathIter.hasNext()) {
                 // invoke new find
-                EosPathDivider.SubpathInfo sub = subpathIter.next();
+                SubPath sub = subpathIter.next();
                 log.warn("find: " + sub.path + " expected file count: " + sub.numFiles);
-                this.eosIter = new EosFind(mgmServer, mgmPath, authToken, artifactScheme, sub.path);
+                this.eosIter = new EosFind(mgmServer, mgmPath, authToken, artifactScheme, sub.path, sub.shallow);
                 if (eosIter.hasNext()) {
                     this.cur = eosIter.next();
                 } else {
