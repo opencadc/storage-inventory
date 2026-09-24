@@ -14,8 +14,9 @@ echo "image version: $IMAGE_VERSION"
 if [ -e $CONFDIR/cacerts ]; then
     echo "Configure CA bundle with extra certificates: $CONFDIR/cacerts"
     cp $CONFDIR/cacerts/* /etc/pki/ca-trust/source/anchors/
-    sudo update-ca-trust
 fi
+# docker build cleaned up, so must run this even without custom CA certs
+update-ca-trust
 
 mkdir -p $HOME/.ssl
 chmod 700 $HOME/.ssl

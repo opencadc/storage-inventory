@@ -25,14 +25,22 @@ RUN dnf install -y java-21-openjdk-headless ca-certificates sudo which nmap-ncat
 
 # system settings and permissions
 COPY src/docker/nofiles.conf /etc/security/limits.d/
-COPY src/docker/opencadc-sudo-perms /etc/sudoers.d/
 
-RUN chgrp opencadc /etc/pki/ca-trust/source/anchors \
-    && chmod 775 /etc/pki/ca-trust/source/anchors \
-    && chmod 440 /etc/sudoers.d/opencadc-sudo-perms
+# allow opencadc to install CA certs and run update-ca-trust at startup
+RUN chgrp -R opencadc \
+        /etc/pki/ca-trust \
+        /etc/pki/tls \
+        /etc/pki/java \
+        /etc/ssl \
+    && chmod -R g+w \
+        /etc/pki/ca-trust \
+        /etc/pki/tls \
+        /etc/pki/java \
+        /etc/ssl \
+    && chown opencadc /etc/pki/ca-trust/extracted/pem/directory-hash
 
-## see https://bugzilla.redhat.com/show_bug.cgi?id=1773148
-RUN touch /etc/sudo.conf && echo "Set disable_coredump false" > /etc/sudo.conf
+# cleanup existing files
+RUN find /etc/pki/ca-trust/extracted -type f -delete
 
 # JVM settings
 ENV JAVA_OPTS="-Xms512m -Xmx2048m -XX:+UseParallelGC -XX:+HeapDumpOnOutOfMemoryError -XX:OnError='cat hs_err_pid%p.log'"
@@ -43,6 +51,6 @@ COPY src/docker/cadc-java-init /usr/bin/cadc-java-init
 
 ENTRYPOINT ["/usr/bin/cadc-java-init"]
 
-ADD build/distributions/xrootd-scanner.tar /
+ADD build/distributions/eos-scanner.tar /
 
-CMD ["/tantar/bin/xrootd-scanner"]
+CMD ["/tantar/bin/eos-scanner"]
