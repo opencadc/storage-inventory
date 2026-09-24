@@ -90,20 +90,16 @@ public class EosPathIterator implements Iterator<StorageMetadata> {
     private final String authToken;
     private final String artifactScheme;
     
-    // optional storageBucketPrefix
-    private final String pathPrefix;
-    
     private StorageMetadata cur;
     private Iterator<SubPath> subpathIter;
     private ResourceIterator<StorageMetadata> eosIter;
     
-    public EosPathIterator(URI mgmServer, String mgmPath, String authToken, String artifactScheme, String pathPrefix) {
+    public EosPathIterator(URI mgmServer, String mgmPath, String authToken, String artifactScheme, List<SubPath> dirs) {
         this.mgmServer = mgmServer;
         this.mgmPath = mgmPath;
         this.authToken = authToken;
         this.artifactScheme = artifactScheme;
-        this.pathPrefix = pathPrefix;
-        init();
+        this.subpathIter = dirs.iterator();
         advance();
     }
 
@@ -122,16 +118,6 @@ public class EosPathIterator implements Iterator<StorageMetadata> {
         return ret;
     }
 
-    private void init() {
-        try {
-            EosPathDivider pdiv = new EosPathDivider(mgmServer, mgmPath, authToken, pathPrefix);
-            List<SubPath> subpaths = pdiv.subdivide();
-            this.subpathIter = subpaths.iterator();
-        } catch (IOException ex) {
-            throw new StorageEngageException("init: failed to subdivide target (" + pathPrefix + ") into viable subpaths", ex);
-        }
-    }
-    
     private void advance() {
         this.cur = null;
         if (eosIter == null && subpathIter == null) {
