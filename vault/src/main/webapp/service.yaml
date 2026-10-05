@@ -437,20 +437,18 @@ paths:
           required: true
           type: string
           format: uri
+        - name: dest
+          in: query
+          description: VOSURI of the allocation (DataNode) to output the report to.
+          required: true
+          type: string
+          format: uri
         - name: maxdepth
           in: query
           description: Maximum container depth to include in the report (default 0)
           required: false
           type: integer
           minimum: 0
-        - name: sort
-          in: query
-          description: Sort report lines by size (`asc` or `desc`)
-          required: false
-          type: string
-          enum:
-            - asc
-            - desc
   /availability:
     get:
       tags:
