@@ -73,6 +73,13 @@ import ca.nrc.cadc.dali.DoubleInterval;
 import ca.nrc.cadc.dali.Point;
 import ca.nrc.cadc.dali.Polygon;
 import ca.nrc.cadc.dali.Range;
+import ca.nrc.cadc.util.Log4jInit;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
 import org.opencadc.soda.ExtensionSlice;
@@ -80,12 +87,13 @@ import org.opencadc.soda.ExtensionSliceFormat;
 import org.opencadc.soda.PixelRange;
 import org.opencadc.soda.server.Cutout;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
-
 public class CutoutFileNameFormatTest {
+    private static final Logger log = Logger.getLogger(CutoutFileNameFormatTest.class);
+    
+    static {
+        Log4jInit.setLevel("org.opencadc.minoc", Level.INFO);
+    }
+
     /**
      * Simple two extension MEF cutout.
      * [2]
@@ -106,8 +114,8 @@ public class CutoutFileNameFormatTest {
 
         final String result = testSubject.format(cutout);
         final String expected = "my_file.2____SCI_3__400_500.fits";
-
-        Assert.assertEquals("Wrong output.", expected, result);
+        log.info("result: " + result);
+        Assert.assertEquals(expected, result);
     }
 
     /**
@@ -130,9 +138,10 @@ public class CutoutFileNameFormatTest {
         final CutoutFileNameFormat testSubject = new CutoutFileNameFormat("myfile_raw.fits");
 
         final String result = testSubject.format(cutout);
+        log.info("result: " + result);
         final String expected = "myfile_raw.116__100_250_____SCI_14__100_125_100_175___91____90_255___101.fits";
 
-        Assert.assertEquals("Wrong output.", expected, result);
+        Assert.assertEquals(expected, result);
     }
 
     @Test
@@ -141,9 +150,9 @@ public class CutoutFileNameFormatTest {
         cutout.pos = new Circle(new Point(45.6D, 77.3D), 0.5D);
 
         final CutoutFileNameFormat testSubject = new CutoutFileNameFormat("fitsfile.fits");
-
-        Assert.assertEquals("Wrong filename.", "fitsfile.circle_45_6_77_3_0_5.fits",
-                            testSubject.format(cutout));
+        String result = testSubject.format(cutout);
+        log.info("result: " + result);
+        Assert.assertEquals("fitsfile.circle_45_6_77_3_0_5.fits", result);
     }
 
     @Test
@@ -159,10 +168,9 @@ public class CutoutFileNameFormatTest {
         cutout.pos = polygon;
 
         final CutoutFileNameFormat testSubject = new CutoutFileNameFormat("fitsfile.fits");
-
-        Assert.assertEquals("Wrong filename.",
-                            "fitsfile.polygon_12_4_38_4_12_4_58_4_0_4_58_4_0_4_38_4.fits",
-                            testSubject.format(cutout));
+        String result = testSubject.format(cutout);
+        log.info("result: " + result);
+        Assert.assertEquals("fitsfile.polygon_12_4_38_4_12_4_58_4_0_4_58_4_0_4_38_4.fits", result);
     }
 
     @Test
@@ -172,8 +180,8 @@ public class CutoutFileNameFormatTest {
                                new DoubleInterval(6.78D, 9.10D));
 
         final CutoutFileNameFormat testSubject = new CutoutFileNameFormat("fitsfile.fits");
-
-        Assert.assertEquals("Wrong filename.", "fitsfile.range_0_12_3_45_6_78_9_1.fits",
-                            testSubject.format(cutout));
+        String result = testSubject.format(cutout);
+        log.info("result: " + result);
+        Assert.assertEquals("fitsfile.range_0_12_3_45_6_78_9_1.fits", testSubject.format(cutout));
     }
 }
