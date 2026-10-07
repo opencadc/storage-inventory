@@ -328,10 +328,6 @@
   </servlet-mapping>
 
   <servlet-mapping>
-      <servlet-name>RecursiveNodeSizeServlet</servlet-name>
-      <url-pattern>/nodesize-report/*</url-pattern>
-  </servlet-mapping>
-  <servlet-mapping>
     <servlet-name>AsyncTransferServlet</servlet-name>
     <url-pattern>/transfers/*</url-pattern>
   </servlet-mapping>
