@@ -437,7 +437,7 @@ paths:
           required: true
           type: string
           format: uri
-        - name: dest
+        - name: output
           in: query
           description: VOSURI of the allocation (DataNode) to output the report to.
           required: true
