@@ -15,7 +15,7 @@ sourceCompatibility = 11
 
 group = 'org.opencadc'
 
-mainClassName = 'org.opencadc.eoscan.Main'
+mainClassName = 'org.opencadc.eos.Main'
 
 dependencies {
     implementation 'org.opencadc:cadc-util:[1.10.2,2.0)'

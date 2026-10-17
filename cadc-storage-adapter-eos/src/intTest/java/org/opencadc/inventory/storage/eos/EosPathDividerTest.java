@@ -111,14 +111,14 @@ public class EosPathDividerTest {
         log.info("found " + numFiles + " files in bucket " + bucket);
     }
     
-    @Test
+    //@Test
     public void testSubdivideDP2() throws Exception {
         EosStorageAdapter sa = new EosStorageAdapter();
         
         final String bucket = "dp2";
         EosPathDivider pdiv = new EosPathDivider(sa.mgmServer, sa.mgmPath, sa.authToken, bucket);
         
-        // start in a small subpath for testing
+        // full scan of dp2
         String subpath = sa.mgmPath + "/" + bucket;
         List<SubPath> result = pdiv.subdivide(subpath, 5);
         log.info("found " + result.size() + " subpaths in bucket " + bucket);

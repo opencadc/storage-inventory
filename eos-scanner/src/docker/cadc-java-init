@@ -11,12 +11,20 @@ echo "user: $USER"
 echo "home: $HOME"
 echo "image version: $IMAGE_VERSION"
 
+# rebuild CA cert bundles
 if [ -e $CONFDIR/cacerts ]; then
     echo "Configure CA bundle with extra certificates: $CONFDIR/cacerts"
     cp $CONFDIR/cacerts/* /etc/pki/ca-trust/source/anchors/
 fi
-# docker build cleaned up, so must run this even without custom CA certs
-update-ca-trust
+CERT_DIR="/opencadc/certs"
+update-ca-trust extract --output "$CERT_DIR"
+
+# For OpenSSL:
+export SSL_CERT_DIR="$CERT_DIR/pem/directory-hash"
+export SSL_CERT_FILE="$CERT_DIR/pem/tls-ca-bundle.pem"
+
+# For Java:
+export JAVA_TOOL_OPTIONS="-Djavax.net.ssl.trustStore=$CERT_DIR/java/cacerts"
 
 mkdir -p $HOME/.ssl
 chmod 700 $HOME/.ssl

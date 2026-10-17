@@ -106,7 +106,7 @@ public class StorageMetadataDAO {
             throw new IllegalStateException("setConfig never called or failed");
         }
     }
-    
+
     public void setConfig(Map<String, Object> config) {
         String jndiDataSourceName = (String) config.get("jndiDataSourceName");
         if (jndiDataSourceName == null) {
@@ -127,6 +127,10 @@ public class StorageMetadataDAO {
         } catch (Exception ex) {
             throw new RuntimeException("failed to verify DataSource", ex);
         }
+    }
+
+    public String getSchema() {
+        return schema;
     }
 
     public DataSource getDataSource() {
@@ -164,6 +168,7 @@ public class StorageMetadataDAO {
         doit.doDelete(loc);
     }
 
+    // return iterator over StorageMetadata objects in StorageMetadata.storageLocation order
     public ResourceIterator<StorageMetadata> iterator(String bucket) {
         throw new UnsupportedOperationException();
     }

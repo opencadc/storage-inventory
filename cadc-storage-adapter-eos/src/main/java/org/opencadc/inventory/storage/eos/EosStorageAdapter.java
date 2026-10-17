@@ -236,6 +236,16 @@ public class EosStorageAdapter implements StorageAdapter {
     public void setConfig(Map<String,Object> daoConfig) {
         this.daoConfig = daoConfig;
     }
+    
+    // called by eos-scanner only to extract StorageMetadata from EOS
+    public EosPathIterator getPathIterator(List<SubPath> dirs) {
+        return new EosPathIterator(mgmServer, mgmPath, authToken, artifactScheme, dirs);
+    }
+    
+    // called by eos-scanner only: to sudivide a dir into scannable subpaths
+    public EosPathDivider getPathDivider(String pathPrefix) {
+        return new EosPathDivider(mgmServer, mgmPath, authToken, pathPrefix);
+    }
 
     @Override
     public BucketType getBucketType() {

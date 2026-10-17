@@ -65,21 +65,29 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.eoscan;
+package org.opencadc.eos;
 
+import ca.nrc.cadc.db.ConnectionConfig;
+import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.util.InvalidConfigException;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.LineNumberReader;
 import java.io.PrintWriter;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import javax.naming.NamingException;
+import javax.sql.DataSource;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.storage.InitDatabaseSM;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.inventory.storage.StorageMetadataDAO;
 import org.opencadc.inventory.storage.eos.EosPathDivider;
 import org.opencadc.inventory.storage.eos.EosPathIterator;
+import org.opencadc.inventory.storage.eos.EosStorageAdapter;
 import org.opencadc.inventory.storage.eos.SubPath;
 
 /**
@@ -89,33 +97,54 @@ import org.opencadc.inventory.storage.eos.SubPath;
 public class EosScanner {
     private static final Logger log = Logger.getLogger(EosScanner.class);
 
-    private final URI mgmServer;
-    private final String mgmPath;
-    private final String authToken;
-    
     private final String pathPrefix;
+    private final StorageMetadataDAO dao;
+    private final EosStorageAdapter eos;
     
-    public EosScanner(URI mgmServer, String mgmPath, String authToken, String pathPrefix) {
-        this.mgmServer = mgmServer;
-        this.mgmPath = mgmPath;
-        this.authToken = authToken;
+    public final boolean dirScanOnly;
+    
+    public EosScanner(String pathPrefix, Map<String,Object> daoConfig, ConnectionConfig cc,
+            boolean dirScanOnly) {
         this.pathPrefix = pathPrefix;
+        this.eos = new EosStorageAdapter(); // reads config
+        
+        // db setup
+        try {
+            String dsName = "jdbc/storage-metadata";
+            daoConfig.put("jndiDataSourceName", dsName);
+            DBUtil.createJNDIDataSource(dsName, cc);
+            this.dao = new StorageMetadataDAO();
+            dao.setConfig(daoConfig);
+            
+            DataSource ds = DBUtil.findJNDIDataSource(dsName);
+            InitDatabaseSM init = new InitDatabaseSM(dao.getDataSource(), dao.getSchema());
+            init.doInit();
+        } catch (NamingException ex) {
+            throw new InvalidConfigException("failed to setup database connectivity", ex);
+        }
+        this.dirScanOnly = dirScanOnly;
     }
     
     public void doit() throws IOException {
+        // subdivide EOS into scannable chunks below find truncation limit
         List<SubPath> dirs = doDirScan();
-        
-        EosPathIterator iter = new EosPathIterator(mgmServer, mgmPath, authToken, "lsst", dirs);
+        if (dirScanOnly) {
+            log.info("dir scan found: " + dirs.size() + " subpaths");
+            return;
+        }
+
+        // scan eos for file metadata and store in db
+        EosPathIterator iter = eos.getPathIterator(dirs);
         while (iter.hasNext()) {
             StorageMetadata sm = iter.next();
             log.info("found: " + sm);
+            dao.put(sm);
         }
     }
     
     private List<SubPath> doDirScan() throws IOException {
-        
         // read list from file instead of scan
-        File f = new File("dir-scan.txt");
+        File f = new File("/work/dir-scan.txt");
         if (f.exists()) {
             List<SubPath> ret = new ArrayList<>();
             LineNumberReader r = new LineNumberReader(new FileReader(f));
@@ -129,7 +158,7 @@ public class EosScanner {
             return ret;
         }
         
-        EosPathDivider eos = new EosPathDivider(mgmServer, mgmPath, authToken, pathPrefix);
+        EosPathDivider eos = this.eos.getPathDivider(pathPrefix);
         List<SubPath> ret = eos.subdivide();
         
         // write list to file for next time

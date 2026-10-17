@@ -65,9 +65,20 @@
 ************************************************************************
 */
 
-package org.opencadc.inventory.eoscan;
+package org.opencadc.eos;
 
+import ca.nrc.cadc.db.ConnectionConfig;
+import ca.nrc.cadc.util.InvalidConfigException;
+import ca.nrc.cadc.util.Log4jInit;
+import ca.nrc.cadc.util.MultiValuedProperties;
+import ca.nrc.cadc.util.PropertiesReader;
+import ca.nrc.cadc.util.StringUtil;
+import java.util.Map;
+import java.util.TreeMap;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.db.SQLGenerator;
+import org.opencadc.inventory.storage.eos.EosStorageAdapter;
 
 /**
  *
@@ -76,6 +87,89 @@ import org.apache.log4j.Logger;
 public class Main {
     private static final Logger log = Logger.getLogger(Main.class);
 
-    public Main() { 
+    private static final String CONFIGT_FILE = "eos-scanner.properties";
+    private static final String CONFIG_BASE = Main.class.getPackage().getName();
+    private static final String LOGGING_KEY = CONFIG_BASE + ".logging";
+    private static final String DIRSCAN_KEY = CONFIG_BASE + ".dirScanOnly";
+    private static final String BUCKET_KEY = CONFIG_BASE + ".bucket";
+    
+    private static final String DB_SCHEMA_KEY = CONFIG_BASE + ".schema";
+    private static final String DB_USERNAME_KEY = CONFIG_BASE + ".username";
+    private static final String DB_PASSWORD_KEY = CONFIG_BASE + ".password";
+    private static final String JDBC_URL_KEY = CONFIG_BASE + ".url";
+    
+    private Main() {
+    }
+    
+    public static void main(final String[] args) {
+            
+        try {
+            Log4jInit.setLevel("ca.nrc.cadc", Level.WARN);
+            Log4jInit.setLevel("org.opencadc", Level.WARN);
+            PropertiesReader pr = new PropertiesReader(CONFIGT_FILE);
+            MultiValuedProperties props = pr.getAllProperties();
+
+            String logCfg = props.getFirstPropertyValue(LOGGING_KEY);
+            Level logLevel = Level.INFO;
+            if (StringUtil.hasLength(logCfg)) {
+                logLevel = Level.toLevel(logCfg);
+            }
+            Log4jInit.setLevel("org.opencadc.inventory", logLevel);
+            Log4jInit.setLevel("org.opencadc.eos", logLevel);
+            
+            // parse config file
+            StringBuilder errMsg = new StringBuilder();
+
+            String schema = props.getFirstPropertyValue(DB_SCHEMA_KEY);
+            if (!StringUtil.hasLength(schema)) {
+                errMsg.append(DB_SCHEMA_KEY).append(" ");
+            }
+
+            String dbUrl = props.getFirstPropertyValue(JDBC_URL_KEY);
+            if (!StringUtil.hasLength(dbUrl)) {
+                errMsg.append(JDBC_URL_KEY).append(" ");
+            }
+
+            String username = props.getFirstPropertyValue(DB_USERNAME_KEY);
+            if (!StringUtil.hasLength(username)) {
+                errMsg.append(DB_USERNAME_KEY).append(" ");
+            }
+
+            String password = props.getFirstPropertyValue(DB_PASSWORD_KEY);
+            if (!StringUtil.hasLength(password)) {
+                errMsg.append(DB_PASSWORD_KEY).append(" ");
+            }
+            
+            String bucket = props.getFirstPropertyValue(BUCKET_KEY);
+            if (!StringUtil.hasLength(bucket)) {
+                errMsg.append(BUCKET_KEY).append(" ");
+            }
+
+            boolean dirScanOnly = false;
+            String str = props.getFirstPropertyValue(DIRSCAN_KEY);
+            if (str != null && "true".equals(str)) {
+                dirScanOnly = true;
+            }
+            if (errMsg.length() > 0) {
+                throw new IllegalStateException(CONFIGT_FILE + " missing one or more values: " + errMsg);
+            }
+            
+            // populate/assign values to pass to FileSync
+            Map<String, Object> daoConfig = new TreeMap<>();
+            daoConfig.put("schema", schema);
+            ConnectionConfig cc = new ConnectionConfig(null, null, username, password,
+                "org.postgresql.Driver", dbUrl);
+            
+            EosScanner doit = new EosScanner(bucket, daoConfig, cc, dirScanOnly);
+            
+            
+        } catch (InvalidConfigException e) {
+            log.fatal(e.getMessage(), e);
+            System.exit(2);
+        } catch (Exception e) {
+            // Used to catch everything else, such as a RuntimeException when a file cannot be obtained and put.
+            log.fatal(e.getMessage(), e);
+            System.exit(1);
+        }
     }
 }

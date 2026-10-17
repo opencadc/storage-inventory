@@ -10,20 +10,18 @@ Runtime configuration must be made available via the `/config` directory.
 
 ### eos-scanner.properties
 ```
-org.opencadc.eoscan.logging = info|debug
+org.opencadc.eos.logging = info|debug
 
 # set whether to report all activity or to perform any actions required.
-org.opencadc.eoscan.reportOnly = true|false
+org.opencadc.eos.reportOnly = true|false
 
 ## database settings
-org.opencadc.eoscan.schema={database schema for raw storage metadata dump}
-org.opencadc.eoscan.username={database username}
-org.opencadc.eoscan.password={database password}
-org.opencadc.eoscan.url=jdbc:postgresql://{server}/{database}
-
-org.opencadc.eoscan.artifactScheme = {scheme}
+org.opencadc.eos.schema={database schema for raw storage metadata dump}
+org.opencadc.eos.username={database username}
+org.opencadc.eos.password={database password}
+org.opencadc.eos.url=jdbc:postgresql://{server}/{database}
 ```
-The `eoscan` database account owns and manages (create, alter, drop) database objects and modifies the content in the
+The `eos` database account owns and manages (create, alter, drop) database objects and modifies the content in the
 specified `schema`. The database is specified in the JDBC URL. Failure to connect or initialize the database will show
 up in logs and cause the application to exit. Note: the database schema is obtained from the EosStorageAdapter configuration.
 
@@ -41,10 +39,10 @@ docker build -t eos-scanner -f Dockerfile .
 
 ## checking it
 ```
-docker run -t eos-scanner:latest /bin/bash
+docker run -it --rm eos-scanner:latest /bin/bash
 ```
 
 ## running it
 ```
-docker run -r --user opencadc:opencadc -v /path/to/external/config:/config:ro --name eos-scanner eos-scanner:latest
+docker run --rm --user opencadc:opencadc -v /path/to/external/config:/config:ro --name eos-scanner eos-scanner:latest
 ```

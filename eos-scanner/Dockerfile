@@ -27,25 +27,19 @@ RUN dnf install -y java-21-openjdk-headless ca-certificates sudo which nmap-ncat
 COPY src/docker/nofiles.conf /etc/security/limits.d/
 
 # allow opencadc to install CA certs and run update-ca-trust at startup
-RUN chgrp -R opencadc \
-        /etc/pki/ca-trust \
-        /etc/pki/tls \
-        /etc/pki/java \
-        /etc/ssl \
-    && chmod -R g+w \
-        /etc/pki/ca-trust \
-        /etc/pki/tls \
-        /etc/pki/java \
-        /etc/ssl \
-    && chown opencadc /etc/pki/ca-trust/extracted/pem/directory-hash
+RUN chgrp opencadc /etc/pki/ca-trust/source/anchors \
+    && chmod g+w /etc/pki/ca-trust/source/anchors
 
-# cleanup existing files
-RUN find /etc/pki/ca-trust/extracted -type f -delete
+# dest dir for update-ca-trist --output (see startup script)
+RUN mkdir -p /opencadc/certs && chown -R opencadc:opencadc /opencadc
 
 # JVM settings
 ENV JAVA_OPTS="-Xms512m -Xmx2048m -XX:+UseParallelGC -XX:+HeapDumpOnOutOfMemoryError -XX:OnError='cat hs_err_pid%p.log'"
 
 RUN mkdir /.ssl && chown opencadc:opencadc /.ssl && chmod 700 /.ssl
+
+# work dir to cache dirscan result and possibly reuse it
+RUN mkdir /work && chown opencadc:opencadc /work
 
 COPY src/docker/cadc-java-init /usr/bin/cadc-java-init
 
@@ -53,4 +47,5 @@ ENTRYPOINT ["/usr/bin/cadc-java-init"]
 
 ADD build/distributions/eos-scanner.tar /
 
-CMD ["/tantar/bin/eos-scanner"]
+CMD ["/eos-scanner/bin/eos-scanner"]
+
