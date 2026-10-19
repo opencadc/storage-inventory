@@ -82,6 +82,7 @@ import java.util.Map;
 import javax.naming.NamingException;
 import javax.sql.DataSource;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.storage.DuplicateStorageLocationException;
 import org.opencadc.inventory.storage.InitDatabaseSM;
 import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.StorageMetadataDAO;
@@ -97,7 +98,7 @@ import org.opencadc.inventory.storage.eos.SubPath;
 public class EosScanner {
     private static final Logger log = Logger.getLogger(EosScanner.class);
 
-    private final String pathPrefix;
+    private final String bucket;
     private final StorageMetadataDAO dao;
     private final EosStorageAdapter eos;
     
@@ -105,7 +106,7 @@ public class EosScanner {
     
     public EosScanner(String pathPrefix, Map<String,Object> daoConfig, ConnectionConfig cc,
             boolean dirScanOnly) {
-        this.pathPrefix = pathPrefix;
+        this.bucket = pathPrefix;
         this.eos = new EosStorageAdapter(); // reads config
         
         // db setup
@@ -138,16 +139,25 @@ public class EosScanner {
         while (iter.hasNext()) {
             StorageMetadata sm = iter.next();
             log.info("found: " + sm);
-            dao.put(sm);
+            try {
+                dao.put(sm);
+            } catch (DuplicateStorageLocationException ex) {
+                log.warn("skip: " + ex.getMessage());
+            }
         }
     }
     
     private List<SubPath> doDirScan() throws IOException {
         // read list from file instead of scan
-        File f = new File("/work/dir-scan.txt");
-        if (f.exists()) {
+        File wd = new File("/work");
+        File cf = new File(wd, "dir-scan.txt");
+        if (bucket != null) {
+            cf = new File(wd, bucket + "-dir-scan.txt");
+        }
+        
+        if (cf.exists()) {
             List<SubPath> ret = new ArrayList<>();
-            LineNumberReader r = new LineNumberReader(new FileReader(f));
+            LineNumberReader r = new LineNumberReader(new FileReader(cf));
             String line = r.readLine();
             while (line != null) {
                 SubPath sp = SubPath.fromString(line);
@@ -155,20 +165,21 @@ public class EosScanner {
                 line = r.readLine();
             }
             r.close();
+            log.info("dir scan: using cache from previous run: " + cf.getAbsolutePath());
             return ret;
         }
         
-        EosPathDivider eos = this.eos.getPathDivider(pathPrefix);
+        EosPathDivider eos = this.eos.getPathDivider(bucket);
         List<SubPath> ret = eos.subdivide();
         
         // write list to file for next time
-        PrintWriter w = new PrintWriter(new FileWriter(f));
+        PrintWriter w = new PrintWriter(new FileWriter(cf));
         for (SubPath sp : ret) {
             w.println(SubPath.toString(sp));
         }
         w.flush();
         w.close();
-        
+        log.info("dir scan: wrote scan result: " + cf.getAbsolutePath());
         return ret;
     }
 }

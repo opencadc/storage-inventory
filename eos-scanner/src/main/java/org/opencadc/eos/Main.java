@@ -160,8 +160,8 @@ public class Main {
             ConnectionConfig cc = new ConnectionConfig(null, null, username, password,
                 "org.postgresql.Driver", dbUrl);
             
-            EosScanner doit = new EosScanner(bucket, daoConfig, cc, dirScanOnly);
-            
+            EosScanner scan = new EosScanner(bucket, daoConfig, cc, dirScanOnly);
+            scan.doit();
             
         } catch (InvalidConfigException e) {
             log.fatal(e.getMessage(), e);

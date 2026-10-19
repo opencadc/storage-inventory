@@ -152,7 +152,8 @@ public class StorageMetadataDAO {
             StorageMetadataMapper doit = new StorageMetadataMapper(new JdbcTemplate(dataSource), tableName);
             doit.doPut(sm);
         } catch (DuplicateKeyException ex) {
-            throw new IllegalArgumentException("duplicate", ex);
+            throw new DuplicateStorageLocationException("duplicate: " 
+                    + sm.getStorageLocation().storageBucket+  " " + sm.getStorageLocation().getStorageID(), ex);
         }
     }
 

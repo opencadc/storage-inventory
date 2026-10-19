@@ -125,7 +125,7 @@ public class EosPathIterator implements Iterator<StorageMetadata> {
         }
 
         // inner: read output from EosFind
-        if (eosIter.hasNext()) {
+        if (eosIter != null && eosIter.hasNext()) {
             this.cur = eosIter.next();
         } else {
             eosIter = null;
@@ -135,11 +135,12 @@ public class EosPathIterator implements Iterator<StorageMetadata> {
                 // invoke new find
                 SubPath sub = subpathIter.next();
                 log.warn("find: " + sub.path + " expected file count: " + sub.numFiles);
-                this.eosIter = new EosFind(mgmServer, mgmPath, authToken, artifactScheme, sub.path, sub.shallow);
-                if (eosIter.hasNext()) {
+                EosFind ef = new EosFind(mgmServer, mgmPath, authToken, artifactScheme, sub.path, sub.shallow);
+                ef.start();
+                // empty dir should have been skipped but check just in case
+                if (ef.hasNext()) {
+                    this.eosIter = ef;
                     this.cur = eosIter.next();
-                } else {
-                    eosIter = null; // empty dir
                 }
             }
             if (!subpathIter.hasNext()) {
