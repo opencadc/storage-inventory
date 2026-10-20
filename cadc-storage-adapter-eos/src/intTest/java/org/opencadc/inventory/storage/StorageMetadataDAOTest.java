@@ -95,7 +95,7 @@ public class StorageMetadataDAOTest {
     private static final Logger log = Logger.getLogger(StorageMetadataDAOTest.class);
     
     static {
-        Log4jInit.setLevel("org.opencadc.inventory", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.inventory", Level.DEBUG);
     }
 
     StorageMetadataDAO dao = new StorageMetadataDAO();
@@ -149,6 +149,8 @@ public class StorageMetadataDAOTest {
                     URI.create("md5:aea82f3d7d786a6db8dc811b4b16e957"),
                     123456L,
                     new Date());
+            expected.contentType = "text/plain";
+            expected.contentEncoding = null;
 
             dao.put(expected);
 
@@ -159,6 +161,8 @@ public class StorageMetadataDAOTest {
             Assert.assertEquals(expected.getContentChecksum(), actual.getContentChecksum());
             Assert.assertEquals(expected.getContentLastModified(), actual.getContentLastModified());
             Assert.assertEquals(expected.getContentLength(), actual.getContentLength());
+            Assert.assertEquals(expected.contentType, actual.contentType);
+            Assert.assertEquals(expected.contentEncoding, actual.contentEncoding);
 
             // prevent duplicate artifacts
             try {
@@ -170,7 +174,7 @@ public class StorageMetadataDAOTest {
                     new Date());
                 dao.put(dupe);
                 Assert.fail("tried to insert duplicate, expected Exception was not thrown");
-            } catch (IllegalArgumentException ex) {
+            } catch (DuplicateStorageLocationException ex) {
                 log.info("caught expected: " + ex);
             }
 

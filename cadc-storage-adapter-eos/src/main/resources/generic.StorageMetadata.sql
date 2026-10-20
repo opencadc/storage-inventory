@@ -7,7 +7,9 @@ create table <schema>.StorageMetadata (
     artifactURI varchar(512) not null,
     contentChecksum varchar(136) not null,
     contentLastModified timestamp not null,
-    contentLength bigint not null
+    contentLength bigint not null,
+    contentType varchar(128),
+    contentEncoding varchar(128)
 );
 
 -- uniqueness, sufficient for ordered iterator only

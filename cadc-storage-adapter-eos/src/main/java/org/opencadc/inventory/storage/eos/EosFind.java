@@ -79,6 +79,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
@@ -91,6 +92,9 @@ import org.opencadc.inventory.storage.StorageMetadata;
 public class EosFind implements ResourceIterator<StorageMetadata> {
     private static final Logger log = Logger.getLogger(EosFind.class);
 
+    public static final String FITS_CONTENT_TYPE = "application/fits";
+    public static final String PARQUET_CONTENT_TYPE = "application/vnd.apache.parquet";
+    
     private static final String EOS_PATH = "path";
     private static final String EOS_CONTENT_TIME = "ctime";
     private static final String EOS_CHECKSUM_TYPE = "checksumtype";
@@ -153,14 +157,6 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
     public StorageMetadata next() {
         StorageMetadata ret = cur;
         advance(false);
-        if (cur != null) {
-            // check order in the stream is as expected
-            int cmp = ret.compareTo(cur);
-            if (cmp >= 0) {
-                throw new RuntimeException("FATAL: found out of order entries in EOS find stream:"
-                    + ret.getStorageLocation() + " vs " + cur.getStorageLocation());
-            }
-        }
         return ret;
     }
 
@@ -211,6 +207,7 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
         Date contentLastModified = null;
         Long contentLength = null;
         StorageLocation sloc = null;
+        String contentType = null;
         
         String csAlg = null;
         String csHex = null;
@@ -225,6 +222,11 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
                         String rel = kv[1].substring(mgmPath.length() + 2, kv[1].length() - 1);
                         artifactURI = URI.create(artifactScheme + ":" + rel);
                         sloc = pathToStorageLocation(rel);
+                        if (rel.endsWith(".fits")) {
+                            contentType = FITS_CONTENT_TYPE;
+                        } else if (rel.endsWith(".parq")) {
+                            contentType = PARQUET_CONTENT_TYPE;
+                        }
                         break;
                     case EOS_FILE_SIZE:
                         log.debug("size: " + kv[1]);
@@ -264,14 +266,15 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
             contentChecksum = URI.create(csAlg + ":" + csHex);
         }
         StorageMetadata ret = new StorageMetadata(sloc, artifactURI, contentChecksum, contentLength, contentLastModified);
+        ret.contentType = contentType;
         return ret;
     }
 
+    // storageID: relative path
+    // storageBucket: hex(storageID)
     StorageLocation pathToStorageLocation(String rel) {
-        int i = rel.lastIndexOf('/');
-        String filename = rel.substring(i + 1);
-        StorageLocation ret = new StorageLocation(URI.create(filename));
-        ret.storageBucket = rel.substring(0, i);
+        StorageLocation ret = new StorageLocation(URI.create(rel));
+        ret.storageBucket = InventoryUtil.computeBucket(ret.getStorageID(), 3);
         return ret;
     }
 

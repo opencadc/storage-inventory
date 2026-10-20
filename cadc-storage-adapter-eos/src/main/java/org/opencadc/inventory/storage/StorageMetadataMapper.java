@@ -96,6 +96,7 @@ public class StorageMetadataMapper {
 
     private static String[] COLUMNS = new String[] {
         "artifactURI", "contentChecksum", "contentLastModified", "contentLength",
+        "contentType", "contentEncoding",
         "storageLocation_storageBucket", "storageLocation_storageID" // 2 PKs last
     };
 
@@ -132,11 +133,16 @@ public class StorageMetadataMapper {
             URI cs = JdbcMapUtil.getURI(rs, col++);
             Date clm = JdbcMapUtil.getDate(rs, col++, utcCalendar);
             Long clen = JdbcMapUtil.getLong(rs, col++);
+            String ctype = rs.getString(col++);
+            String cenc = rs.getString(col++);
             String bucket = rs.getString(col++);
             URI sid = JdbcMapUtil.getURI(rs, col++);
             StorageLocation loc = new StorageLocation(sid);
             loc.storageBucket = bucket;
-            return new StorageMetadata(loc, auri, cs, clen, clm);
+            StorageMetadata ret = new StorageMetadata(loc, auri, cs, clen, clm);
+            ret.contentType = ctype;
+            ret.contentEncoding = cenc;
+            return ret;
         }
     }
     
@@ -161,6 +167,8 @@ public class StorageMetadataMapper {
         
         @Override
         public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
+            int pk1 = COLUMNS.length - 2;
+            int pk2 = COLUMNS.length - 1;
             StringBuilder sb = new StringBuilder();
             sb.append("SELECT ").append(" ");
             for (int i = 0; i < COLUMNS.length; i++) {
@@ -170,8 +178,8 @@ public class StorageMetadataMapper {
                 }
             };
             sb.append(" FROM ").append(tableName);
-            sb.append(" WHERE ").append(COLUMNS[4]).append(" = ?");
-            sb.append(" AND ").append(COLUMNS[5]).append(" = ?");
+            sb.append(" WHERE ").append(COLUMNS[pk1]).append(" = ?");
+            sb.append(" AND ").append(COLUMNS[pk2]).append(" = ?");
             String sql = sb.toString();
             log.debug("SQL: " + sql);
             
@@ -218,6 +226,8 @@ public class StorageMetadataMapper {
             safeSetString(ret, col++, value.getContentChecksum());
             safeSetTimestamp(ret, col++, new Timestamp(value.getContentLastModified().getTime()), utcCalendar);
             safeSetLong(ret, col++, value.getContentLength());
+            safeSetString(ret, col++, value.contentType);
+            safeSetString(ret, col++, value.contentEncoding);
             safeSetString(ret, col++, value.getStorageLocation().storageBucket);
             safeSetString(ret, col++, value.getStorageLocation().getStorageID());
             return ret;
@@ -233,10 +243,12 @@ public class StorageMetadataMapper {
         
         @Override
         public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
+            int pk1 = COLUMNS.length - 2;
+            int pk2 = COLUMNS.length - 1;
             StringBuilder sb = new StringBuilder();
             sb.append("DELETE FROM ").append(tableName);
-            sb.append(" WHERE ").append(COLUMNS[4]).append(" = ?");
-            sb.append(" AND ").append(COLUMNS[5]).append(" = ?");
+            sb.append(" WHERE ").append(COLUMNS[pk1]).append(" = ?");
+            sb.append(" AND ").append(COLUMNS[pk2]).append(" = ?");
             String sql = sb.toString();
             log.debug("SQL: " + sql);
             
