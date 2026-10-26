@@ -104,25 +104,16 @@ public class EosScanner {
     
     public final boolean dirScanOnly;
     
-    public EosScanner(String pathPrefix, Map<String,Object> daoConfig, ConnectionConfig cc,
-            boolean dirScanOnly) {
+    public EosScanner(String pathPrefix, boolean dirScanOnly) {
         this.bucket = pathPrefix;
         this.eos = new EosStorageAdapter(); // reads config
         
         // db setup
-        try {
-            String dsName = "jdbc/storage-metadata";
-            daoConfig.put("jndiDataSourceName", dsName);
-            DBUtil.createJNDIDataSource(dsName, cc);
-            this.dao = new StorageMetadataDAO();
-            dao.setConfig(daoConfig);
-            
-            DataSource ds = DBUtil.findJNDIDataSource(dsName);
-            InitDatabaseSM init = new InitDatabaseSM(dao.getDataSource(), dao.getSchema());
-            init.doInit();
-        } catch (NamingException ex) {
-            throw new InvalidConfigException("failed to setup database connectivity", ex);
-        }
+        this.dao = new StorageMetadataDAO();
+        dao.setConfig(eos.initDataSource());
+        InitDatabaseSM init = new InitDatabaseSM(dao.getDataSource(), dao.getSchema());
+        init.doInit();
+        
         this.dirScanOnly = dirScanOnly;
     }
     

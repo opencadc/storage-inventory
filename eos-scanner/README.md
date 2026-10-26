@@ -15,21 +15,14 @@ org.opencadc.eos.logging = info|debug
 # set whether to report all activity or to perform any actions required.
 org.opencadc.eos.reportOnly = true|false
 
-## database settings
-org.opencadc.eos.schema={database schema for raw storage metadata dump}
-org.opencadc.eos.username={database username}
-org.opencadc.eos.password={database password}
-org.opencadc.eos.url=jdbc:postgresql://{server}/{database}
+## database settings: see cadc-storage-adapter-eos.properties
+
 ```
-The `eos` database account owns and manages (create, alter, drop) database objects and modifies the content in the
-specified `schema`. The database is specified in the JDBC URL. Failure to connect or initialize the database will show
-up in logs and cause the application to exit. Note: the database schema is obtained from the EosStorageAdapter configuration.
 
 The **database and the database account must** be the same one used by `tantar` (the inventory admin account).
 
-The `artifactScheme` 
 ### cadc-storage-adapter-eos.properties
-This tool is hard coded to use the EosStorageAdapter to read EOS connection configuration.
+This tool is hard coded to use the EosStorageAdapter to read EOS and database connection configuration.
 
 ## building it
 ```

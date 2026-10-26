@@ -22,7 +22,17 @@ org.opencadc.inventory.storage.eos.EosStorageAdapter.subpath = {dir name under m
 
 # no longer used:
 org.opencadc.inventory.storage.eos.EosStorageAdapter.artifactScheme = {scheme}
+
+# database config for iterator used by tantar and eos-scanner
+org.opencadc.eos.scan.schema={database schema for raw storage metadata dump}
+org.opencadc.eos.scan.username={database username}
+org.opencadc.eos.scan.password={database password}
+org.opencadc.eos.scan.url=jdbc:postgresql://{server}/{database}
 ```
+The `eos` database account owns and manages (create, alter, drop) database objects and modifies the content in the
+specified `schema`. The database is specified in the JDBC URL. Failure to connect or initialize the database will show
+up in logs and cause the application to exit. Note: the database config is only needed when running `eos-scanner` 
+or `tantar` and is not required for `minoc`. The _schema_ MUST NOT be the same as the inventory schema.
 
 The _mgmServer_ is a normal value of the EOS_MGM_URL environment variable used by eos-client tools; it is
 normally of the form `root://{server name}`.

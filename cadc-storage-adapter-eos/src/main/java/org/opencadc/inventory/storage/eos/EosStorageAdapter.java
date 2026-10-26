@@ -132,7 +132,7 @@ public class EosStorageAdapter implements StorageAdapter {
     static final String CONFIG_PROPERTY_SCHEME = EosStorageAdapter.class.getName() + ".artifactScheme";
 
     // eos-scanner output
-    private static final String EOS_BASE = "org.opencadc.eos";
+    private static final String EOS_BASE = "org.opencadc.eos.scan";
     private static final String DB_SCHEMA_KEY = EOS_BASE + ".schema";
     private static final String DB_USERNAME_KEY = EOS_BASE + ".username";
     private static final String DB_PASSWORD_KEY = EOS_BASE + ".password";
@@ -377,6 +377,15 @@ public class EosStorageAdapter implements StorageAdapter {
         if (includeRecoverable) {
             throw new UnsupportedOperationException();
         }
+        
+        Map<String,Object> daoConfig = initDataSource();
+        StorageMetadataDAO dao = new StorageMetadataDAO();
+        dao.setConfig(daoConfig);
+        return dao.iterator(storageBucketPrefix);
+    }
+    
+    // for iterator above and reuse by eos-scanner
+    public Map<String,Object> initDataSource() {
         // check config captured by ctor:
         if (dbSchema == null || dbUser == null || dbCred == null || jdbcURL == null) {
             StringBuilder sb = new StringBuilder();
@@ -404,10 +413,7 @@ public class EosStorageAdapter implements StorageAdapter {
         } catch (NamingException ex) {
             throw new RuntimeException("failed to create JNDI DataSource", ex);
         }
-
-        StorageMetadataDAO dao = new StorageMetadataDAO();
-        dao.setConfig(daoConfig);
-        return dao.iterator(storageBucketPrefix);
+        return daoConfig;
     }
 
     // read-only implementation -- everything else unsupported

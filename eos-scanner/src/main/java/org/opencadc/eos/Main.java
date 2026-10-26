@@ -91,12 +91,7 @@ public class Main {
     private static final String CONFIG_BASE = Main.class.getPackage().getName();
     private static final String LOGGING_KEY = CONFIG_BASE + ".logging";
     private static final String DIRSCAN_KEY = CONFIG_BASE + ".dirScanOnly";
-    private static final String BUCKET_KEY = CONFIG_BASE + ".bucket";
-    
-    private static final String DB_SCHEMA_KEY = CONFIG_BASE + ".schema";
-    private static final String DB_USERNAME_KEY = CONFIG_BASE + ".username";
-    private static final String DB_PASSWORD_KEY = CONFIG_BASE + ".password";
-    private static final String JDBC_URL_KEY = CONFIG_BASE + ".url";
+    private static final String BUCKET_KEY = CONFIG_BASE + ".subdir";
     
     private Main() {
     }
@@ -120,26 +115,6 @@ public class Main {
             // parse config file
             StringBuilder errMsg = new StringBuilder();
 
-            String schema = props.getFirstPropertyValue(DB_SCHEMA_KEY);
-            if (!StringUtil.hasLength(schema)) {
-                errMsg.append(DB_SCHEMA_KEY).append(" ");
-            }
-
-            String dbUrl = props.getFirstPropertyValue(JDBC_URL_KEY);
-            if (!StringUtil.hasLength(dbUrl)) {
-                errMsg.append(JDBC_URL_KEY).append(" ");
-            }
-
-            String username = props.getFirstPropertyValue(DB_USERNAME_KEY);
-            if (!StringUtil.hasLength(username)) {
-                errMsg.append(DB_USERNAME_KEY).append(" ");
-            }
-
-            String password = props.getFirstPropertyValue(DB_PASSWORD_KEY);
-            if (!StringUtil.hasLength(password)) {
-                errMsg.append(DB_PASSWORD_KEY).append(" ");
-            }
-            
             String bucket = props.getFirstPropertyValue(BUCKET_KEY);
             if (!StringUtil.hasLength(bucket)) {
                 errMsg.append(BUCKET_KEY).append(" ");
@@ -154,13 +129,7 @@ public class Main {
                 throw new IllegalStateException(CONFIGT_FILE + " missing one or more values: " + errMsg);
             }
             
-            // populate/assign values to pass to FileSync
-            Map<String, Object> daoConfig = new TreeMap<>();
-            daoConfig.put("schema", schema);
-            ConnectionConfig cc = new ConnectionConfig(null, null, username, password,
-                "org.postgresql.Driver", dbUrl);
-            
-            EosScanner scan = new EosScanner(bucket, daoConfig, cc, dirScanOnly);
+            EosScanner scan = new EosScanner(bucket, dirScanOnly);
             scan.doit();
             
         } catch (InvalidConfigException e) {
