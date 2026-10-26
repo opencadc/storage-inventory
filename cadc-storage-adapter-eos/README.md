@@ -17,13 +17,9 @@ org.opencadc.inventory.storage.eos.EosStorageAdapter.mgmHttpsPort = {https port}
 
 org.opencadc.inventory.storage.eos.EosStorageAdapter.authToken = zteos64:{token}
 
-# new
-org.opencadc.inventory.storage.eos.EosStorageAdapter.subpath = {dir name under mgmServerPath}
-
-# no longer used:
 org.opencadc.inventory.storage.eos.EosStorageAdapter.artifactScheme = {scheme}
 
-# database config for iterator used by tantar and eos-scanner
+# database config for iterator, used by tantar and eos-scanner
 org.opencadc.eos.scan.schema={database schema for raw storage metadata dump}
 org.opencadc.eos.scan.username={database username}
 org.opencadc.eos.scan.password={database password}
