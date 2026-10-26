@@ -68,7 +68,8 @@
 package org.opencadc.inventory.storage.eos;
 
 import ca.nrc.cadc.auth.AuthenticationUtil;
-import ca.nrc.cadc.auth.NotAuthenticatedException;
+import ca.nrc.cadc.db.ConnectionConfig;
+import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.io.ByteLimitExceededException;
 import ca.nrc.cadc.io.MultiBufferIO;
 import ca.nrc.cadc.io.ReadException;
@@ -76,7 +77,6 @@ import ca.nrc.cadc.io.WriteException;
 import ca.nrc.cadc.net.HttpGet;
 import ca.nrc.cadc.net.IncorrectContentChecksumException;
 import ca.nrc.cadc.net.IncorrectContentLengthException;
-import ca.nrc.cadc.net.RangeNotSatisfiableException;
 import ca.nrc.cadc.net.ResourceAlreadyExistsException;
 import ca.nrc.cadc.net.ResourceNotFoundException;
 import ca.nrc.cadc.net.TransientException;
@@ -91,7 +91,6 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.security.AccessControlContext;
 import java.security.AccessControlException;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
@@ -99,6 +98,9 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import javax.naming.NamingException;
 import javax.security.auth.Subject;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.InventoryUtil;
@@ -111,6 +113,7 @@ import org.opencadc.inventory.storage.PutTransaction;
 import org.opencadc.inventory.storage.StorageAdapter;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
+import org.opencadc.inventory.storage.StorageMetadataDAO;
 
 /**
  * StorageAdapter implementation for the EOS file storage system.
@@ -128,14 +131,26 @@ public class EosStorageAdapter implements StorageAdapter {
     static final String CONFIG_PROPERTY_TOKEN = EosStorageAdapter.class.getName() + ".authToken";
     static final String CONFIG_PROPERTY_SCHEME = EosStorageAdapter.class.getName() + ".artifactScheme";
 
+    // eos-scanner output
+    private static final String EOS_BASE = "org.opencadc.eos.scan";
+    private static final String DB_SCHEMA_KEY = EOS_BASE + ".schema";
+    private static final String DB_USERNAME_KEY = EOS_BASE + ".username";
+    private static final String DB_PASSWORD_KEY = EOS_BASE + ".password";
+    private static final String JDBC_URL_KEY = EOS_BASE + ".url";
+    
     private static final int CIRC_BUFFERS = 3;
     private static final int CIRC_BUFFERSIZE = 64 * 1024;
     
-    private final URI mgmServer;
-    private final String mgmPath;
-    private final URL mgmBaseURL;
-    private final String authToken;
+    final URI mgmServer;
+    final String mgmPath;
+    final URL mgmBaseURL;
+    final String authToken;
     private final String artifactScheme;
+    
+    private final String dbUser;
+    private final String dbCred;
+    private final String dbSchema;
+    private final String jdbcURL;
 
     /**
      * Standard constructor for dynamic loading and operational use.
@@ -223,6 +238,12 @@ public class EosStorageAdapter implements StorageAdapter {
         
         this.artifactScheme = as;
         
+        // eos database config optional: only needed for tantar creating iterator
+        this.dbSchema = mvp.getFirstPropertyValue(DB_SCHEMA_KEY);
+        this.dbUser = mvp.getFirstPropertyValue(DB_USERNAME_KEY);
+        this.dbCred = mvp.getFirstPropertyValue(DB_PASSWORD_KEY);
+        this.jdbcURL = mvp.getFirstPropertyValue(JDBC_URL_KEY);
+        
         log.debug("mgmServer: " + mgmServer);
         log.debug("mgmPath: " + mgmPath);
         log.debug("mgm http: " + mgmBaseURL);
@@ -230,9 +251,19 @@ public class EosStorageAdapter implements StorageAdapter {
         log.debug("authToken: REDACTED");
     }
 
+    // called by eos-scanner only to extract StorageMetadata from EOS
+    public EosPathIterator getPathIterator(List<SubPath> dirs) {
+        return new EosPathIterator(mgmServer, mgmPath, authToken, artifactScheme, dirs);
+    }
+    
+    // called by eos-scanner only: to sudivide a dir into scannable subpaths
+    public EosPathDivider getPathDivider(String pathPrefix) {
+        return new EosPathDivider(mgmServer, mgmPath, authToken, pathPrefix);
+    }
+
     @Override
     public BucketType getBucketType() {
-        return BucketType.PATH;
+        return BucketType.HEX;
     }
 
     @Override
@@ -252,7 +283,7 @@ public class EosStorageAdapter implements StorageAdapter {
 
         StringBuilder sb = new StringBuilder();
         sb.append(mgmBaseURL);
-        sb.append("/").append(storageLocation.storageBucket);
+        // ignore hex storageLocation.storageBucket
         sb.append("/").append(storageLocation.getStorageID().toASCIIString());
         sb.append("?authz=");
         String surl = sb.toString();
@@ -321,6 +352,7 @@ public class EosStorageAdapter implements StorageAdapter {
                 }
                 get.prepare();
             }
+            log.debug("content-length: " + get.getContentLength());
             return get.getInputStream();
         } catch (ByteLimitExceededException | ResourceAlreadyExistsException ex) {
             throw new RuntimeException("BUG: unexpected fail during get: " + ex);
@@ -345,10 +377,43 @@ public class EosStorageAdapter implements StorageAdapter {
         if (includeRecoverable) {
             throw new UnsupportedOperationException();
         }
-        EosFind find = new EosFind(mgmServer, mgmPath, authToken, artifactScheme);
-        find.pathPrefix = storageBucketPrefix;
-        find.start();
-        return find;
+        
+        Map<String,Object> daoConfig = initDataSource();
+        StorageMetadataDAO dao = new StorageMetadataDAO();
+        dao.setConfig(daoConfig);
+        return dao.iterator(storageBucketPrefix);
+    }
+    
+    // for iterator above and reuse by eos-scanner
+    public Map<String,Object> initDataSource() {
+        // check config captured by ctor:
+        if (dbSchema == null || dbUser == null || dbCred == null || jdbcURL == null) {
+            StringBuilder sb = new StringBuilder();
+            if (dbSchema == null) {
+                sb.append(DB_SCHEMA_KEY + ": MISSING ");
+            }
+            if (dbUser == null) {
+                sb.append(DB_USERNAME_KEY + ": MISSING ");
+            }
+            if (dbCred == null) {
+                sb.append(DB_PASSWORD_KEY + ": MISSING ");
+            }
+            if (jdbcURL == null) {
+                sb.append(JDBC_URL_KEY + ": MISSING ");
+            }
+            throw new InvalidConfigException("invalid config: " + sb.toString());
+        }
+        Map<String,Object> daoConfig = new TreeMap<>();
+        daoConfig.put("schema", dbSchema);
+        ConnectionConfig cc = new ConnectionConfig(null, null, dbUser, dbCred, "org.postgresql.Driver", jdbcURL);
+        String dsName = "jdbc/storage-metadata";
+        daoConfig.put("jndiDataSourceName", dsName);
+        try {
+            DBUtil.createJNDIDataSource(dsName, cc);
+        } catch (NamingException ex) {
+            throw new RuntimeException("failed to create JNDI DataSource", ex);
+        }
+        return daoConfig;
     }
 
     // read-only implementation -- everything else unsupported

@@ -1,0 +1,50 @@
+#!/bin/bash
+
+SELF=cadc-java-init
+
+CONFDIR=/config
+USER=$(whoami)
+
+TS=$(date)
+echo "$TS $SELF START"
+echo "user: $USER"
+echo "home: $HOME"
+echo "image version: $IMAGE_VERSION"
+
+# rebuild CA cert bundles
+if [ -e $CONFDIR/cacerts ]; then
+    echo "Configure CA bundle with extra certificates: $CONFDIR/cacerts"
+    cp $CONFDIR/cacerts/* /etc/pki/ca-trust/source/anchors/
+fi
+CERT_DIR="/opencadc/certs"
+update-ca-trust extract --output "$CERT_DIR"
+
+# For OpenSSL:
+export SSL_CERT_DIR="$CERT_DIR/pem/directory-hash"
+export SSL_CERT_FILE="$CERT_DIR/pem/tls-ca-bundle.pem"
+
+# For Java:
+export JAVA_TOOL_OPTIONS="-Djavax.net.ssl.trustStore=$CERT_DIR/java/cacerts"
+
+mkdir -p $HOME/.ssl
+chmod 700 $HOME/.ssl
+for pcf in $CONFDIR/*.pem; do
+    [ -e "$pcf" ] || continue
+    echo "Link proxy certificate: $pcf"
+    ln -s $pcf $HOME/.ssl/
+done
+
+test -e /config && (test -e $HOME/config || ln -s /config $HOME/config)
+
+TS=$(date)
+echo "$TS $SELF DONE"
+
+if [ -z "$1" ]; then
+    echo "no ENTRYPOINT args: missing CMD?"
+    exit
+fi
+
+## exec CMD
+exec $@
+
+

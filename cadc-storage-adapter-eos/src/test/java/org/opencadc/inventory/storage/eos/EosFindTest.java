@@ -77,6 +77,7 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Test;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
@@ -93,19 +94,20 @@ public class EosFindTest {
     }
 
     EosFind eos = new EosFind(URI.create("root://eos-mgm.keel-dev.arbutus.cloud"), 
-            "/eos/keel-dev.arbutus.cloud/data/lsst", "zteos64:invalid-token", "lsst");
+            "/eos/keel-dev.arbutus.cloud/data/lsst", "zteos64:invalid-token", "lsst", null, false);
 
     public EosFindTest() { 
     }
 
     @Test
-    public void testPathStorageLocation() throws Exception {
+    public void testPathToStorageLocation() throws Exception {
         String path = "users/fabio/hello.txt";
         StorageLocation sloc = eos.pathToStorageLocation(path);
         log.info("sloc: " + sloc);
         Assert.assertNotNull(sloc);
-        Assert.assertEquals("hello.txt", sloc.getStorageID().toASCIIString());
-        Assert.assertEquals("users/fabio", sloc.storageBucket);
+        Assert.assertEquals("users/fabio/hello.txt", sloc.getStorageID().toASCIIString());
+        Assert.assertNotNull(sloc.storageBucket);
+        Assert.assertEquals(3, sloc.storageBucket.length());
     }
 
     @Test
@@ -135,16 +137,6 @@ public class EosFindTest {
         DateFormat df = DateUtil.getDateFormat(DateUtil.IVOA_DATE_FORMAT, DateUtil.UTC);
         final Date expectedDate = df.parse("2025-03-18T08:19:12.102");
         
-        // eos find -f --fileinfo:
-        String fileInfoLine = "keylength.file=59 file=/eos/keel-dev.arbutus.cloud/data/lsst/users/fabio/hello.txt size=12 status=healthy"
-            + " mtime=1742285952.707288000 ctime=1742285952.102409887 btime=1742285952.102409887 atime=1742285952.102410975"
-            + " clock=1751496240343894024 mode=0644 uid=5000 gid=5000 fxid=00000007 fid=7 ino=1879048192 pid=21 pxid=00000015"
-            + " xstype=adler xs=1e3d045f etag=\"1879048192:1e3d045f\""
-            + " detached=0 layout=plain nstripes=1 lid=00100002 nrep=1 xattrn=sys.eos.btime xattrv=1742285952.102409887"
-            + " xattrn=sys.fs.tracking xattrv=+3 xattrn=sys.utrace xattrv=ac39a4b8-03d1-11f0-9ee4-423bedf0b9a2"
-            + " xattrn=sys.vtrace xattrv=[Tue Mar 18 09:19:12 2025] uid:5000[lsst] gid:5000[lsst]"
-            + " tident:http name:lsst dn: prot:https app:http host:[::ffff:134.158.240.252] domain:158.240.252] geo: sudo:0 fsid=3";
-        
         // eos find -f --format path,size,checksumtype,checksum,ctime
         String findLine = "path=\"/eos/keel-dev.arbutus.cloud/data/lsst/users/fabio/hello.txt\""
                 + " size=12 checksumtype=adler checksum=1e3d045f ctime=1742285952.102409887";
@@ -158,7 +150,7 @@ public class EosFindTest {
         Assert.assertEquals("adler:1e3d045f", sm.getContentChecksum().toASCIIString());
         Assert.assertEquals(expectedDate.getTime(), sm.getContentLastModified().getTime());
         StorageLocation sloc = sm.getStorageLocation();
-        Assert.assertEquals("hello.txt", sloc.getStorageID().toASCIIString());
-        Assert.assertEquals("users/fabio", sloc.storageBucket);
+        Assert.assertEquals("users/fabio/hello.txt", sloc.getStorageID().toASCIIString());
+        Assert.assertNotNull(sloc.storageBucket);
     }
 }

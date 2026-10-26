@@ -67,23 +67,19 @@
 
 package org.opencadc.inventory.storage.eos;
 
-import ca.nrc.cadc.exec.BuilderOutputGrabber;
 import ca.nrc.cadc.io.ResourceIterator;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.LineNumberReader;
 import java.io.OutputStream;
-import java.io.StringReader;
 import java.net.URI;
-import java.net.URL;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.log4j.Logger;
+import org.opencadc.inventory.InventoryUtil;
 import org.opencadc.inventory.StorageLocation;
 import org.opencadc.inventory.storage.StorageEngageException;
 import org.opencadc.inventory.storage.StorageMetadata;
@@ -96,6 +92,9 @@ import org.opencadc.inventory.storage.StorageMetadata;
 public class EosFind implements ResourceIterator<StorageMetadata> {
     private static final Logger log = Logger.getLogger(EosFind.class);
 
+    public static final String FITS_CONTENT_TYPE = "application/fits";
+    public static final String PARQUET_CONTENT_TYPE = "application/vnd.apache.parquet";
+    
     private static final String EOS_PATH = "path";
     private static final String EOS_CONTENT_TIME = "ctime";
     private static final String EOS_CHECKSUM_TYPE = "checksumtype";
@@ -106,9 +105,8 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
     private final String mgmPath;
     private final String authToken;
     private final String artifactScheme;
-    
-    // optional storageBucketPrefix
-    public String pathPrefix;
+    private final String subpath;
+    private final boolean shallow;
     
     private Process proc;
     private InputStream istream;
@@ -118,11 +116,15 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
     private LineNumberReader inputReader;
     private StorageMetadata cur = null;
 
-    public EosFind(URI mgmServer, String mgmPath, String authToken, String artifactScheme) {
+    // mgmPath is not included in the output StorageLocation
+    // subpath is included in the output StorageLocation
+    public EosFind(URI mgmServer, String mgmPath, String authToken, String artifactScheme, String subpath, boolean shallow) {
         this.mgmServer = mgmServer;
         this.mgmPath = mgmPath;
         this.authToken = authToken;
         this.artifactScheme = artifactScheme;
+        this.subpath = subpath;
+        this.shallow = shallow;
     }
 
     // explicit start
@@ -134,8 +136,8 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
         // currently used: openStream()
         try {
             String path = mgmPath;
-            if (pathPrefix != null) {
-                path += "/" + pathPrefix;
+            if (subpath != null) {
+                path += "/" + subpath;
             }
             openStream(mgmServer, path, authToken);
             this.inputReader = new LineNumberReader(new InputStreamReader(istream));
@@ -155,14 +157,6 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
     public StorageMetadata next() {
         StorageMetadata ret = cur;
         advance(false);
-        if (cur != null) {
-            // check order in the stream is as expected
-            int cmp = ret.compareTo(cur);
-            if (cmp >= 0) {
-                throw new RuntimeException("FATAL: found out of order entries in EOS find stream:"
-                    + ret.getStorageLocation() + " vs " + cur.getStorageLocation());
-            }
-        }
         return ret;
     }
 
@@ -213,6 +207,7 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
         Date contentLastModified = null;
         Long contentLength = null;
         StorageLocation sloc = null;
+        String contentType = null;
         
         String csAlg = null;
         String csHex = null;
@@ -227,6 +222,11 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
                         String rel = kv[1].substring(mgmPath.length() + 2, kv[1].length() - 1);
                         artifactURI = URI.create(artifactScheme + ":" + rel);
                         sloc = pathToStorageLocation(rel);
+                        if (rel.endsWith(".fits")) {
+                            contentType = FITS_CONTENT_TYPE;
+                        } else if (rel.endsWith(".parq")) {
+                            contentType = PARQUET_CONTENT_TYPE;
+                        }
                         break;
                     case EOS_FILE_SIZE:
                         log.debug("size: " + kv[1]);
@@ -266,42 +266,31 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
             contentChecksum = URI.create(csAlg + ":" + csHex);
         }
         StorageMetadata ret = new StorageMetadata(sloc, artifactURI, contentChecksum, contentLength, contentLastModified);
+        ret.contentType = contentType;
         return ret;
     }
 
+    // storageID: relative path
+    // storageBucket: hex(storageID)
     StorageLocation pathToStorageLocation(String rel) {
-        int i = rel.lastIndexOf('/');
-        String filename = rel.substring(i + 1);
-        StorageLocation ret = new StorageLocation(URI.create(filename));
-        ret.storageBucket = rel.substring(0, i);
+        StorageLocation ret = new StorageLocation(URI.create(rel));
+        ret.storageBucket = InventoryUtil.computeBucket(ret.getStorageID(), 3);
         return ret;
-    }
-
-    // read-into-memory implementation
-    private LineNumberReader readFully(URI mgmServer, String remotePath, String authToken) throws IOException {
-        
-        String str = "eos find -f --format path,size,checksumtype,checksum,ctime " + remotePath;
-        final String[] cmd = str.split(" ");
-        final Map<String, String> environment = new HashMap<>();
-        environment.put("EOS_MGM_URL", mgmServer.toASCIIString());
-        environment.put("EOSAUTHZ", authToken);
-        
-        log.warn("readFully: " + str);
-        BuilderOutputGrabber exec = new BuilderOutputGrabber();
-        exec.captureOutput(cmd, environment);
-        log.warn("exit status: " + exec.getExitValue());
-        
-        if (exec.getExitValue() != 0) {
-            throw new StorageEngageException("eos find failed (" + exec.getExitValue() + "): " + exec.getOutput());
-        }
-
-        return new LineNumberReader(new StringReader(exec.getOutput()));
     }
 
     // streaming implementation
     private void openStream(URI mgmServer, String remotePath, String authToken) throws IOException {
-        final String str = "eos find -f --format path,size,checksumtype,checksum,ctime " + remotePath;
-        List<String> parameters = Arrays.asList(str.split(" "));
+        StringBuilder sb = new StringBuilder();
+        sb.append("eos newfind -f ");
+        if (shallow) {
+            sb.append("--maxdepth 1 ");
+        }
+        sb.append("--format path,size,checksumtype,checksum,ctime ");
+        sb.append(remotePath);
+        String cmd = sb.toString();
+        log.info("find files: " + cmd);
+        
+        List<String> parameters = Arrays.asList(cmd.split(" "));
         
         ProcessBuilder processBuilder = new ProcessBuilder(parameters);
         processBuilder.redirectErrorStream(true);
@@ -310,7 +299,6 @@ public class EosFind implements ResourceIterator<StorageMetadata> {
         environment.put("EOS_MGM_URL", mgmServer.toASCIIString());
         environment.put("EOSAUTHZ", authToken);
 
-        log.warn("openStream: " + str);
         this.proc = processBuilder.start();
         this.istream = proc.getInputStream();
         this.ostream = proc.getOutputStream();

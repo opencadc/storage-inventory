@@ -93,7 +93,7 @@ public class EosStorageAdapterTest {
     private static final Logger log = Logger.getLogger(EosStorageAdapterTest.class);
     
     static {
-        Log4jInit.setLevel("org.opencadc.inventory.storage", Level.INFO);
+        Log4jInit.setLevel("org.opencadc.inventory.storage", Level.DEBUG);
         Log4jInit.setLevel("ca.nrc.cadc.net", Level.DEBUG);
     }
     

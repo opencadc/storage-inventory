@@ -22,6 +22,6 @@ RUN update-ca-trust
 
 # install required software
 RUN dnf install -y java-21-openjdk.x86_64 java-21-openjdk-devel.x86_64 && dnf clean all
-RUN dnf install -y eos-client && dnf clean all
+RUN dnf install -y eos-client xrootd-client && dnf clean all
 
 
