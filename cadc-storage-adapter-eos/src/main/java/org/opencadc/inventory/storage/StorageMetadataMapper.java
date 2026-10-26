@@ -69,6 +69,8 @@ package org.opencadc.inventory.storage;
 
 import ca.nrc.cadc.date.DateUtil;
 import ca.nrc.cadc.db.mappers.JdbcMapUtil;
+import ca.nrc.cadc.io.ResourceIterator;
+import java.io.IOException;
 import java.net.URI;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -78,9 +80,9 @@ import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.Calendar;
 import java.util.Date;
+import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 import org.opencadc.inventory.StorageLocation;
-import org.opencadc.inventory.storage.StorageMetadata;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementCreator;
@@ -100,7 +102,7 @@ public class StorageMetadataMapper {
         "storageLocation_storageBucket", "storageLocation_storageID" // 2 PKs last
     };
 
-    private final Calendar utcCalendar = Calendar.getInstance(DateUtil.UTC);
+    
     private final JdbcTemplate jdbc;
     private final String tableName;
     
@@ -124,8 +126,28 @@ public class StorageMetadataMapper {
         jdbc.update(del);
     }
     
+    public ResourceIterator<StorageMetadata> iterator(String bucket) {
+        IteratorQuery iq = new IteratorQuery(bucket);
+        return iq.query(jdbc.getDataSource());
+    }
+    
     // usable by extractor and iterator
+    private StringBuilder getSelectSQL() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("SELECT ").append(" ");
+        for (int i = 0; i < COLUMNS.length; i++) {
+            sb.append(COLUMNS[i]);
+            if (i + 1 < COLUMNS.length) {
+                sb.append(",");
+            }
+        }
+        sb.append(" FROM ").append(tableName);
+        return sb;
+    }
+
     private class StorageMetadataRowMapper implements RowMapper<StorageMetadata> {
+        private final Calendar utcCalendar = Calendar.getInstance(DateUtil.UTC);
+        
         @Override
         public StorageMetadata mapRow(ResultSet rs, int i) throws SQLException {
             int col = 1;
@@ -167,17 +189,9 @@ public class StorageMetadataMapper {
         
         @Override
         public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
+            StringBuilder sb = getSelectSQL();
             int pk1 = COLUMNS.length - 2;
             int pk2 = COLUMNS.length - 1;
-            StringBuilder sb = new StringBuilder();
-            sb.append("SELECT ").append(" ");
-            for (int i = 0; i < COLUMNS.length; i++) {
-                sb.append(COLUMNS[i]);
-                if (i + 1 < COLUMNS.length) {
-                    sb.append(",");
-                }
-            };
-            sb.append(" FROM ").append(tableName);
             sb.append(" WHERE ").append(COLUMNS[pk1]).append(" = ?");
             sb.append(" AND ").append(COLUMNS[pk2]).append(" = ?");
             String sql = sb.toString();
@@ -193,6 +207,7 @@ public class StorageMetadataMapper {
     }
 
     private class PutEntity implements PreparedStatementCreator {
+        private final Calendar utcCalendar = Calendar.getInstance(DateUtil.UTC);
         private StorageMetadata value;
         
         PutEntity(StorageMetadata value) {
@@ -258,6 +273,129 @@ public class StorageMetadataMapper {
             safeSetString(ret, col++, key.storageBucket);
             safeSetString(ret, col++, key.getStorageID());
             return ret;
+        }
+    }
+
+    private class IteratorQuery {
+        private String storageBucket;
+        
+        IteratorQuery(String storageBucket) {
+            this.storageBucket = storageBucket;
+        }
+
+        public ResourceIterator<StorageMetadata> query(DataSource ds) {
+            StringBuilder sb = getSelectSQL();
+            if (storageBucket != null) {
+                sb.append(" WHERE storageLocation_storageBucket LIKE ?");
+            }
+            sb.append(" ORDER BY storageLocation_storageBucket, storageLocation_storageID");
+            String sql = sb.toString();
+            log.warn("iterator query: " + sql);
+            
+            try {
+                Connection con = ds.getConnection();
+                log.debug("ArtifactIterator: setAutoCommit(false)");
+                con.setAutoCommit(false);
+                // defaults for options: ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY
+                PreparedStatement ps = con.prepareStatement(sql);
+                ps.setFetchSize(1000);
+                ps.setFetchDirection(ResultSet.FETCH_FORWARD);
+                
+                if (storageBucket != null) {
+                    String val = storageBucket + "%";
+                    log.debug("bucket prefix: " + val);
+                    ps.setString(1, val);
+                }
+                ResultSet rs = ps.executeQuery();
+                return new StorageMetadataIterator(con, rs, new StorageMetadataRowMapper());
+            } catch (SQLException ex) {
+                throw new RuntimeException("BUG: artifact iterator query failed", ex);
+            }    
+        }
+    }
+
+    private class StorageMetadataIterator implements ResourceIterator<StorageMetadata> {
+
+        final Calendar utc = Calendar.getInstance(DateUtil.UTC);
+        private final Connection con;
+        private final ResultSet rs;
+        private final RowMapper<StorageMetadata> mapper;
+        boolean hasRow;
+        boolean closeWhenDone = true; // return to pool | assume close suppressed for static connections
+
+        public StorageMetadataIterator(Connection con, ResultSet rs, RowMapper<StorageMetadata> mapper)
+                throws SQLException {
+            this.con = con;
+            this.rs = rs;
+            this.mapper = mapper;
+            hasRow = rs.next();
+            log.debug("StorageMetdataIterator: " + super.toString() + " ctor " + hasRow);
+            if (!hasRow) {
+                log.debug("StorageMetadataIterator:  " + super.toString() + " ctor - setAutoCommit(true)");
+                try {
+                    con.setAutoCommit(true); // commit txn
+                    if (closeWhenDone) {
+                        con.close(); // return to pool
+                    }
+                } catch (SQLException unexpected) {
+                    log.error("Connection.setAutoCommit(true) & close() failed", unexpected);
+                }
+            }
+        }
+
+        @Override
+        public boolean hasNext() {
+            return hasRow;
+        }
+
+        @Override
+        public StorageMetadata next() {
+            try {
+                StorageMetadata ret = mapper.mapRow(rs, 0);
+                hasRow = rs.next();
+                if (!hasRow) {
+                    log.debug("ArtifactResultSetIterator:  " + super.toString() + " DONE - setAutoCommit(true)");
+                    try {
+                        con.setAutoCommit(true); // commit txn
+                        if (closeWhenDone) {
+                            con.close(); // return to pool
+                        }
+                    } catch (SQLException unexpected) {
+                        log.error("Connection.setAutoCommit(true) & close() failed", unexpected);
+                    }
+                }
+                return ret;
+            } catch (Exception ex) {
+                if (hasRow) {
+                    log.debug("ArtifactResultSetIterator:  " + super.toString() + " ResultSet.next() FAILED - setAutoCommit(true)");
+                    try {
+                        con.setAutoCommit(true); // commit txn
+                        if (closeWhenDone) {
+                            con.close(); // return to pool
+                        }
+                        hasRow = false;
+                    } catch (SQLException unexpected) {
+                        log.error("Connection.setAutoCommit(true) & close() failed", unexpected);
+                    }
+                }
+                throw new RuntimeException("BUG: artifact list query failed while iterating", ex);
+            }
+        }
+
+        @Override
+        public void close() throws IOException {
+            if (hasRow) {
+                log.debug("StorageMetdataIterator:  " + super.toString() + " ctor - setAutoCommit(true)");
+                try {
+                    con.setAutoCommit(true); // commit txn
+                    if (closeWhenDone) {
+                        con.close(); // return to pool
+                    }
+                    hasRow = false; 
+                } catch (SQLException unexpected) {
+                    log.error("Connection.setAutoCommit(true) & close() failed", unexpected);
+                }
+            }
         }
     }
 

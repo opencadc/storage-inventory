@@ -72,6 +72,7 @@ import org.opencadc.inventory.storage.InitDatabaseSM;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
+import ca.nrc.cadc.io.ResourceIterator;
 import ca.nrc.cadc.util.Log4jInit;
 import java.net.URI;
 import java.util.Date;
@@ -189,11 +190,25 @@ public class StorageMetadataDAOTest {
     
     @Test
     public void testIterator() {
-        
+        ResourceIterator<StorageMetadata> iter = dao.iterator(null);
+        Assert.assertNotNull(iter);
+        while (iter.hasNext()) {
+            StorageMetadata sm = iter.next();
+            log.info("found: " + sm);
+        }
     }
     
     @Test
     public void testBucketIterator() {
-        
+        for (char c : InventoryUtil.BUCKET_CHARS.toCharArray()) {
+            String b = String.valueOf(c);
+            ResourceIterator<StorageMetadata> iter = dao.iterator(b);
+            Assert.assertNotNull(iter);
+            log.info("bucket: " + b);
+            while (iter.hasNext()) {
+                StorageMetadata sm = iter.next();
+                log.info("  " + sm);
+            }
+        }
     }
 }

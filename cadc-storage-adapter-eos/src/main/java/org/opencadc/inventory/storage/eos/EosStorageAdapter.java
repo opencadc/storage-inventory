@@ -263,7 +263,7 @@ public class EosStorageAdapter implements StorageAdapter {
 
     @Override
     public BucketType getBucketType() {
-        return BucketType.PATH;
+        return BucketType.HEX;
     }
 
     @Override
@@ -283,6 +283,7 @@ public class EosStorageAdapter implements StorageAdapter {
 
         StringBuilder sb = new StringBuilder();
         sb.append(mgmBaseURL);
+        // ignore hex storageLocation.storageBucket
         sb.append("/").append(storageLocation.getStorageID().toASCIIString());
         sb.append("?authz=");
         String surl = sb.toString();

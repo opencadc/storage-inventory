@@ -171,7 +171,7 @@ public class StorageMetadataDAO {
 
     // return iterator over StorageMetadata objects in StorageMetadata.storageLocation order
     public ResourceIterator<StorageMetadata> iterator(String bucket) {
-        throw new UnsupportedOperationException();
+        StorageMetadataMapper doit = new StorageMetadataMapper(new JdbcTemplate(dataSource), tableName);
+        return doit.iterator(bucket);
     }
-
 }
