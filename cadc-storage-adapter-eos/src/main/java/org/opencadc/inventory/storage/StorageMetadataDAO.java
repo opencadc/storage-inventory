@@ -153,7 +153,7 @@ public class StorageMetadataDAO {
             doit.doPut(sm);
         } catch (DuplicateKeyException ex) {
             throw new DuplicateStorageLocationException("duplicate: " 
-                    + sm.getStorageLocation().storageBucket+  " " + sm.getStorageLocation().getStorageID(), ex);
+                    + sm.getStorageLocation().storageBucket + " " + sm.getStorageLocation().getStorageID(), ex);
         }
     }
 

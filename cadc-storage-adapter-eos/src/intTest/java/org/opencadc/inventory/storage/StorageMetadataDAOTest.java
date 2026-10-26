@@ -67,8 +67,6 @@
 
 package org.opencadc.inventory.storage;
 
-import org.opencadc.inventory.storage.StorageMetadataDAO;
-import org.opencadc.inventory.storage.InitDatabaseSM;
 import ca.nrc.cadc.db.ConnectionConfig;
 import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;

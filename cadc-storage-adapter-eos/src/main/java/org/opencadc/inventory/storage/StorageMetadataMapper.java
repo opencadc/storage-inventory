@@ -230,7 +230,7 @@ public class StorageMetadataMapper {
                 if (i + 1 < COLUMNS.length) {
                     sb.append(",");
                 }
-            };
+            }
             sb.append(")");
             String sql = sb.toString();
             log.debug("SQL: " + sql);
