@@ -152,9 +152,9 @@ public class EosPathDivider {
                         case 7:
                             throw new RuntimeException("FAIL: shallow file count truncated - directory " + subpath + " has too many files");
                         case 0:
-                            log.info("file count: " + count + " OK " + dt + "ms");
+                            log.info("file count, shallow: " + shallowCount + " OK " + dt + "ms");
                             // output: nfiles=X ndirectories=Y
-                            String cr = proc.getOutput();
+                            String cr = sproc.getOutput();
                             SubPath spi = parse(subpath, cr, true);
                             if (spi.numFiles > 0) {
                                 ret.add(spi);
