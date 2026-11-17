@@ -141,11 +141,13 @@ abstract class AbstractStorageAdapter implements StorageAdapter {
     
     protected Path txnPath;
     protected Path contentPath;
+    private final boolean failOnNameCollision;
     
     protected final List<Namespace> recoverableNamespaces = new ArrayList<>();
     protected final List<Namespace> purgeNamespaces = new ArrayList<>();
     
-    protected AbstractStorageAdapter() {
+    protected AbstractStorageAdapter(boolean failOnNameCollision) {
+        this.failOnNameCollision = failOnNameCollision;
     }
     
     static void setFileAttribute(Path path, String attributeKey, String attributeValue) throws IOException {
@@ -647,8 +649,7 @@ abstract class AbstractStorageAdapter implements StorageAdapter {
                 
                 PutTransaction pt = new PutTransaction(transactionID, PT_MIN_BYTES, PT_MAX_BYTES);
                 if (prevLength > 0L) {
-                    StorageLocation loc = pathToStorageLocation(txnPath, txnFile);
-                    pt.storageMetadata = createStorageMetadata(loc, txnPath, txnFile, false);
+                    pt.storageMetadata = createStorageMetadata(txnPath, txnFile, false);
                 }
                 return pt;
             }
@@ -690,8 +691,7 @@ abstract class AbstractStorageAdapter implements StorageAdapter {
             if (Files.exists(txnFile)) {
                 PutTransaction pt = new PutTransaction(transactionID, PT_MIN_BYTES, PT_MAX_BYTES);
                 if (Files.size(txnFile) > 0) {
-                    StorageLocation loc = pathToStorageLocation(txnPath, txnFile);
-                    pt.storageMetadata = createStorageMetadata(loc, txnPath, txnFile, false);
+                    pt.storageMetadata = createStorageMetadata(txnPath, txnFile, false);
                 }
                 return pt;
             }
@@ -718,17 +718,17 @@ abstract class AbstractStorageAdapter implements StorageAdapter {
         return commit(pt.storageMetadata, txnTarget);
     }
     
-    protected StorageMetadata commit(StorageMetadata sm, Path txnTarget) throws StorageEngageException {
+    private StorageMetadata commit(StorageMetadata sm, Path txnTarget) throws StorageEngageException {
         try {
             Path contentTarget = storageLocationToPath(sm.getStorageLocation());
+            log.warn("commit: " + sm + " -> " + contentTarget);
             // make sure parent (bucket) directories exist
             Path parent = contentTarget.getParent();
             if (!Files.exists(parent)) {
                 Files.createDirectories(parent);
             }
 
-            if (Files.exists(contentTarget)) {
-                // since filename is a UUID this is fatal
+            if (failOnNameCollision && Files.exists(contentTarget)) {
                 throw new RuntimeException("BUG: UUID collision on commit: " + sm.getStorageLocation());
             }
 
@@ -741,8 +741,7 @@ abstract class AbstractStorageAdapter implements StorageAdapter {
             long delta = d2.getTime() - sm.getContentLastModified().getTime();
             if (delta != 0L) {
                 log.warn("commit-induced delta lastModified: " + delta + " - recreate StorageMetadata from path");
-                StorageLocation loc = pathToStorageLocation(contentPath, contentTarget);
-                sm = createStorageMetadata(loc, contentPath, contentTarget, false);
+                sm = createStorageMetadata(contentPath, contentTarget, false);
             }
 
             return sm;
@@ -758,7 +757,7 @@ abstract class AbstractStorageAdapter implements StorageAdapter {
     protected abstract StorageLocation pathToStorageLocation(Path base, Path p);
     
     // static easier to use from iterator
-    static StorageMetadata createStorageMetadata(StorageLocation sloc, Path base, Path p, boolean includeRecoverable) {
+    protected StorageMetadata createStorageMetadata(Path base, Path p, boolean includeRecoverable) {
         try {
             String csAttr = getFileAttribute(p, CHECKSUM_ATTR);
             String aidAttr = getFileAttribute(p, ARTIFACTID_ATTR);
@@ -767,15 +766,15 @@ abstract class AbstractStorageAdapter implements StorageAdapter {
                 // a new storage area and not preserve xattrs (eg rsync without -X/--xattrs)
 
                 // for now, just warn and skip so the operator has a chance to correct
-                log.warn("SKIP invalid: " + sloc + " : missing required attribute(s)"
-                    + " " + OpaqueFileSystemStorageAdapter.CHECKSUM_ATTR + "=" + csAttr
-                    + " " + OpaqueFileSystemStorageAdapter.ARTIFACTID_ATTR + "=" + aidAttr);
+                log.warn("SKIP invalid: " + p.toString() + " : missing required attribute(s)"
+                    + " " + CHECKSUM_ATTR + "=" + csAttr
+                    + " " + ARTIFACTID_ATTR + "=" + aidAttr);
                 return null;
             }
             URI contentChecksum = new URI(csAttr);
             long contentLength = Files.size(p);
             URI artifactURI = new URI(aidAttr);
-
+            StorageLocation sloc = createStorageLocation(artifactURI, p);
             String delAttr = getFileAttribute(p, DELETED_PRESERVED);
             if ("true".equals(delAttr) && !includeRecoverable) {
                 log.debug("skip " + DELETED_PRESERVED + ": " + sloc + " aka " + artifactURI);
@@ -786,11 +785,10 @@ abstract class AbstractStorageAdapter implements StorageAdapter {
             ret.deleteRecoverable = "true".equals(delAttr);
             log.debug("createStorageMetadata: " + ret + " " + ret.deleteRecoverable);
             return ret;
-        } catch (FileSystemException | IllegalArgumentException | URISyntaxException ex) {
-            log.debug("invalid stored object", ex);
-            return new StorageMetadata(sloc); // missing attrs: invalid stored object
         } catch (IOException ex) {
             throw new StorageEngageException("failed to read FS attributes: " + p, ex);
+        } catch (IllegalArgumentException | URISyntaxException ex) {
+            throw new RuntimeException("BUG: invalid storted object at " + base + " " + p, ex);
         }
     }
 }

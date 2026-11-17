@@ -108,19 +108,22 @@ public class LogicalFileSystemStorageAdapterTest {
         Path rel;
         try {
             URI typicalPath = URI.create("scheme:path/filename");
-            StorageLocation sloc1 = LogicalFileSystemStorageAdapter.createStorageLocationImpl(typicalPath);
+            
+            StorageLocation sloc1 = adapter.createStorageLocation(typicalPath, null);
+            log.info(typicalPath + " -> " + sloc1);
             Assert.assertNotNull(sloc1);
-            Assert.assertEquals(URI.create("filename"), sloc1.getStorageID());
-            Assert.assertEquals("scheme:path/", sloc1.storageBucket);
+            Assert.assertEquals("filename", sloc1.getStorageID().toASCIIString());
+            Assert.assertEquals("scheme:path", sloc1.storageBucket);
             abs = adapter.storageLocationToPath(sloc1);
             Assert.assertNotNull(abs);
             rel = adapter.contentPath.relativize(abs);
             Assert.assertEquals(typicalPath.toASCIIString(), rel.toString());
             
             URI noPath = URI.create("scheme:filename");
-            StorageLocation sloc2 = LogicalFileSystemStorageAdapter.createStorageLocationImpl(noPath);
+            StorageLocation sloc2 = adapter.createStorageLocation(noPath, null);
+            log.info(noPath + " -> " + sloc2);
             Assert.assertNotNull(sloc2);
-            Assert.assertEquals(URI.create("filename"), sloc2.getStorageID());
+            Assert.assertEquals("filename", sloc2.getStorageID().toASCIIString());
             Assert.assertEquals("scheme:", sloc2.storageBucket);
             abs = adapter.storageLocationToPath(sloc2);
             Assert.assertNotNull(abs);
@@ -128,11 +131,12 @@ public class LogicalFileSystemStorageAdapterTest {
             Assert.assertEquals(noPath.toASCIIString(), rel.toString());
             
             // make sure it is the whole path -> storage bucket
-            String expectedBucket = "scheme:path/to/some/thing/";
-            URI longPath = URI.create(expectedBucket + "filename");
-            StorageLocation sloc3 = LogicalFileSystemStorageAdapter.createStorageLocationImpl(longPath);
+            String expectedBucket = "scheme:path/to/some/thing";
+            URI longPath = URI.create(expectedBucket + "/filename");
+            StorageLocation sloc3 = adapter.createStorageLocation(longPath, null);
+            log.info(longPath + " -> " + sloc3);
             Assert.assertNotNull(sloc3);
-            Assert.assertEquals(URI.create("filename"), sloc3.getStorageID());
+            Assert.assertEquals("filename", sloc3.getStorageID().toASCIIString());
             Assert.assertEquals(expectedBucket, sloc3.storageBucket);
             abs = adapter.storageLocationToPath(sloc3);
             Assert.assertNotNull(abs);

@@ -146,9 +146,9 @@ public class LogicalPutTxnTest extends StorageAdapterPutTxnTest {
         Assert.assertNotNull(sm.getStorageLocation());
         Assert.assertNotNull(sm.getStorageLocation().storageBucket);
         log.info("checkStorageMetadata: " + sm.getArtifactURI() + " vs " + sm.getStorageLocation());
-        Assert.assertEquals(sm.getArtifactURI(), 
-                sm.getStorageLocation().getStorageID());
+        String[] ss = sm.getArtifactURI().toASCIIString().split("/");
+        Assert.assertEquals("test assumption", 2, ss.length);
+        Assert.assertEquals(ss[0], sm.getStorageLocation().storageBucket);
+        Assert.assertEquals(ss[1], sm.getStorageLocation().getStorageID().toASCIIString());
     }
-
-    
 }

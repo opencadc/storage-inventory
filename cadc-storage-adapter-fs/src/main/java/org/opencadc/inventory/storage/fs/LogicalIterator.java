@@ -97,6 +97,7 @@ class LogicalIterator implements Iterator<StorageMetadata> {
     
     private static final Logger log = Logger.getLogger(LogicalIterator.class);
     
+    private final LogicalFileSystemStorageAdapter adapter;
     private final Path base;
     private Path nextFile = null;
     Stack<StackItem> stack;
@@ -107,11 +108,13 @@ class LogicalIterator implements Iterator<StorageMetadata> {
      * @param base The base path to content
      * @throws IOException If there is a problem with file-system interaction.
      */
-    public LogicalIterator(Path base, String storageBucketPrefix) {
+    public LogicalIterator(LogicalFileSystemStorageAdapter adapter, Path base, String storageBucketPrefix) {
+        InventoryUtil.assertNotNull(LogicalIterator.class, "adapter", adapter);
         InventoryUtil.assertNotNull(LogicalIterator.class, "dir", base);
         if (!Files.isDirectory(base)) {
             throw new IllegalArgumentException("not a directory: " + base);
         }
+        this.adapter = adapter;
         this.base = base;
         
         try {
@@ -154,7 +157,7 @@ class LogicalIterator implements Iterator<StorageMetadata> {
         } catch (IOException ex) {
             throw new StorageEngageException("failed to read filesystem: " + ex.getMessage(), ex);
         }
-        return LogicalFileSystemStorageAdapter.createStorageMetadataImpl(base, rpath, false);
+        return adapter.createStorageMetadata(base, rpath, false);
     }
     
     private void advance() throws IOException {

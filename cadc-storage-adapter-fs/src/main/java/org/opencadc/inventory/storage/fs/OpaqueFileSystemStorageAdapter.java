@@ -148,6 +148,7 @@ public class OpaqueFileSystemStorageAdapter extends AbstractStorageAdapter imple
     private final int bucketLength;
 
     public OpaqueFileSystemStorageAdapter() throws InvalidConfigException {
+        super(true); // fail on duplicate random UUID
         PropertiesReader pr = new PropertiesReader(CONFIG_FILE);
         MultiValuedProperties props = pr.getAllProperties();
         
@@ -189,9 +190,8 @@ public class OpaqueFileSystemStorageAdapter extends AbstractStorageAdapter imple
     }
 
     // for test code
-    public OpaqueFileSystemStorageAdapter(File rootDirectory, int bucketLen) 
-            throws InvalidConfigException {
-
+    public OpaqueFileSystemStorageAdapter(File rootDirectory, int bucketLen) throws InvalidConfigException {
+        super(true); // fail on duplicate random UUID
         InventoryUtil.assertNotNull(LogicalFileSystemStorageAdapter.class, "rootDirectory", rootDirectory);
 
         if (bucketLen < 1 || bucketLen > MAX_BUCKET_LENGTH) {
@@ -287,7 +287,7 @@ public class OpaqueFileSystemStorageAdapter extends AbstractStorageAdapter imple
 
     @Override
     public Iterator<StorageMetadata> iterator(String storageBucketPrefix, boolean includeRecoverable) throws StorageEngageException, TransientException {
-        return new OpaqueIterator(contentPath, storageBucketPrefix, includeRecoverable);
+        return new OpaqueIterator(this, contentPath, storageBucketPrefix, includeRecoverable);
     }
 
     
@@ -341,16 +341,5 @@ public class OpaqueFileSystemStorageAdapter extends AbstractStorageAdapter imple
         StorageLocation ret = new StorageLocation(storageID);
         ret.storageBucket = storageBucket;
         return ret;
-    }
-
-    // static impl more easily re-used by OpaqueIterator
-    static StorageMetadata createStorageMetadataImpl(Path base, Path p, boolean includeRecoverable) {
-        return createStorageMetadataImpl(base, p, includeRecoverable, null);
-    }
-
-    static StorageMetadata createStorageMetadataImpl(Path base, Path p, 
-            boolean includeRecoverable, Integer bucketLenFix) {
-        StorageLocation loc = pathToStorageLocation(base, p, bucketLenFix);
-        return AbstractStorageAdapter.createStorageMetadata(loc, base, p, includeRecoverable);
     }
 }
