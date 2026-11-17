@@ -589,7 +589,7 @@ public class FileSyncJob implements Runnable {
                 long transferTime = 0;
                 for (PutSegment seg : segs) {
                     log.debug("get: " + seg);
-                    long startGet = System.currentTimeMillis();
+                    final long startGet = System.currentTimeMillis();
                     postPrepare = false;
                     HttpGet get = new HttpGet(u, true);
                     get.setConnectionTimeout(6000); // ms
@@ -622,8 +622,8 @@ public class FileSyncJob implements Runnable {
                     }
                     
                     // accumulate time spent on actual byte transfer
-                    long startPut = System.currentTimeMillis();
-                    log.warn("initiate GET: " + (startPut - startGet) + "ms");
+                    final long startPut = System.currentTimeMillis();
+                    log.debug("initiate GET: " + (startPut - startGet) + "ms");
                     StorageMetadata storageMeta = this.storageAdapter.put(na, get.getInputStream(), txnID);
                     transferTime = transferTime + System.currentTimeMillis() - startPut;
                     log.debug("put ok: " + storageMeta);
