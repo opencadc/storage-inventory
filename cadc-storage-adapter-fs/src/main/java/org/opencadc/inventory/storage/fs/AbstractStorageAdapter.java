@@ -721,7 +721,7 @@ abstract class AbstractStorageAdapter implements StorageAdapter {
     private StorageMetadata commit(StorageMetadata sm, Path txnTarget) throws StorageEngageException {
         try {
             Path contentTarget = storageLocationToPath(sm.getStorageLocation());
-            log.warn("commit: " + sm + " -> " + contentTarget);
+            log.debug("commit: " + sm + " -> " + contentTarget);
             // make sure parent (bucket) directories exist
             Path parent = contentTarget.getParent();
             if (!Files.exists(parent)) {
@@ -734,13 +734,13 @@ abstract class AbstractStorageAdapter implements StorageAdapter {
 
             // atomic move into content directory
             final Path result = Files.move(txnTarget, contentTarget, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            log.warn("committed: " + result + " aka " + sm.getStorageLocation());
+            log.debug("committed: " + result + " aka " + sm.getStorageLocation());
             
             // defensive check in case commit tweaked lastModified timestamp slightly:
             Date d2 = new Date(Files.getLastModifiedTime(contentTarget).toMillis());
             long delta = d2.getTime() - sm.getContentLastModified().getTime();
             if (delta != 0L) {
-                log.warn("commit-induced delta lastModified: " + delta + " - recreate StorageMetadata from path");
+                log.debug("commit-induced delta lastModified: " + delta + " - recreate StorageMetadata from path");
                 sm = createStorageMetadata(contentPath, contentTarget, false);
             }
 
