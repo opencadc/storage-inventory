@@ -39,7 +39,7 @@ JDBC URL. Failure to connect or initialize the database will show up in logs.
 The _locatorService_ is normally the global locator (raven) service that supports transfer negotiation.
 Despite the config name, this can also be a specific files (minoc) service to retrieve from, although
 this configuration is likely to result in some failed transfers (not found) if there are more than two
-sites in the storage system and artifacts+files have not been syned to the target service.
+sites in the storage system and artifacts+files have not been synced to the target service.
 
 The range of _uriBucket_ prefixes is specified with two values separated by a single - (dash) 
 character; whitespace is ignored. A value `0-f` is equivalent to _all_ artifacts. Subsets of this
