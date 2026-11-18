@@ -788,7 +788,7 @@ abstract class AbstractStorageAdapter implements StorageAdapter {
         } catch (IOException ex) {
             throw new StorageEngageException("failed to read FS attributes: " + p, ex);
         } catch (IllegalArgumentException | URISyntaxException ex) {
-            throw new RuntimeException("BUG: invalid storted object at " + base + " " + p, ex);
+            throw new RuntimeException("BUG: invalid stored object at " + base + " " + p, ex);
         }
     }
 }
