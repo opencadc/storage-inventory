@@ -141,11 +141,13 @@ abstract class AbstractStorageAdapter implements StorageAdapter {
     
     protected Path txnPath;
     protected Path contentPath;
+    private final boolean failOnNameCollision;
     
     protected final List<Namespace> recoverableNamespaces = new ArrayList<>();
     protected final List<Namespace> purgeNamespaces = new ArrayList<>();
     
-    protected AbstractStorageAdapter() {
+    protected AbstractStorageAdapter(boolean failOnNameCollision) {
+        this.failOnNameCollision = failOnNameCollision;
     }
     
     static void setFileAttribute(Path path, String attributeKey, String attributeValue) throws IOException {
@@ -673,14 +675,14 @@ abstract class AbstractStorageAdapter implements StorageAdapter {
                 throw new IllegalArgumentException("unknown transaction: " + transactionID);
             }
         } catch (IOException ex) {
-            throw new StorageEngageException("failed to create transaction", ex);
+            throw new StorageEngageException("failed to abort transaction", ex);
         }
     }
     
     @Override
     public PutTransaction getTransactionStatus(String transactionID)
         throws IllegalArgumentException, StorageEngageException, TransientException {
-        InventoryUtil.assertNotNull(LogicalFileSystemStorageAdapter.class, "transactionID", transactionID);
+        InventoryUtil.assertNotNull(AbstractStorageAdapter.class, "transactionID", transactionID);
         try {
             // validate
             UUID.fromString(transactionID);
@@ -716,23 +718,23 @@ abstract class AbstractStorageAdapter implements StorageAdapter {
         return commit(pt.storageMetadata, txnTarget);
     }
     
-    protected StorageMetadata commit(StorageMetadata sm, Path txnTarget) throws StorageEngageException {
+    private StorageMetadata commit(StorageMetadata sm, Path txnTarget) throws StorageEngageException {
         try {
             Path contentTarget = storageLocationToPath(sm.getStorageLocation());
+            log.debug("commit: " + sm + " -> " + contentTarget);
             // make sure parent (bucket) directories exist
             Path parent = contentTarget.getParent();
             if (!Files.exists(parent)) {
                 Files.createDirectories(parent);
             }
 
-            if (Files.exists(contentTarget)) {
-                // since filename is a UUID this is fatal
+            if (failOnNameCollision && Files.exists(contentTarget)) {
                 throw new RuntimeException("BUG: UUID collision on commit: " + sm.getStorageLocation());
             }
 
             // atomic move into content directory
             final Path result = Files.move(txnTarget, contentTarget, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            log.debug("committed: " + result);
+            log.debug("committed: " + result + " aka " + sm.getStorageLocation());
             
             // defensive check in case commit tweaked lastModified timestamp slightly:
             Date d2 = new Date(Files.getLastModifiedTime(contentTarget).toMillis());
@@ -752,5 +754,41 @@ abstract class AbstractStorageAdapter implements StorageAdapter {
 
     protected abstract Path storageLocationToPath(StorageLocation loc);
     
-    protected abstract StorageMetadata createStorageMetadata(Path base, Path p, boolean includeRecoverable);
+    protected abstract StorageLocation pathToStorageLocation(Path base, Path p);
+    
+    // static easier to use from iterator
+    protected StorageMetadata createStorageMetadata(Path base, Path p, boolean includeRecoverable) {
+        try {
+            String csAttr = getFileAttribute(p, CHECKSUM_ATTR);
+            String aidAttr = getFileAttribute(p, ARTIFACTID_ATTR);
+            if (csAttr == null || aidAttr == null) {
+                // this could happen if some were to copy files or the whole filesystem to
+                // a new storage area and not preserve xattrs (eg rsync without -X/--xattrs)
+
+                // for now, just warn and skip so the operator has a chance to correct
+                log.warn("SKIP invalid: " + p.toString() + " : missing required attribute(s)"
+                    + " " + CHECKSUM_ATTR + "=" + csAttr
+                    + " " + ARTIFACTID_ATTR + "=" + aidAttr);
+                return null;
+            }
+            URI contentChecksum = new URI(csAttr);
+            long contentLength = Files.size(p);
+            URI artifactURI = new URI(aidAttr);
+            StorageLocation sloc = createStorageLocation(artifactURI, p);
+            String delAttr = getFileAttribute(p, DELETED_PRESERVED);
+            if ("true".equals(delAttr) && !includeRecoverable) {
+                log.debug("skip " + DELETED_PRESERVED + ": " + sloc + " aka " + artifactURI);
+                return null;
+            }
+            StorageMetadata ret = new StorageMetadata(sloc, artifactURI, contentChecksum, contentLength, 
+                    new Date(Files.getLastModifiedTime(p).toMillis()));
+            ret.deleteRecoverable = "true".equals(delAttr);
+            log.debug("createStorageMetadata: " + ret + " " + ret.deleteRecoverable);
+            return ret;
+        } catch (IOException ex) {
+            throw new StorageEngageException("failed to read FS attributes: " + p, ex);
+        } catch (IllegalArgumentException | URISyntaxException ex) {
+            throw new RuntimeException("BUG: invalid stored object at " + base + " " + p, ex);
+        }
+    }
 }

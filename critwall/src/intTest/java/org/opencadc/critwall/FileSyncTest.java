@@ -141,7 +141,7 @@ public class FileSyncTest {
             String testDir = TEST_ROOT + File.separator + "testFileSync";
 
             // Create the test directory the fs storage adapter needs
-            Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwxrw-");
+            Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwxr-x");
             FileAttribute<Set<PosixFilePermission>> attr = PosixFilePermissions.asFileAttribute(perms);
             Files.createDirectories(Paths.get(testDir), attr);
 

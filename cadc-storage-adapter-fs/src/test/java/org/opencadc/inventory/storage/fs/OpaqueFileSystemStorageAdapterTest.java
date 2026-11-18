@@ -114,8 +114,9 @@ public class OpaqueFileSystemStorageAdapterTest {
     @Test
     public void testStorageLocationMethods() {
         try {
+            URI auri = null;
             Path p = adapter.txnPath.resolve(UUID.randomUUID().toString());
-            StorageLocation sloc = adapter.createStorageLocation(null, p);
+            StorageLocation sloc = adapter.createStorageLocation(auri, p);
             log.info("created: " + sloc);
             Assert.assertNotNull(sloc);
             Assert.assertNotNull(sloc.storageBucket);

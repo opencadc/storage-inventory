@@ -82,6 +82,7 @@ import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Ignore;
 import org.junit.Test;
+import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.test.StorageAdapterBasicTest;
 
 /**
@@ -142,5 +143,18 @@ public class LogicalStorageAdapterTest extends StorageAdapterBasicTest {
             });
         }
         log.info("cleanupBefore: " + fsAdapter.contentPath.getParent() + " DONE");
+    }
+
+    @Override
+    protected void checkStorageMetadata(StorageMetadata sm) {
+        super.checkStorageMetadata(sm);
+        Assert.assertNotNull(sm.getStorageLocation());
+        Assert.assertNotNull(sm.getStorageLocation().storageBucket);
+        log.info("checkStorageMetadata: " + sm.getArtifactURI() + " vs " + sm.getStorageLocation());
+        // test code uses a flat artifact uri style: test:TEST/filename
+        String[] ss = sm.getArtifactURI().toASCIIString().split("/");
+        Assert.assertEquals("test assumption", 2, ss.length);
+        Assert.assertEquals(ss[0], sm.getStorageLocation().storageBucket);
+        Assert.assertEquals(ss[1], sm.getStorageLocation().getStorageID().toASCIIString());
     }
 }

@@ -134,6 +134,7 @@ public class LogicalFileSystemStorageAdapter extends AbstractStorageAdapter impl
     private final FileSystem fs;
     
     public LogicalFileSystemStorageAdapter() {
+        super(false); // duplicate path == replace
         PropertiesReader pr = new PropertiesReader(CONFIG_FILE);
         MultiValuedProperties mvp = pr.getAllProperties();
         String rootVal = null;
@@ -157,6 +158,7 @@ public class LogicalFileSystemStorageAdapter extends AbstractStorageAdapter impl
     }
 
     public LogicalFileSystemStorageAdapter(File rootDirectory) {
+        super(false); // duplicate path == replace
         InventoryUtil.assertNotNull(LogicalFileSystemStorageAdapter.class, "rootDirectory", rootDirectory);
         this.fs = FileSystems.getDefault();
 
@@ -244,61 +246,28 @@ public class LogicalFileSystemStorageAdapter extends AbstractStorageAdapter impl
 
     @Override
     public Iterator<StorageMetadata> iterator(String storageBucketPrefix, boolean includeRecoverable) throws StorageEngageException, TransientException {
-        return new LogicalIterator(contentPath, storageBucketPrefix);
+        return new LogicalIterator(this, contentPath, storageBucketPrefix);
     }
 
-    @Override
-    protected StorageMetadata createStorageMetadata(Path base, Path p, boolean includeRecoverable) {
-        if (txnPath.equals(base)) {
-            log.warn("in-txn: re-use OpaqueFileSystemStorageAdapter.createStorageMetadataImpl");
-            return OpaqueFileSystemStorageAdapter.createStorageMetadataImpl(base, p, includeRecoverable);
-        }
-        // content
-        return createStorageMetadataImpl(base, p, includeRecoverable);
-    }
-    
-    // content
-    static StorageMetadata createStorageMetadataImpl(Path base, Path p, boolean includeRecoverable) {
-        Path rel = base.relativize(p);
-        log.warn("base: " + base + " path: " + p + " rel: " + rel);
-        
-        URI artifactID = URI.create(rel.toString());
-        
-        StorageLocation storageLocation = createStorageLocationImpl(artifactID);
-        try {
-            URI checksum = new URI(AbstractStorageAdapter.getFileAttribute(p, LogicalFileSystemStorageAdapter.CHECKSUM_ATTRIBUTE_NAME));
-            long length = Files.size(p);
-            StorageMetadata meta = new StorageMetadata(storageLocation, artifactID, 
-                    checksum, length, new Date(Files.getLastModifiedTime(p).toMillis()));
-            return meta;
-        } catch (Exception ex) {
-            throw new RuntimeException("failed to recreate StorageMetadata: " + rel, ex);
-        }
-    }
+    // implementation notes for bucket strategy
+    // StorageLocation.storageBucket is the artifactURI - filename, StorageLocation.storageID is the bare filename
     
     @Override
     protected StorageLocation createStorageLocation(URI artifactURI, Path txnTarget) {
-        // ignore txn
-        return createStorageLocationImpl(artifactURI);
-    }
-
-    static StorageLocation createStorageLocationImpl(URI artifactURI) {
+        // ignore txnTarget
         URI storageID = null;
         String storageBucket = null;
-        
         String ssp = artifactURI.getSchemeSpecificPart();
         int lastSlash = ssp.lastIndexOf("/");
         if (lastSlash > 0) {
-            String sspPath = ssp.substring(0, lastSlash + 1); // include /
+            String sspPath = ssp.substring(0, lastSlash); // do not include /
             storageBucket = artifactURI.getScheme() + ":" + sspPath;
-            storageID = URI.create(ssp.substring(lastSlash + 1)); // do not include /
+            storageID = URI.create(ssp.substring(lastSlash + 1));  // do not include /
         } else {
             // bare scheme:filename
             storageBucket = artifactURI.getScheme() + ":"; 
             storageID = URI.create(ssp);
         }
-           
-        log.debug("new storage location " + storageID + " with bucket: " + storageBucket);
         StorageLocation loc = new StorageLocation(storageID);
         loc.storageBucket = storageBucket;
         return loc;
@@ -309,6 +278,9 @@ public class LogicalFileSystemStorageAdapter extends AbstractStorageAdapter impl
         StringBuilder path = new StringBuilder();
 
         path.append(storageLocation.storageBucket);
+        if (!storageLocation.storageBucket.endsWith(":")) {
+            path.append("/");
+        }
         path.append(storageLocation.getStorageID().toASCIIString());
         
         log.debug("Resolving path in content : " + path.toString());
@@ -316,4 +288,15 @@ public class LogicalFileSystemStorageAdapter extends AbstractStorageAdapter impl
         return ret;
     }
 
+    @Override
+    protected StorageLocation pathToStorageLocation(Path base, Path p) {
+        Path rel = base.relativize(p);
+        log.debug("base: " + base + " path: " + p + " rel: " + rel);
+        
+        URI artifactID = URI.create(rel.toString());
+        
+        StorageLocation storageLocation = createStorageLocation(artifactID, null);
+        return storageLocation;
+    }
+    
 }

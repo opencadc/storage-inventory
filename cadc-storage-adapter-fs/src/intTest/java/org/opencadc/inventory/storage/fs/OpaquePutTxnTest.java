@@ -82,6 +82,7 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
+import org.opencadc.inventory.storage.StorageMetadata;
 import org.opencadc.inventory.storage.test.StorageAdapterPutTxnTest;
 
 /**
@@ -142,5 +143,15 @@ public class OpaquePutTxnTest extends StorageAdapterPutTxnTest {
             });
         }
         log.info("cleanupBefore: " + ofsAdapter.contentPath.getParent() + " DONE");
+    }
+    
+    @Override
+    protected void checkStorageMetadata(StorageMetadata sm) {
+        super.checkStorageMetadata(sm);
+        Assert.assertNotNull(sm.getStorageLocation());
+        Assert.assertNotNull(sm.getStorageLocation().storageBucket);
+        Assert.assertEquals("uuid", sm.getStorageLocation().getStorageID().getScheme());
+        Assert.assertEquals(BUCKET_LEN, sm.getStorageLocation().storageBucket.length());
+        
     }
 }

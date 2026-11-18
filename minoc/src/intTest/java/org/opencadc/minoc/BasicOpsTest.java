@@ -113,7 +113,7 @@ public class BasicOpsTest extends MinocTest {
     @Test
     public void testPutGetUpdateHeadDelete() {
         try {
-            URI artifactURI = URI.create("cadc:TEST/file.txt");
+            URI artifactURI = URI.create("cadc:TEST/testPutGetUpdateHeadDelete");
             URL artifactURL = new URL(filesURL + "/" + artifactURI.toString());
 
             String content = "abcdefghijklmnopqrstuvwxyz";
@@ -152,7 +152,7 @@ public class BasicOpsTest extends MinocTest {
             Assert.assertEquals(data.length, contentLength);
             Assert.assertEquals(type, contentType);
             Assert.assertEquals(encoding, contentEncoding);
-            Assert.assertTrue(contentDisposition.contains("filename=") && contentDisposition.contains("file.txt"));
+            Assert.assertTrue(contentDisposition.contains("filename=") && contentDisposition.contains("testPutGetUpdateHeadDelete"));
             Date lastModified = get.getLastModified(); 
             Assert.assertNotNull(lastModified);
 
@@ -199,7 +199,7 @@ public class BasicOpsTest extends MinocTest {
             Assert.assertEquals(data.length, contentLength);
             Assert.assertEquals(newType, contentType);
             Assert.assertEquals(newEncoding, contentEncoding);
-            Assert.assertTrue(contentDisposition.contains("filename=") && contentDisposition.contains("file.txt"));
+            Assert.assertTrue(contentDisposition.contains("filename=") && contentDisposition.contains("testPutGetUpdateHeadDelete"));
             lastModified = head.getLastModified(); 
             Assert.assertNotNull(lastModified);
 
@@ -209,7 +209,7 @@ public class BasicOpsTest extends MinocTest {
             log.info("delete: " + delete.getResponseCode() + " " + delete.getThrowable());
             Assert.assertNull(delete.getThrowable());
             Assert.assertEquals("no content", 204, delete.getResponseCode());
-            
+
             // get
             get = new HttpGet(artifactURL, out);
             Subject.doAs(userSubject, new RunnableAction(get));
@@ -217,6 +217,7 @@ public class BasicOpsTest extends MinocTest {
             Assert.assertNotNull(throwable);
             Assert.assertTrue(throwable instanceof ResourceNotFoundException);
             
+            // no cleanup
         } catch (Exception t) {
             log.error("unexpected throwable", t);
             Assert.fail("unexpected throwable: " + t);
@@ -335,10 +336,13 @@ public class BasicOpsTest extends MinocTest {
             Assert.assertEquals(416, get.getResponseCode());
             Assert.assertEquals(RangeNotSatisfiableException.class, get.getThrowable().getClass());
 
-            // delete
-            //HttpDelete delete = new HttpDelete(artifactURL, false);
-            //Subject.doAs(userSubject, new RunnableAction(delete));
-            //Assert.assertNull(delete.getThrowable());
+            if (cleanupOnSuccess) {
+                HttpDelete delete = new HttpDelete(artifactURL, false);
+                Subject.doAs(userSubject, new RunnableAction(delete));
+                log.info("delete: " + delete.getResponseCode() + " " + delete.getThrowable());
+                Assert.assertNull(delete.getThrowable());
+                Assert.assertEquals("no content", 204, delete.getResponseCode());
+            }
 
         } catch (Exception t) {
             log.error("unexpected throwable", t);
@@ -390,7 +394,6 @@ public class BasicOpsTest extends MinocTest {
             Assert.assertEquals(data.length, contentLength);
             Assert.assertEquals(type, contentType);
             Assert.assertEquals(encoding, contentEncoding);
-            log.info("content-disposition: " + contentDisposition);
             Assert.assertTrue(contentDisposition.contains("filename=") && contentDisposition.contains("testFilenameOverride.txt"));
             Date lastModified = head.getLastModified(); 
             Assert.assertNotNull(lastModified);
@@ -441,12 +444,13 @@ public class BasicOpsTest extends MinocTest {
             Date lastModified3 = get.getLastModified(); 
             Assert.assertEquals(lastModified, lastModified3);
             
-            // delete
-            HttpDelete delete = new HttpDelete(artifactURL, false);
-            Subject.doAs(userSubject, new RunnableAction(delete));
-            log.info("delete: " + delete.getResponseCode() + " " + delete.getThrowable());
-            Assert.assertNull(delete.getThrowable());
-            Assert.assertEquals("no content", 204, delete.getResponseCode());
+            if (cleanupOnSuccess) {
+                HttpDelete delete = new HttpDelete(artifactURL, false);
+                Subject.doAs(userSubject, new RunnableAction(delete));
+                log.info("delete: " + delete.getResponseCode() + " " + delete.getThrowable());
+                Assert.assertNull(delete.getThrowable());
+                Assert.assertEquals("no content", 204, delete.getResponseCode());
+            }
             
         } catch (Exception t) {
             log.error("unexpected throwable", t);
@@ -599,10 +603,13 @@ public class BasicOpsTest extends MinocTest {
                     Assert.assertEquals(computeChecksumURI(data2.getBytes()), digest);
                     Assert.assertEquals(data2.getBytes().length, contentLength);
 
-                    // delete
-                    HttpDelete delete = new HttpDelete(artifactURL, false);
-                    delete.run();
-                    Assert.assertNull(delete.getThrowable());
+                    if (cleanupOnSuccess) {
+                        HttpDelete delete = new HttpDelete(artifactURL, false);
+                        Subject.doAs(userSubject, new RunnableAction(delete));
+                        log.info("delete: " + delete.getResponseCode() + " " + delete.getThrowable());
+                        Assert.assertNull(delete.getThrowable());
+                        Assert.assertEquals("no content", 204, delete.getResponseCode());
+                    }
 
                     return null;
                 }

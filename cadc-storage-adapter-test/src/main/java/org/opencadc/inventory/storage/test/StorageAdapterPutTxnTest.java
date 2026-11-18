@@ -204,6 +204,7 @@ public class StorageAdapterPutTxnTest {
             log.info("commit: " + txn);
             StorageMetadata meta3 = adapter.commitTransaction(txn.getID());
             Assert.assertNotNull(meta3);
+            checkStorageMetadata(meta3);
             log.info("commit");
             
             try {
@@ -295,7 +296,13 @@ public class StorageAdapterPutTxnTest {
     public void testPutResumeCommit_UnknownLength() {
         testPutResumeCommit(false);
     }
-            
+
+    // impl-specific verification of a final StorageMetadata
+    // default: no-op
+    protected void checkStorageMetadata(StorageMetadata sm) {
+        log.info("checkStorageMetadata: " + sm);
+    }
+    
     void testPutResumeCommit(boolean knownLength) {
         try {
             String dataString1 = "abcdefghijklmnopqrstuvwxyz\n";
@@ -359,7 +366,7 @@ public class StorageAdapterPutTxnTest {
             Assert.assertEquals("length", expectedLength, txnMeta2.getContentLength().longValue());
             
             StorageMetadata finalMeta = adapter.commitTransaction(txn.getID());
-            log.info("commit");
+            checkStorageMetadata(finalMeta);
             
             try {
                 PutTransaction oldtxn = adapter.getTransactionStatus(txn.getID());
@@ -508,6 +515,7 @@ public class StorageAdapterPutTxnTest {
             
             StorageMetadata finalMeta = adapter.commitTransaction(txn.getID());
             log.info("commit");
+            checkStorageMetadata(finalMeta);
             
             try {
                 PutTransaction oldtxn = adapter.getTransactionStatus(txn.getID());
@@ -645,7 +653,8 @@ public class StorageAdapterPutTxnTest {
             
             StorageMetadata finalMeta = adapter.commitTransaction(txn.getID());
             log.info("commit");
-            
+            checkStorageMetadata(finalMeta);
+
             try {
                 PutTransaction oldtxn = adapter.getTransactionStatus(txn.getID());
                 Assert.fail("expected IllegalArgumentException, got: " + oldtxn);

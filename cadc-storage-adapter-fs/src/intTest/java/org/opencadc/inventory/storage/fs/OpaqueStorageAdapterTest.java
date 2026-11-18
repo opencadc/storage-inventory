@@ -86,6 +86,8 @@ import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.opencadc.inventory.storage.StorageMetadata;
+import static org.opencadc.inventory.storage.fs.OpaquePutTxnTest.BUCKET_LEN;
 import org.opencadc.inventory.storage.test.StorageAdapterBasicTest;
 
 /**
@@ -222,5 +224,14 @@ public class OpaqueStorageAdapterTest extends StorageAdapterBasicTest {
         } finally {
             OpaqueFileSystemStorageAdapter.XATTR_EXEC = false;
         }
+    }
+
+    @Override
+    protected void checkStorageMetadata(StorageMetadata sm) {
+        super.checkStorageMetadata(sm);
+        Assert.assertNotNull(sm.getStorageLocation());
+        Assert.assertNotNull(sm.getStorageLocation().storageBucket);
+        Assert.assertEquals("uuid", sm.getStorageLocation().getStorageID().getScheme());
+        Assert.assertEquals(BUCKET_LEN, sm.getStorageLocation().storageBucket.length());
     }
 }

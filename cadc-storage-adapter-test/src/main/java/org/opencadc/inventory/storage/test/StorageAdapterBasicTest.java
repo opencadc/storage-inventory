@@ -121,6 +121,12 @@ public abstract class StorageAdapterBasicTest {
     @Before
     public abstract void cleanupBefore() throws Exception;
     
+    // impl-specific verification of a final StorageMetadata
+    // default: no-op
+    protected void checkStorageMetadata(StorageMetadata sm) {
+        log.info("checkStorageMetadata: " + sm);
+    }
+
     @Test
     public void testPutGetDelete() {
         URI artifactURI = URI.create(TEST_NAMESPACE + "TEST/testPutGetDelete");
@@ -144,6 +150,7 @@ public abstract class StorageAdapterBasicTest {
             log.info("put: " + storageMetadata.getStorageLocation());
             Assert.assertNotNull(storageMetadata);
             Assert.assertNotNull(storageMetadata.getStorageLocation());
+            checkStorageMetadata(storageMetadata);
             Assert.assertEquals(newArtifact.contentChecksum, storageMetadata.getContentChecksum());
             Assert.assertEquals(newArtifact.contentLength, storageMetadata.getContentLength());
             Assert.assertEquals("artifactURI",  artifactURI, storageMetadata.getArtifactURI());
@@ -202,6 +209,7 @@ public abstract class StorageAdapterBasicTest {
             log.debug("testPutGetDeleteMinimal put: " + artifactURI);
             StorageMetadata storageMetadata = adapter.put(na, new ByteArrayInputStream(data), null);
             log.info("testPutGetDeleteMinimal put: " + artifactURI + " to " + storageMetadata.getStorageLocation());
+            checkStorageMetadata(storageMetadata);
             
             // verify data
             log.debug("testPutGetDeleteMinimal get: " + artifactURI);

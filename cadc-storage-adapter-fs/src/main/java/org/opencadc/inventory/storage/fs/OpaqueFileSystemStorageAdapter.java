@@ -3,7 +3,7 @@
  *******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
  **************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
  *
- *  (c) 2025.                            (c) 2025.
+ *  (c) 2026.                            (c) 2026.
  *  Government of Canada                 Gouvernement du Canada
  *  National Research Council            Conseil national de recherches
  *  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -148,6 +148,7 @@ public class OpaqueFileSystemStorageAdapter extends AbstractStorageAdapter imple
     private final int bucketLength;
 
     public OpaqueFileSystemStorageAdapter() throws InvalidConfigException {
+        super(true); // fail on duplicate random UUID
         PropertiesReader pr = new PropertiesReader(CONFIG_FILE);
         MultiValuedProperties props = pr.getAllProperties();
         
@@ -170,7 +171,7 @@ public class OpaqueFileSystemStorageAdapter extends AbstractStorageAdapter imple
         } catch (NumberFormatException ex) {
             throw new InvalidConfigException("invalid integer value: " + CONFIG_PROPERTY_BUCKET_LENGTH + " = " + length);
         }
-        if (bucketLen < 0 || bucketLen > MAX_BUCKET_LENGTH) {
+        if (bucketLen < 1 || bucketLen > MAX_BUCKET_LENGTH) {
             throw new InvalidConfigException(CONFIG_PROPERTY_BUCKET_LENGTH + " must be in [1," + MAX_BUCKET_LENGTH + "], found " + bucketLen);
         }
         this.bucketLength = bucketLen;
@@ -189,12 +190,11 @@ public class OpaqueFileSystemStorageAdapter extends AbstractStorageAdapter imple
     }
 
     // for test code
-    public OpaqueFileSystemStorageAdapter(File rootDirectory, int bucketLen) 
-            throws InvalidConfigException {
-
+    public OpaqueFileSystemStorageAdapter(File rootDirectory, int bucketLen) throws InvalidConfigException {
+        super(true); // fail on duplicate random UUID
         InventoryUtil.assertNotNull(LogicalFileSystemStorageAdapter.class, "rootDirectory", rootDirectory);
 
-        if (bucketLen < 0 || bucketLen > MAX_BUCKET_LENGTH) {
+        if (bucketLen < 1 || bucketLen > MAX_BUCKET_LENGTH) {
             throw new InvalidConfigException(CONFIG_PROPERTY_BUCKET_LENGTH + " must be in [1," + MAX_BUCKET_LENGTH + "], found " + bucketLen);
         }
         this.bucketLength = bucketLen;
@@ -287,7 +287,7 @@ public class OpaqueFileSystemStorageAdapter extends AbstractStorageAdapter imple
 
     @Override
     public Iterator<StorageMetadata> iterator(String storageBucketPrefix, boolean includeRecoverable) throws StorageEngageException, TransientException {
-        return new OpaqueIterator(contentPath, storageBucketPrefix, includeRecoverable);
+        return new OpaqueIterator(this, contentPath, storageBucketPrefix, includeRecoverable);
     }
 
     
@@ -303,7 +303,7 @@ public class OpaqueFileSystemStorageAdapter extends AbstractStorageAdapter imple
         log.debug("created: " + loc);
         return loc;
     }
-    
+
     // generate destination path with bucket under contentPath
     @Override
     protected Path storageLocationToPath(StorageLocation storageLocation) {
@@ -321,12 +321,11 @@ public class OpaqueFileSystemStorageAdapter extends AbstractStorageAdapter imple
     }
 
     @Override
-    protected StorageMetadata createStorageMetadata(Path base, Path p, boolean includeRecoverable) {
-        return createStorageMetadataImpl(base, p, includeRecoverable);
+    protected StorageLocation pathToStorageLocation(Path base, Path p) {
+        return pathToStorageLocation(base, p, bucketLength);
     }
 
-    // static impl more easily re-used by OpaqueIterator 
-    static StorageMetadata createStorageMetadataImpl(Path base, Path p, boolean includeRecoverable) {
+    static StorageLocation pathToStorageLocation(Path base, Path p, Integer fixBucketLen) {
         Path rel = base.relativize(p);
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < rel.getNameCount() - 1; i++) {
@@ -334,46 +333,13 @@ public class OpaqueFileSystemStorageAdapter extends AbstractStorageAdapter imple
         }
         String storageBucket = sb.toString();
         URI storageID = URI.create("uuid:" + rel.getFileName());
-        
         // take care: if base is txnPath, then storageBucket is empty string
-        
-        log.debug("createStorageMetadata: " + storageBucket + "," + storageID);
-        try {
-            StorageLocation sloc = new StorageLocation(storageID);
-            sloc.storageBucket = storageBucket;
-            try {
-                String csAttr = getFileAttribute(p, OpaqueFileSystemStorageAdapter.CHECKSUM_ATTR);
-                String aidAttr = getFileAttribute(p, OpaqueFileSystemStorageAdapter.ARTIFACTID_ATTR);
-                if (csAttr == null || aidAttr == null) {
-                    // this could happen if some were to copy files or the whole filesystem to
-                    // a new storage area and not preserve xattrs (eg rsync without -X/--xattrs)
-                    
-                    // for now, just warn and skip so the operator has a chance to correct
-                    log.warn("SKIP invalid: " + sloc + " : missing required attribute(s)"
-                        + " " + OpaqueFileSystemStorageAdapter.CHECKSUM_ATTR + "=" + csAttr
-                        + " " + OpaqueFileSystemStorageAdapter.ARTIFACTID_ATTR + "=" + aidAttr);
-                    return null;
-                }
-                URI contentChecksum = new URI(csAttr);
-                long contentLength = Files.size(p);
-                URI artifactURI = new URI(aidAttr);
-                
-                String delAttr = getFileAttribute(p, DELETED_PRESERVED);
-                if ("true".equals(delAttr) && !includeRecoverable) {
-                    log.debug("skip " + DELETED_PRESERVED + ": " + sloc + " aka " + artifactURI);
-                    return null;
-                }
-                StorageMetadata ret = new StorageMetadata(sloc, artifactURI, contentChecksum, contentLength, 
-                        new Date(Files.getLastModifiedTime(p).toMillis()));
-                ret.deleteRecoverable = "true".equals(delAttr);
-                log.debug("createStorageMetadata: " + ret + " " + ret.deleteRecoverable);
-                return ret;
-            } catch (FileSystemException | IllegalArgumentException | URISyntaxException ex) {
-                log.debug("invalid stored object", ex);
-                return new StorageMetadata(sloc); // missing attrs: invalid stored object
-            }
-        } catch (IOException ex) {
-            throw new RuntimeException("failed to recreate StorageMetadata: " + storageBucket + "," + storageID, ex);
+        if (fixBucketLen != null && (storageBucket == null || storageBucket.isEmpty())) {
+            // inside txn
+            storageBucket = InventoryUtil.computeBucket(storageID, fixBucketLen);
         }
+        StorageLocation ret = new StorageLocation(storageID);
+        ret.storageBucket = storageBucket;
+        return ret;
     }
 }

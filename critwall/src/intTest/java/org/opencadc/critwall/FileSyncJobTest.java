@@ -74,6 +74,7 @@ import ca.nrc.cadc.db.DBConfig;
 import ca.nrc.cadc.db.DBUtil;
 import ca.nrc.cadc.util.FileUtil;
 import ca.nrc.cadc.util.Log4jInit;
+import ca.nrc.cadc.util.PropertiesReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -108,7 +109,8 @@ public class FileSyncJobTest {
     private static final String TEST_ROOT = "build/tmp/fsroot/critwallTests";
     private static final String TEST_ARTIFACT_URI = "cadc:IRIS/I212B2H0.fits";
     private static final String TEST_ARTIFACT_NOT_FOUND = "cadc:IRIS/NotFound.fits";
-    private static final String TEST_RESOURCE_ID = "ivo://cadc.nrc.ca/global/raven";
+    private static final URI TEST_RESOURCE_ID = URI.create("ivo://cadc.nrc.ca/global/raven");
+    private static final URI TEST_FILES_ID = URI.create("ivo://cadc.nrc.ca/uvic/minoc");
     private static final String CERTIFICATE_FILE = "critwall-test.pem";
 
     private OpaqueFileSystemStorageAdapter oa = null;
@@ -139,11 +141,10 @@ public class FileSyncJobTest {
             dao.setConfig(config);
 
             String testDir = TEST_ROOT + File.separator + "testValidJob";
-
-            // Create the test directory the fs storage adapter needs
-            Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwxrw-");
-            FileAttribute<Set<PosixFilePermission>> attr = PosixFilePermissions.asFileAttribute(perms);
-            Files.createDirectories(Paths.get(testDir), attr);
+            createTestDirectory(testDir);
+            
+            // quick has to pick up registry config
+            System.setProperty(PropertiesReader.class.getName() + ".dir", "src/intTest/config");
 
         } catch (Exception ex) {
             log.error("setup failed", ex);
@@ -197,22 +198,35 @@ public class FileSyncJobTest {
 
     private void createTestDirectory(String testDirectory) throws IOException {
         // Create the test directory the fs storage adapter needs
-        Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwxrw-");
+        Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxrwxr-x");
         FileAttribute<Set<PosixFilePermission>> attr = PosixFilePermissions.asFileAttribute(perms);
         Files.createDirectories(Paths.get(testDirectory), attr);
     }
 
     @Test
-    public void testValidJobWithAnonSubject() {
-        String testDir = TEST_ROOT + File.separator + "testValidJobWithAnonSubject";
-        testValidJob(testDir, anonSubject);
+    public void testLocatorJobWithAnonSubject() {
+        String testDir = TEST_ROOT + File.separator + "testLocatorJobWithAnonSubject";
+        testValidJob(testDir, anonSubject, TEST_RESOURCE_ID);
     }
     
     @Test
-    public void testValidJobWithCertSubject() {
-        String testDir = TEST_ROOT + File.separator + "testValidJobWithCertSubject";
+    public void testLocationJobWithCertSubject() {
+        String testDir = TEST_ROOT + File.separator + "testLocationJobWithCertSubject";
         final File certificateFile = FileUtil.getFileFromResource(CERTIFICATE_FILE, FileSyncJobTest.class);
-        testValidJob(testDir, SSLUtil.createSubject(certificateFile));
+        testValidJob(testDir, SSLUtil.createSubject(certificateFile), TEST_RESOURCE_ID);
+    }
+    
+    @Test
+    public void testFiles_AnonSubject() {
+        String testDir = TEST_ROOT + File.separator + "testFilesAnonSubject";
+        testValidJob(testDir, anonSubject, TEST_FILES_ID);
+    }
+    
+    @Test
+    public void testFiles_CertSubject() {
+        String testDir = TEST_ROOT + File.separator + "testFilesJobWithCertSubject";
+        final File certificateFile = FileUtil.getFileFromResource(CERTIFICATE_FILE, FileSyncJobTest.class);
+        testValidJob(testDir, SSLUtil.createSubject(certificateFile), TEST_FILES_ID);
     }
     
     @Test
@@ -222,20 +236,19 @@ public class FileSyncJobTest {
         try {
             String testDir = TEST_ROOT + File.separator + "testValidJobPutTransaction";
             FileSyncJob.SEGMENT_SIZE_PREF = 512 * 1024L; // 512KiB or 2 segments
-            testValidJob(testDir, anonSubject);
+            testValidJob(testDir, anonSubject, TEST_RESOURCE_ID);
         } finally {
             FileSyncJob.SEGMENT_SIZE_PREF = prev;
         }
     }
     
-    public void testValidJob(String testDir, Subject testSubject) {
+    public void testValidJob(String testDir, Subject testSubject, URI remote) {
         try {
             createTestDirectory(testDir);
 
             final OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(testDir), 1);
 
             final URI artifactID = new URI(TEST_ARTIFACT_URI);
-            final URI resourceID = new URI(TEST_RESOURCE_ID);
 
             // Set up an Artifact in the database to start.
             Artifact artifactToUpdate = new Artifact(artifactID,
@@ -245,7 +258,8 @@ public class FileSyncJobTest {
             log.debug("putting test artifact to database");
             dao.put(artifactToUpdate);
 
-            FileSyncJob fsj = new FileSyncJob(artifactToUpdate, resourceID, sa, dao, testSubject);
+            log.info("FileSyncJob: " + artifactToUpdate + " from " + remote);
+            FileSyncJob fsj = new FileSyncJob(artifactToUpdate, remote, sa, dao, testSubject);
             fsj.run();
 
             // verify job succeeded by trying to get artifact by location
@@ -285,7 +299,7 @@ public class FileSyncJobTest {
 
             // note: this tests that transfer negotiaiton failed with a ResourceNotFoundException
             final URI artifactID = new URI(TEST_ARTIFACT_NOT_FOUND);
-            final URI resourceID = new URI(TEST_RESOURCE_ID);
+            final URI resourceID = TEST_RESOURCE_ID;
 
             // Set up an Artifact in the database to start.
             // Set checksum to the wrong value.
@@ -329,7 +343,7 @@ public class FileSyncJobTest {
             final OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(TEST_ROOT), 1);
 
             final URI artifactID = new URI(TEST_ARTIFACT_URI);
-            final URI resourceID = new URI(TEST_RESOURCE_ID);
+            final URI resourceID = TEST_RESOURCE_ID;
 
             // Set up an Artifact in the database to start.
             // Set checksum to the wrong value.
@@ -370,7 +384,7 @@ public class FileSyncJobTest {
             final OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(TEST_ROOT), 1);
 
             final URI artifactID = new URI(TEST_ARTIFACT_URI);
-            final URI resourceID = new URI(TEST_RESOURCE_ID);
+            final URI resourceID = TEST_RESOURCE_ID;
 
             // Set up an Artifact in the database to start.
             // Set checksum to the wrong value.
@@ -412,7 +426,7 @@ public class FileSyncJobTest {
             final OpaqueFileSystemStorageAdapter sa = new OpaqueFileSystemStorageAdapter(new File(TEST_ROOT), 1);
 
             final URI artifactID = new URI(TEST_ARTIFACT_URI);
-            final URI resourceID = new URI(TEST_RESOURCE_ID);
+            final URI resourceID = TEST_RESOURCE_ID;
 
             // Set up an Artifact in the database to start.
             Artifact artifactToUpdate = new Artifact(artifactID,

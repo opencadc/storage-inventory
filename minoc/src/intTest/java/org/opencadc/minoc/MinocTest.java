@@ -105,6 +105,7 @@ public abstract class MinocTest {
     protected URL filesURL;
     protected Subject anonSubject;
     protected Subject userSubject;
+    protected boolean cleanupOnSuccess = true;
     
     static {
         Log4jInit.setLevel("org.opencadc.minoc", Level.INFO);

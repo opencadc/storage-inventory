@@ -385,11 +385,28 @@ public class FileSyncJob implements Runnable {
         Subject subject = AuthenticationUtil.getCurrentSubject();
         AuthMethod am = AuthenticationUtil.getAuthMethodFromCredentials(subject);
         log.debug("resource id: " + resource);
-        URL transferURL = regClient.getServiceURL(resource, Standards.SI_LOCATE, am);
+        URL transferURL = regClient.getServiceURL(resource, Standards.SI_LOCATE);
         if (transferURL == null) {
-            transferURL = regClient.getServiceURL(resource, Standards.VOSPACE_SYNC_21, am);
+            transferURL = regClient.getServiceURL(resource, Standards.VOSPACE_SYNC_21);
         }
         log.debug("locator URL: " + transferURL);
+        if (transferURL == null) {
+            // try files aka minoc
+            URL filesURL = regClient.getServiceURL(resource, Standards.SI_FILES);
+            if (filesURL != null) {
+                StringBuilder sb = new StringBuilder();
+                sb.append(filesURL.toExternalForm());
+                sb.append("/").append(artifact.toASCIIString());
+                String surl = sb.toString();
+                log.debug("getDownloadURLs: " + surl);
+                List<Protocol> ret = new ArrayList<>();
+                Protocol p = new Protocol(VOS.PROTOCOL_HTTPS_GET);
+                p.setSecurityMethod(Standards.getSecurityMethod(am));
+                p.setEndpoint(surl);
+                ret.add(p);
+                return ret;
+            }
+        }
 
         // request all protocols that can be used
         List<Protocol> protocolList = new ArrayList<>();
@@ -572,6 +589,7 @@ public class FileSyncJob implements Runnable {
                 long transferTime = 0;
                 for (PutSegment seg : segs) {
                     log.debug("get: " + seg);
+                    final long startGet = System.currentTimeMillis();
                     postPrepare = false;
                     HttpGet get = new HttpGet(u, true);
                     get.setConnectionTimeout(6000); // ms
@@ -604,7 +622,8 @@ public class FileSyncJob implements Runnable {
                     }
                     
                     // accumulate time spent on actual byte transfer
-                    long startPut = System.currentTimeMillis();
+                    final long startPut = System.currentTimeMillis();
+                    log.debug("initiate GET: " + (startPut - startGet) + "ms");
                     StorageMetadata storageMeta = this.storageAdapter.put(na, get.getInputStream(), txnID);
                     transferTime = transferTime + System.currentTimeMillis() - startPut;
                     log.debug("put ok: " + storageMeta);

@@ -202,11 +202,12 @@ public class PutTransactionTest extends MinocTest {
             Assert.assertEquals("contentChecksum", expectedChecksum, actualChecksum);
             Assert.assertEquals("contentlength", expectedLength, actualLength);
             
-            // delete
-            delete = new HttpDelete(artifactURL, false);
-            Subject.doAs(userSubject, new RunnableAction(delete));
-            Assert.assertNull(delete.getThrowable());
-            Assert.assertEquals("deleted", 204, delete.getResponseCode());
+            if (cleanupOnSuccess) {
+                delete = new HttpDelete(artifactURL, false);
+                Subject.doAs(userSubject, new RunnableAction(delete));
+                Assert.assertNull(delete.getThrowable());
+                Assert.assertEquals("deleted", 204, delete.getResponseCode());
+            }
         } catch (Exception t) {
             log.error("unexpected throwable", t);
             Assert.fail("unexpected throwable: " + t);
@@ -482,11 +483,13 @@ public class PutTransactionTest extends MinocTest {
             Assert.assertEquals("contentChecksum", expectedChecksum, actualChecksum);
             Assert.assertEquals("contentlength", expectedLength, actualLength);
             
-            log.info("delete");
-            delete = new HttpDelete(artifactURL, false);
-            Subject.doAs(userSubject, new RunnableAction(delete));
-            Assert.assertNull(delete.getThrowable());
-            Assert.assertEquals("deleted", 204, delete.getResponseCode());
+            if (cleanupOnSuccess) {
+                log.info("delete");
+                delete = new HttpDelete(artifactURL, false);
+                Subject.doAs(userSubject, new RunnableAction(delete));
+                Assert.assertNull(delete.getThrowable());
+                Assert.assertEquals("deleted", 204, delete.getResponseCode());
+            }
         } catch (Exception t) {
             log.error("unexpected throwable", t);
             Assert.fail("unexpected throwable: " + t);
