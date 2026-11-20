@@ -277,7 +277,7 @@ public abstract class ArtifactAction extends RestAction {
         }
         if (xp != null && !config.fileSyncOperators.isEmpty()) {
             // locally configured read
-            for (X500Principal xa : config.archiveOperators) {
+            for (X500Principal xa : config.fileSyncOperators) {
                 if (AuthenticationUtil.equals(xp, xa)) {
                     logInfo.setResource(artifactURI);
                     logInfo.setPath(syncInput.getContextPath() + syncInput.getComponentPath());

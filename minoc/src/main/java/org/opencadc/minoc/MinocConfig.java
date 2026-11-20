@@ -245,7 +245,6 @@ public class MinocConfig {
     private void validateConfigProps(MultiValuedProperties mvp) {
         // plain validate once at startup
         StringBuilder sb = new StringBuilder();
-        sb.append("incomplete config: ");
         boolean ok = true;
 
         String rid = mvp.getFirstPropertyValue(MinocConfig.RESOURCE_ID_KEY);
@@ -336,6 +335,36 @@ public class MinocConfig {
         }
         
         // optional
+        List<String> aops = configProperties.getProperty(ARCHIVE_OPS_KEY);
+        if (aops != null) {
+            for (String s : aops) {
+                sb.append("\n\t").append(ARCHIVE_OPS_KEY + "=").append(s);
+                try {
+                    X500Principal p = new X500Principal(s);
+                    sb.append(" OK");
+                } catch (Exception ex) {
+                    sb.append(" INVALID");
+                    ok = false;
+                }
+            }
+        }
+        
+        // optional
+        List<String> fsus = configProperties.getProperty(FILE_SYNC_OPS_KEY);
+        if (fsus != null) {
+            for (String s : fsus) {
+                sb.append("\n\t").append(FILE_SYNC_OPS_KEY + "=").append(s);
+                try {
+                    X500Principal p = new X500Principal(s);
+                    sb.append(" OK");
+                } catch (Exception ex) {
+                    sb.append(" INVALID");
+                    ok = false;
+                }
+            }
+        }
+        
+        // optional
         String sread = mvp.getFirstPropertyValue(MinocConfig.READABLE_KEY);
         sb.append("\n\t" + READABLE_KEY + ": ");
         if (sread != null) {
@@ -372,6 +401,8 @@ public class MinocConfig {
             }
         }
 
+        log.info(sb.toString());
+        
         if (!ok) {
             throw new InvalidConfigException(sb.toString());
         }
