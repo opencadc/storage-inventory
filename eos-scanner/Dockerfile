@@ -1,5 +1,8 @@
 FROM almalinux:9
 
+ENV IMAGE_VERSION="0.2.1"
+LABEL org.opencontainers.image.version="${IMAGE_VERSION}"
+
 LABEL org.opencontainers.image.authors="pdowler.cadc@gmail.com"
 
 ## copied from docker-base.git/cadc-java/Dockerfile ##
